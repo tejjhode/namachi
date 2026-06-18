@@ -58,7 +58,7 @@ export default function AllTripsPage() {
     endDate: "",
     totalSeats: "12",
     price: "",
-    tripLeader: "",
+    tripLeaderId: "",
     meetingPoint: "",
     notes: "",
   });
@@ -135,7 +135,7 @@ export default function AllTripsPage() {
       endDate: "",
       totalSeats: "12",
       price: trip.price ? String(trip.price) : "",
-      tripLeader: "",
+      tripLeaderId: "",
       meetingPoint: "",
       notes: "",
     });
@@ -149,17 +149,20 @@ export default function AllTripsPage() {
       setError("");
       setSuccess("");
 
-      const { startDate, endDate, totalSeats, price, tripLeader, meetingPoint, notes } = activationForm;
+      const { startDate, endDate, totalSeats, price, tripLeaderId, meetingPoint, notes } = activationForm;
       if (!startDate || !totalSeats) {
         throw new Error("Please fill in all required fields (Start Date and Total Seats).");
       }
+
+      const selectedLeader = users.find((p) => p.id === tripLeaderId);
 
       await tripService.activateTrip(activeTripForActivation, {
         startDate,
         endDate: endDate || undefined,
         totalSeats: parseInt(totalSeats) || 12,
         price: parseFloat(price) || activeTripForActivation.price || 0,
-        tripLeader: tripLeader || undefined,
+        tripLeaderId: tripLeaderId || undefined,
+        tripLeader: selectedLeader?.full_name || selectedLeader?.email || undefined,
         meetingPoint: meetingPoint || undefined,
         notes: notes || undefined,
       });
@@ -798,9 +801,7 @@ export default function AllTripsPage() {
                           >
                             <span className="flex items-center gap-2">
                               {(() => {
-                                const selectedLeader = users.find(
-                                  (p) => (p.full_name || p.email) === activationForm.tripLeader
-                                );
+                                const selectedLeader = users.find((p) => p.id === activationForm.tripLeaderId);
                                 if (selectedLeader) {
                                   return (
                                     <>
@@ -815,7 +816,7 @@ export default function AllTripsPage() {
                                     </>
                                   );
                                 }
-                                return <span>{activationForm.tripLeader || "Select Team Member"}</span>;
+                                return <span>{selectedLeader ? selectedLeader.full_name : "Select Team Member"}</span>;
                               })()}
                             </span>
                             <ChevronDown className="w-3.5 h-3.5 text-nomichi-ink/40 shrink-0" />
@@ -826,7 +827,7 @@ export default function AllTripsPage() {
                               <button
                                 type="button"
                                 onClick={() => {
-                                  setActivationForm({ ...activationForm, tripLeader: "" });
+                                  setActivationForm({ ...activationForm, tripLeaderId: "" });
                                   setLeaderDropdownOpen(false);
                                 }}
                                 className="w-full px-2.5 py-1.5 text-left text-xs font-semibold rounded-lg hover:bg-[#FAF8F4] border-0 bg-transparent text-nomichi-ink/50 cursor-pointer"
@@ -842,7 +843,7 @@ export default function AllTripsPage() {
                                       key={user.id}
                                       type="button"
                                       onClick={() => {
-                                        setActivationForm({ ...activationForm, tripLeader: name });
+                                        setActivationForm({ ...activationForm, tripLeaderId: user.id });
                                         setLeaderDropdownOpen(false);
                                       }}
                                       className="w-full px-2.5 py-1.5 text-left text-xs font-bold rounded-lg hover:bg-[#FAF8F4] border-0 bg-transparent text-nomichi-ink cursor-pointer flex items-center gap-2"

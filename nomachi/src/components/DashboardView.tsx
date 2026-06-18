@@ -85,6 +85,7 @@ interface ChatMessage {
   senderName: string;
   content: string;
   time: string;
+  sortTime?: number;
   isRead?: boolean;
   attachment?: {
     title: string;
@@ -146,6 +147,30 @@ function formatFullName(fullName: string): string {
     return `${w1} ${w0}`;
   }
   return clean.charAt(0).toUpperCase() + clean.slice(1).toLowerCase();
+}
+
+function getGroupThreadKey(lead: any): string {
+  const tripId = lead.trip_id || lead.trip_interest || lead.trips?.id;
+  return tripId ? `trip:${tripId}` : `lead:${lead.id}`;
+}
+
+function getGroupThreadName(lead: any): string {
+  return lead.trips?.title || "General Enquiry";
+}
+
+function getGroupAvatarText(name: string): string {
+  const words = name
+    .split(/\s+/)
+    .map((word) => word.trim())
+    .filter(Boolean);
+
+  if (words.length === 0) return "GRP";
+  if (words.length === 1) return words[0].slice(0, 3).toUpperCase();
+  return words
+    .slice(0, 2)
+    .map((word) => word[0]?.toUpperCase() || "")
+    .join("")
+    .slice(0, 3);
 }
 
 export function DashboardView({ user, leads = [], trips = [], initialChatMessages = [] }: DashboardViewProps) {
@@ -357,76 +382,86 @@ export function DashboardView({ user, leads = [], trips = [], initialChatMessage
 
   const [chatSearchQuery, setChatSearchQuery] = useState("");
   const [chatActiveTab, setChatActiveTab] = useState<"all" | "team" | "updates" | "archived">("all");
-  const [activeThreadId, setActiveThreadId] = useState("nomichi-team");
+  const [activeThreadId, setActiveThreadId] = useState("");
   const [chatInputText, setChatInputText] = useState("");
   const chatEndRef = useRef<HTMLDivElement>(null);
+  const threadCanonicalLeadRef = useRef<globalThis.Map<string, string>>(new globalThis.Map());
 
-  const [chatThreads, setChatThreads] = useState<ChatThread[]>([
-    {
-      id: "nomichi-team",
-      name: "Nomichi Team",
-      avatarText: "NOMI",
-      isOnline: true,
-      lastTime: "",
-      category: "team",
-      messages: []
-    }
-  ]);
+  const [chatThreads, setChatThreads] = useState<ChatThread[]>([]);
 
   useEffect(() => {
     if (!leads) return;
 
-    const dbThreads: ChatThread[] = leads.map(lead => {
-      const leadTitle = lead.trips?.title || "Trip Enquiry";
-      const enquiryDate = new Date(lead.created_at);
+    const threadMap = new globalThis.Map<string, ChatThread & { sortTime: number }>();
+    const canonicalLeadMap = new globalThis.Map<string, string>();
 
-      const threadMessages: ChatMessage[] = [
-        {
-          id: `lead-init-${lead.id}`,
-          sender: "user",
-          senderName: lead.name || "",
-          content: `Hi! I submitted an enquiry for "${leadTitle}". Looking forward to hearing from the team! 🙏`,
-          time: enquiryDate.toLocaleTimeString("en-US", { hour: "numeric", minute: "2-digit" })
-        }
-      ];
+    leads.forEach((lead: any) => {
+      const threadId = getGroupThreadKey(lead);
+      const threadName = getGroupThreadName(lead);
+      const enquiryDate = new Date(lead.created_at || Date.now());
+      const enquiryTime = enquiryDate.getTime();
+      const threadLeadName = lead.name || threadName;
+
+      if (!threadMap.has(threadId)) {
+        threadMap.set(threadId, {
+          id: threadId,
+          name: threadName,
+          avatarText: getGroupAvatarText(threadName),
+          isOnline: true,
+          lastTime: enquiryDate.toLocaleDateString("en-US", { day: "numeric", month: "short" }),
+          unreadCount: 0,
+          category: "updates",
+          messages: [],
+          sortTime: enquiryTime
+        });
+      }
+
+      const thread = threadMap.get(threadId)!;
+      const existingLeadIds = canonicalLeadMap.get(threadId);
+      if (!existingLeadIds) {
+        canonicalLeadMap.set(threadId, lead.id);
+      }
+
+      thread.messages.push({
+        id: `lead-init-${lead.id}`,
+        sender: "user",
+        senderName: threadLeadName,
+        content: `Hi! I submitted an enquiry for "${threadName}". Looking forward to hearing from the team! 🙏`,
+        time: enquiryDate.toLocaleTimeString("en-US", { hour: "numeric", minute: "2-digit" }),
+        sortTime: enquiryTime
+      });
 
       if (lead.lead_notes && Array.isArray(lead.lead_notes)) {
         lead.lead_notes.forEach((note: any) => {
-          threadMessages.push({
+          const noteTime = new Date(note.created_at || lead.created_at || Date.now()).getTime();
+          thread.messages.push({
             id: note.id,
             sender: "other",
             senderName: "Nomichi Team",
             content: note.content,
-            time: new Date(note.created_at || lead.created_at).toLocaleTimeString("en-US", { hour: "numeric", minute: "2-digit" })
+            time: new Date(note.created_at || lead.created_at).toLocaleTimeString("en-US", { hour: "numeric", minute: "2-digit" }),
+            sortTime: noteTime
           });
         });
       }
 
-      const lastNote = lead.lead_notes && lead.lead_notes.length > 0
-        ? lead.lead_notes[lead.lead_notes.length - 1]
-        : null;
-      const lastTime = lastNote
-        ? new Date(lastNote.created_at).toLocaleDateString("en-US", { day: "numeric", month: "short" })
-        : enquiryDate.toLocaleDateString("en-US", { day: "numeric", month: "short" });
-
-      const hasUnread = lead.lead_notes && lead.lead_notes.length > 0;
-
-      return {
-        id: lead.id,
-        name: `${leadTitle}`,
-        avatarText: "✈️",
-        lastTime,
-        unreadCount: hasUnread ? 1 : 0,
-        category: "updates" as const,
-        messages: threadMessages
-      };
+      thread.messages.sort((a, b) => (a.sortTime || 0) - (b.sortTime || 0));
+      thread.sortTime = thread.messages[thread.messages.length - 1]?.sortTime || enquiryTime;
+      thread.lastTime = new Date(thread.sortTime).toLocaleDateString("en-US", { day: "numeric", month: "short" });
+      thread.unreadCount = thread.messages.length > 1 ? 1 : 0;
     });
 
-    setChatThreads(prev => {
-      // Keep the fixed Nomichi Team support thread, replace all others with DB threads
-      const supportThread = prev.find(t => t.id === "nomichi-team");
-      return supportThread ? [supportThread, ...dbThreads] : dbThreads;
-    });
+    threadCanonicalLeadRef.current = canonicalLeadMap;
+
+    const groupedThreads: ChatThread[] = Array.from(threadMap.values())
+      .map(({ sortTime, ...thread }) => thread as ChatThread)
+      .sort((a, b) => {
+        const aTime = a.messages[a.messages.length - 1]?.sortTime || 0;
+        const bTime = b.messages[b.messages.length - 1]?.sortTime || 0;
+        return bTime - aTime;
+      });
+
+    setChatThreads(groupedThreads);
   }, [leads]);
 
   // Decrypt and load initial messages from DB into threads on mount
@@ -437,7 +472,10 @@ export function DashboardView({ user, leads = [], trips = [], initialChatMessage
       const decrypted: Record<string, ChatMessage[]> = {};
 
       for (const row of initialChatMessages) {
-        const threadKey = row.lead_id || "nomichi-team";
+        const lead = leads.find((item: any) => item.id === row.lead_id);
+        if (!lead) continue;
+
+        const threadKey = getGroupThreadKey(lead);
         if (!decrypted[threadKey]) decrypted[threadKey] = [];
 
         const plaintext = await decryptMessage(row.content_encrypted, row.iv);
@@ -447,6 +485,7 @@ export function DashboardView({ user, leads = [], trips = [], initialChatMessage
           senderName: row.sender_type === "user" ? (profileForm.fullName || firstName) : "Nomichi Team",
           content: plaintext,
           time: new Date(row.created_at).toLocaleTimeString("en-US", { hour: "numeric", minute: "2-digit" }),
+          sortTime: new Date(row.created_at).getTime(),
           isRead: true
         });
       }
@@ -478,12 +517,10 @@ export function DashboardView({ user, leads = [], trips = [], initialChatMessage
         { event: "INSERT", schema: "public", table: "chat_messages" },
         async (payload) => {
           const row = payload.new as any;
-          const threadKey = row.lead_id || "nomichi-team";
+          const lead = leads.find((item: any) => item.id === row.lead_id);
+          if (!lead) return;
 
-          // Only add if it belongs to this user's threads
-          const isRelevant = row.lead_id === null ||
-            leads.some((l: any) => l.id === row.lead_id);
-          if (!isRelevant) return;
+          const threadKey = getGroupThreadKey(lead);
 
           const plaintext = await decryptMessage(row.content_encrypted, row.iv);
           const incomingMsg: ChatMessage = {
@@ -492,6 +529,7 @@ export function DashboardView({ user, leads = [], trips = [], initialChatMessage
             senderName: row.sender_type === "user" ? (profileForm.fullName || firstName) : "Nomichi Team",
             content: plaintext,
             time: new Date(row.created_at).toLocaleTimeString("en-US", { hour: "numeric", minute: "2-digit" }),
+            sortTime: new Date(row.created_at).getTime(),
             isRead: false
           };
 
@@ -521,6 +559,7 @@ export function DashboardView({ user, leads = [], trips = [], initialChatMessage
   const handleSendChatMessage = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!chatInputText.trim()) return;
+    if (!activeThreadId) return;
 
     const plaintext = chatInputText.trim();
     const now = new Date();
@@ -535,6 +574,7 @@ export function DashboardView({ user, leads = [], trips = [], initialChatMessage
       senderName: profileForm.fullName || firstName,
       content: plaintext,
       time: timeStr,
+      sortTime: now.getTime(),
       isRead: true
     };
 
@@ -549,8 +589,13 @@ export function DashboardView({ user, leads = [], trips = [], initialChatMessage
       // Encrypt then persist to Supabase
       const { ciphertext, iv } = await encryptMessage(plaintext);
       const supabaseClient = createClient();
+      const canonicalLeadId = threadCanonicalLeadRef.current.get(activeThreadId);
+      if (!canonicalLeadId) {
+        throw new Error("No lead found for the selected group.");
+      }
+
       await supabaseClient.from("chat_messages").insert({
-        lead_id: activeThreadId === "nomichi-team" ? null : activeThreadId,
+        lead_id: canonicalLeadId,
         sender_type: "user",
         content_encrypted: ciphertext,
         iv
@@ -1504,25 +1549,54 @@ export function DashboardView({ user, leads = [], trips = [], initialChatMessage
   // Saved list directly mapped from database (no dummy fallbacks)
   const displaySaved = savedTripsList;
 
-  // 5. Messages (notes linked to user's leads from database — no dummy fallbacks)
-  const displayMessages: any[] = [];
-  leads.forEach(lead => {
-    if (lead.lead_notes && Array.isArray(lead.lead_notes)) {
-      const leadTitle = lead.trips?.title || "Trip Enquiry";
-      lead.lead_notes.forEach((note: any) => {
-        displayMessages.push({
-          id: note.id,
-          sender: "Nomichi Team",
+  // 5. Messages (grouped by trip so the same enquiry group appears once)
+  const displayMessageMap = new globalThis.Map<string, any>();
+  leads.forEach((lead: any) => {
+    const threadKey = getGroupThreadKey(lead);
+    const leadTitle = getGroupThreadName(lead);
+    const baseTime = new Date(lead.created_at || Date.now()).getTime();
+
+    const upsertMessage = (message: any, messageTime: number) => {
+      const existing = displayMessageMap.get(threadKey);
+      if (!existing || messageTime >= existing.sortTime) {
+        displayMessageMap.set(threadKey, {
+          ...message,
           leadTitle,
-          time: new Date(note.created_at || lead.created_at).toLocaleDateString("en-US", { day: "numeric", month: "short" }),
-          text: note.content,
-          avatarType: "team"
+          sortTime: messageTime
         });
+      }
+    };
+
+    if (lead.lead_notes && Array.isArray(lead.lead_notes) && lead.lead_notes.length > 0) {
+      lead.lead_notes.forEach((note: any) => {
+        const noteTime = new Date(note.created_at || lead.created_at || Date.now()).getTime();
+        upsertMessage(
+          {
+            id: note.id,
+            sender: "Nomichi Team",
+            time: new Date(note.created_at || lead.created_at).toLocaleDateString("en-US", { day: "numeric", month: "short" }),
+            text: note.content,
+            avatarType: "team"
+          },
+          noteTime
+        );
       });
+    } else {
+      upsertMessage(
+        {
+          id: `lead-init-${lead.id}`,
+          sender: lead.name || "Traveler",
+          time: new Date(lead.created_at || Date.now()).toLocaleDateString("en-US", { day: "numeric", month: "short" }),
+          text: `New enquiry for ${leadTitle}`,
+          avatarType: "group"
+        },
+        baseTime
+      );
     }
   });
-  // Only show up to 3 most recent real messages
-  displayMessages.splice(3);
+  const displayMessages = Array.from(displayMessageMap.values() as Iterable<any>)
+    .sort((a, b) => (b.sortTime || 0) - (a.sortTime || 0))
+    .slice(0, 3);
 
   const renderTripCard = (rec: any) => {
     return (
@@ -1598,6 +1672,17 @@ export function DashboardView({ user, leads = [], trips = [], initialChatMessage
   });
 
   const activeThread = chatThreads.find(t => t.id === activeThreadId);
+
+  useEffect(() => {
+    if (chatThreads.length === 0) {
+      if (activeThreadId) setActiveThreadId("");
+      return;
+    }
+
+    if (!activeThreadId || !chatThreads.some((thread) => thread.id === activeThreadId)) {
+      setActiveThreadId(chatThreads[0].id);
+    }
+  }, [chatThreads, activeThreadId]);
 
   // Auto-scroll to bottom whenever messages update or thread changes
   useEffect(() => {
@@ -2612,8 +2697,8 @@ export function DashboardView({ user, leads = [], trips = [], initialChatMessage
 
                 const dbLogs = localNotes.map(n => ({
                   id: n.id,
-                  sender: n.content.includes("Status updated to") ? "System" : "You",
-                  avatarType: n.content.includes("Status updated to") ? "system" : "traveler",
+                  sender: n.content.includes("Status updated to") ? "Admin" : "You",
+                  avatarType: n.content.includes("Status updated to") ? "admin" : "traveler",
                   absoluteTime: formatLogTime(n.created_at),
                   text: n.content,
                   badge: n.content.includes("Status updated to") ? {
@@ -2919,7 +3004,7 @@ export function DashboardView({ user, leads = [], trips = [], initialChatMessage
                             {allLogs.map((log) => {
                               // Avatar background and icon colors based on sender
                               let avatarColorClass = "bg-zinc-100 text-zinc-600";
-                              let avatarInitials = "S";
+                              let avatarInitials = "A";
                               
                               if (log.sender === "You") {
                                 avatarColorClass = "bg-[#FFEFEA] text-[#FF5B26]";
@@ -2931,9 +3016,9 @@ export function DashboardView({ user, leads = [], trips = [], initialChatMessage
                                       .toUpperCase()
                                       .slice(0, 2)
                                   : "Y";
-                              } else if (log.sender === "System") {
+                              } else if (log.sender === "Admin") {
                                 avatarColorClass = "bg-blue-50 text-blue-600";
-                                avatarInitials = "S";
+                                avatarInitials = "A";
                               }
 
                               return (

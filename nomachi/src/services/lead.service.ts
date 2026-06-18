@@ -3,6 +3,12 @@ import { Lead, LeadNote } from "@/types/admin.types";
 
 const supabase = createClient();
 
+const isSchemaCacheColumnError = (error: any, columnName: string) => {
+  const message = String(error?.message || "");
+  const code = String(error?.code || "");
+  return code === "PGRST204" || message.includes(`'${columnName}'`) || message.includes(columnName);
+};
+
 export const leadService = {
   async getLeads(params?: {
     search?: string;
@@ -56,11 +62,25 @@ export const leadService = {
   },
 
   async getLeadById(id: string): Promise<Lead> {
-    const { data, error } = await supabase
+    let queryWithAuthor = await supabase
       .from("leads")
-      .select("*, trips(id, title, destination), lead_notes(id, lead_id, content, created_at)")
+      .select("*, trips(id, title, destination), lead_notes(id, lead_id, content, created_at, created_by)")
       .eq("id", id)
       .single();
+
+    let data = queryWithAuthor.data;
+    let error = queryWithAuthor.error;
+
+    if (error && isSchemaCacheColumnError(error, "created_by")) {
+      queryWithAuthor = await supabase
+        .from("leads")
+        .select("*, trips(id, title, destination), lead_notes(id, lead_id, content, created_at)")
+        .eq("id", id)
+        .single();
+
+      data = queryWithAuthor.data;
+      error = queryWithAuthor.error;
+    }
 
     if (error) throw error;
     
@@ -68,7 +88,9 @@ export const leadService = {
     if (data.lead_notes) {
       data.lead_notes = data.lead_notes.map((note: any) => ({
         ...note,
-        note_text: note.content
+        created_by: note.created_by || null,
+        author_id: note.created_by || "",
+        note_text: note.content,
       }));
       data.lead_notes.sort((a: any, b: any) => new Date(a.created_at).getTime() - new Date(b.created_at).getTime());
     }
@@ -104,21 +126,43 @@ export const leadService = {
   },
 
   async addLeadNote(leadId: string, noteText: string, authorId: string): Promise<LeadNote> {
-    const { data, error } = await supabase
+    let insertResult = await supabase
       .from("lead_notes")
       .insert([
         {
           lead_id: leadId,
           content: noteText,
+          created_by: authorId || null,
         },
       ])
       .select()
       .single();
 
+    let data = insertResult.data;
+    let error = insertResult.error;
+
+    if (error && isSchemaCacheColumnError(error, "created_by")) {
+      insertResult = await supabase
+        .from("lead_notes")
+        .insert([
+          {
+            lead_id: leadId,
+            content: noteText,
+          },
+        ])
+        .select()
+        .single();
+
+      data = insertResult.data;
+      error = insertResult.error;
+    }
+
     if (error) throw error;
     return {
       ...data,
-      note_text: data.content
+      created_by: data?.created_by || null,
+      author_id: data?.created_by || "",
+      note_text: data.content,
     } as LeadNote;
   },
 };

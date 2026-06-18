@@ -35,6 +35,7 @@ export interface LeadNote {
   id: string;
   lead_id: string;
   author_id: string;
+  created_by?: string | null;
   note_text: string;
   created_at: string;
 }

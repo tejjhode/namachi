@@ -63,6 +63,8 @@ import {
 } from "lucide-react";
 import { createClient } from "@/lib/supabase/client";
 import { leadService } from "@/services/lead.service";
+import { useUsers } from "@/hooks/useUsers";
+import { getLeadNoteAuthorLabel, getLeadNoteDisplay, getLeadNoteVisual } from "@/lib/lead-notes";
 import { useRouter } from "next/navigation";
 
 interface AdminViewProps {
@@ -257,7 +259,7 @@ export default function AdminView({ user, onBack, initialTab }: AdminViewProps) 
     endDate: "",
     totalSeats: "12",
     price: "",
-    tripLeader: "",
+    tripLeaderId: "",
     meetingPoint: "",
     notes: "",
   });
@@ -269,6 +271,8 @@ export default function AdminView({ user, onBack, initialTab }: AdminViewProps) 
   const [newEnquiryNoteText, setNewEnquiryNoteText] = useState("");
   const [addingEnquiryNote, setAddingEnquiryNote] = useState(false);
   const [currentUser, setCurrentUser] = useState<any>(null);
+  const { users } = useUsers();
+  const usersById = new Map(users.map((user) => [user.id, user]));
   const [enquirySearchVal, setEnquirySearchVal] = useState("");
   const [enquiryStatusVal, setEnquiryStatusVal] = useState("all");
   const [enquirySourceVal, setEnquirySourceVal] = useState("all");
@@ -1034,7 +1038,7 @@ export default function AdminView({ user, onBack, initialTab }: AdminViewProps) 
       endDate: "",
       totalSeats: "12",
       price: "",
-      tripLeader: "",
+      tripLeaderId: "",
       meetingPoint: "",
       notes: "",
     });
@@ -1048,10 +1052,12 @@ export default function AdminView({ user, onBack, initialTab }: AdminViewProps) 
       setError("");
       setSuccess("");
 
-      const { startDate, endDate, totalSeats, tripLeader, meetingPoint, notes } = activationForm;
+      const { startDate, endDate, totalSeats, tripLeaderId, meetingPoint, notes } = activationForm;
       if (!startDate || !totalSeats) {
         throw new Error("Please fill in all required fields (Start Date and Total Seats).");
       }
+
+      const selectedLeader = users.find((p) => p.id === tripLeaderId);
 
       const totalSeatsNum = parseInt(totalSeats);
       const priceNum = activeTripForActivation.price ? parseFloat(activeTripForActivation.price) : 99999;
@@ -1069,7 +1075,7 @@ export default function AdminView({ user, onBack, initialTab }: AdminViewProps) 
       const statusJson = JSON.stringify({
         status: "active",
         code: departureCode,
-        leader: tripLeader || "Select Team Member",
+        leader: selectedLeader?.full_name || selectedLeader?.email || "Select Team Member",
         meeting: meetingPoint || "Airport / City",
         notes: notes || ""
       });
@@ -1105,6 +1111,22 @@ export default function AdminView({ user, onBack, initialTab }: AdminViewProps) 
 
       if (departureErr) {
         console.warn("Could not insert departure archive record:", departureErr.message);
+      }
+
+      if (tripLeaderId) {
+        const { error: assignPrimaryErr } = await supabase
+          .from("leads")
+          .update({ assigned_to: tripLeaderId })
+          .eq("trip_id", activeTripForActivation.id);
+
+        if (assignPrimaryErr) throw assignPrimaryErr;
+
+        const { error: assignLegacyErr } = await supabase
+          .from("leads")
+          .update({ assigned_to: tripLeaderId })
+          .eq("trip_interest", activeTripForActivation.id);
+
+        if (assignLegacyErr) throw assignLegacyErr;
       }
 
       const activeId = activeTripForActivation.id;
@@ -4533,32 +4555,15 @@ export default function AdminView({ user, onBack, initialTab }: AdminViewProps) 
                             ) : (
                               selectedCRMLead.lead_notes.map((note: any) => {
                                 const noteText = note.note_text || "";
-                                
-                                // Select styling & icon based on note text keyword prefix
-                                let iconColor = "bg-gray-100 text-gray-500 border-gray-200";
-                                let Icon = FileText;
-
-                                if (noteText.startsWith("Initial Enquiry")) {
-                                  iconColor = "bg-[#FFEFEA] text-[#FF5B26] border-[#FFD3C4]";
-                                  Icon = Globe;
-                                } else if (noteText.startsWith("Called")) {
-                                  iconColor = "bg-[#EBF5FF] text-[#2563EB] border-[#D0E2FF]";
-                                  Icon = Phone;
-                                } else if (noteText.startsWith("Vibe Check")) {
-                                  iconColor = "bg-[#FFF8E6] text-[#D97706] border-[#FDE68A]";
-                                  Icon = Calendar;
-                                } else if (noteText.startsWith("Converted")) {
-                                  iconColor = "bg-[#ECFDF5] text-[#10B981] border-[#A7F3D0]";
-                                  Icon = CheckCircle;
-                                }
-
-                                let noteTitle = "Admin Log";
-                                let noteDesc = noteText;
-                                if (noteText.includes(":")) {
-                                  const parts = noteText.split(":");
-                                  noteTitle = parts[0].trim();
-                                  noteDesc = parts.slice(1).join(":").trim();
-                                }
+                                const { title: noteTitle, description: noteDesc } = getLeadNoteDisplay(noteText);
+                                const { iconColor, Icon } = getLeadNoteVisual(noteText);
+                                const authorLabel = getLeadNoteAuthorLabel(note, usersById);
+                                const authorTone =
+                                  authorLabel === "Admin"
+                                    ? "bg-[#F3F4F6] text-[#6B7280] border-[#E5E7EB]"
+                                    : authorLabel === "Unknown"
+                                      ? "bg-[#FAF8F4] text-[#8B7D6B] border-[#E7E1D5]"
+                                      : "bg-[#EFF6FF] text-[#2563EB] border-[#BFDBFE]";
 
                                 return (
                                   <div key={note.id} className="relative pl-8 space-y-1 pb-1 text-left">
@@ -4568,7 +4573,12 @@ export default function AdminView({ user, onBack, initialTab }: AdminViewProps) 
                                     </div>
                                     
                                     <div className="space-y-0.5 pl-0.5">
-                                      <p className="font-extrabold text-xs text-nomichi-ink">{noteTitle}</p>
+                                      <div className="flex items-center justify-between gap-2">
+                                        <p className="font-extrabold text-xs text-nomichi-ink">{noteTitle}</p>
+                                        <span className={`shrink-0 rounded-full border px-2 py-0.5 text-[9px] font-black uppercase tracking-widest ${authorTone}`}>
+                                          {authorLabel}
+                                        </span>
+                                      </div>
                                       <p className="text-[10px] text-nomichi-ink/60 font-semibold leading-relaxed">{noteDesc}</p>
                                       <span className="text-[9px] text-nomichi-ink/35 font-bold block pt-0.5">
                                         {new Date(note.created_at).toLocaleDateString("en-IN", {
@@ -5092,9 +5102,7 @@ export default function AdminView({ user, onBack, initialTab }: AdminViewProps) 
                           >
                             <span className="flex items-center gap-2">
                               {(() => {
-                                const selectedLeader = profiles.find(
-                                  (p) => (p.full_name || p.email) === activationForm.tripLeader
-                                );
+                                const selectedLeader = users.find((p) => p.id === activationForm.tripLeaderId);
                                 if (selectedLeader) {
                                   return (
                                     <>
@@ -5109,7 +5117,7 @@ export default function AdminView({ user, onBack, initialTab }: AdminViewProps) 
                                     </>
                                   );
                                 }
-                                return <span>{activationForm.tripLeader || "Select Team Member"}</span>;
+                                return <span>{selectedLeader ? selectedLeader.full_name : "Select Team Member"}</span>;
                               })()}
                             </span>
                             <ChevronDown className="w-3.5 h-3.5 text-nomichi-ink/40 shrink-0" />
@@ -5120,14 +5128,14 @@ export default function AdminView({ user, onBack, initialTab }: AdminViewProps) 
                               <button
                                 type="button"
                                 onClick={() => {
-                                  setActivationForm({ ...activationForm, tripLeader: "" });
+                                  setActivationForm({ ...activationForm, tripLeaderId: "" });
                                   setLeaderDropdownOpen(false);
                                 }}
                                 className="w-full px-2.5 py-1.5 text-left text-xs font-semibold rounded-lg hover:bg-[#FAF8F4] border-0 bg-transparent text-nomichi-ink/50 cursor-pointer"
                               >
                                 Select Team Member
                               </button>
-                              {profiles
+                              {users
                                 .filter((u) => u.role === "MANAGER")
                                 .map((user) => {
                                   const name = user.full_name || user.email;
@@ -5136,7 +5144,7 @@ export default function AdminView({ user, onBack, initialTab }: AdminViewProps) 
                                       key={user.id}
                                       type="button"
                                       onClick={() => {
-                                        setActivationForm({ ...activationForm, tripLeader: name });
+                                        setActivationForm({ ...activationForm, tripLeaderId: user.id });
                                         setLeaderDropdownOpen(false);
                                       }}
                                       className="w-full px-2.5 py-1.5 text-left text-xs font-bold rounded-lg hover:bg-[#FAF8F4] border-0 bg-transparent text-nomichi-ink cursor-pointer flex items-center gap-2"

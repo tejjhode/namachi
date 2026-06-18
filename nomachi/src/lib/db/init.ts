@@ -76,6 +76,7 @@ const migrations = [
     created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
     updated_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
   );
+  ALTER TABLE IF EXISTS public.lead_notes ADD COLUMN IF NOT EXISTS created_by UUID REFERENCES public.profiles(id) ON DELETE SET NULL;
   CREATE INDEX IF NOT EXISTS idx_lead_notes_lead_id ON public.lead_notes(lead_id);
   CREATE INDEX IF NOT EXISTS idx_lead_notes_created_by ON public.lead_notes(created_by);
   CREATE INDEX IF NOT EXISTS idx_lead_notes_created_at ON public.lead_notes(created_at);`,

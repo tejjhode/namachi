@@ -50,9 +50,12 @@ export const dbMigrations = [
       id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
       lead_id UUID REFERENCES public.leads(id) ON DELETE CASCADE,
       content TEXT NOT NULL,
+      created_by UUID REFERENCES public.profiles(id) ON DELETE SET NULL,
       created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
     );
+    ALTER TABLE IF EXISTS public.lead_notes ADD COLUMN IF NOT EXISTS created_by UUID REFERENCES public.profiles(id) ON DELETE SET NULL;
     CREATE INDEX IF NOT EXISTS idx_lead_notes_lead_id ON public.lead_notes(lead_id);
+    CREATE INDEX IF NOT EXISTS idx_lead_notes_created_by ON public.lead_notes(created_by);
     ALTER TABLE public.lead_notes ENABLE ROW LEVEL SECURITY;`,
   },
   {

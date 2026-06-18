@@ -32,6 +32,7 @@ import { useState, useEffect, useRef } from "react";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
 import { createClient } from "@/lib/supabase/client";
+import { getLeadNoteAuthorLabel, getLeadNoteDisplay, getLeadNoteVisual } from "@/lib/lead-notes";
 
 export default function LeadsPage() {
   const router = useRouter();
@@ -74,6 +75,7 @@ export default function LeadsPage() {
   const itemsPerPage = 6;
 
   const noteInputRef = useRef<HTMLInputElement>(null);
+  const usersById = new Map(users.map((user) => [user.id, user]));
 
   useEffect(() => {
     const supabase = createClient();
@@ -638,7 +640,7 @@ export default function LeadsPage() {
       </div>
 
       {/* ===================== RIGHT SIDE DETAILS PANEL ===================== */}
-      {selectedLeadId && selectedLead && (
+      {selectedLeadId && (
         <div
           className="w-[380px] bg-white border border-[#e7e1d5]/50 rounded-2xl shadow-sm flex flex-col justify-between shrink-0 overflow-hidden animate-in slide-in-from-right duration-300"
         >
@@ -655,7 +657,7 @@ export default function LeadsPage() {
 
           {/* Details Content Scroll Area */}
           <div className="flex-1 overflow-y-auto p-6 space-y-6">
-            {loadingLeadDetail ? (
+            {loadingLeadDetail || !selectedLead ? (
               <div className="flex justify-center py-20">
                 <Loader2 className="w-7 h-7 text-[#FF5B26] animate-spin" />
               </div>
@@ -921,32 +923,16 @@ export default function LeadsPage() {
                     ) : (
                       selectedLead.lead_notes.map((note: any) => {
                         const noteText = note.note_text || "";
-                        
-                        // Select styling & icon based on note text keyword prefix
-                        let iconColor = "bg-gray-100 text-gray-500 border-gray-200";
-                        let Icon = FileText;
-
-                        if (noteText.startsWith("Initial Enquiry")) {
-                          iconColor = "bg-[#FFEFEA] text-[#FF5B26] border-[#FFD3C4]";
-                          Icon = Globe;
-                        } else if (noteText.startsWith("Called")) {
-                          iconColor = "bg-[#EBF5FF] text-[#2563EB] border-[#D0E2FF]";
-                          Icon = Phone;
-                        } else if (noteText.startsWith("Vibe Check")) {
-                          iconColor = "bg-[#FFF8E6] text-[#D97706] border-[#FDE68A]";
-                          Icon = Calendar;
-                        } else if (noteText.startsWith("Converted")) {
-                          iconColor = "bg-[#ECFDF5] text-[#10B981] border-[#A7F3D0]";
-                          Icon = CheckCircle2;
-                        }
-
-                        let noteTitle = "Admin Log";
-                        let noteDesc = noteText;
-                        if (noteText.includes(":")) {
-                          const parts = noteText.split(":");
-                          noteTitle = parts[0].trim();
-                          noteDesc = parts.slice(1).join(":").trim();
-                        }
+                        const { title: noteTitle, description: noteDesc } = getLeadNoteDisplay(noteText);
+                        const { iconColor, Icon } = getLeadNoteVisual(noteText);
+                        const authorLabel = getLeadNoteAuthorLabel(note, usersById);
+                        const authorTone = authorLabel.startsWith("Admin")
+                          ? "bg-[#FEF3C7] text-[#92400E] border-[#FCD34D]"
+                          : authorLabel.startsWith("Manager")
+                            ? "bg-[#EFF6FF] text-[#1D4ED8] border-[#BFDBFE]"
+                            : authorLabel.startsWith("Staff")
+                              ? "bg-[#F3E8FF] text-[#7C3AED] border-[#E9D5FF]"
+                              : "bg-[#F3F4F6] text-[#6B7280] border-[#E5E7EB]";
 
                         return (
                           <div key={note.id} className="relative pl-8 space-y-1 pb-1 text-left">
@@ -956,7 +942,12 @@ export default function LeadsPage() {
                             </div>
                             
                             <div className="space-y-0.5 pl-0.5">
-                              <p className="font-extrabold text-xs text-nomichi-ink">{noteTitle}</p>
+                              <div className="flex items-center justify-between gap-2">
+                                <p className="font-extrabold text-xs text-nomichi-ink">{noteTitle}</p>
+                                <span className={`shrink-0 rounded-full border px-2 py-0.5 text-[9px] font-black uppercase tracking-widest ${authorTone}`}>
+                                  {authorLabel}
+                                </span>
+                              </div>
                               <p className="text-[10px] text-nomichi-ink/60 font-semibold leading-relaxed">{noteDesc}</p>
                               <span className="text-[9px] text-nomichi-ink/35 font-bold block pt-0.5">
                                 {new Date(note.created_at).toLocaleDateString("en-IN", {

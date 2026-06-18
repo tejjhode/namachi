@@ -1,11 +1,13 @@
 "use client";
 
 import { useLead } from "@/hooks/useLead";
+import { useUsers } from "@/hooks/useUsers";
 import { createClient } from "@/lib/supabase/client";
 import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import { ArrowLeft, Loader2, Calendar, Mail, Phone, Tag, Clock, Send, MessageSquare } from "lucide-react";
 import Link from "next/link";
+import { getLeadNoteAuthorLabel, getLeadNoteDisplay, getLeadNoteVisual } from "@/lib/lead-notes";
 
 interface LeadDetailPageProps {
   params: {
@@ -16,9 +18,11 @@ interface LeadDetailPageProps {
 export default function LeadDetailPage({ params }: LeadDetailPageProps) {
   const router = useRouter();
   const { lead, loading, error, changeStatus, addNote } = useLead(params.id);
+  const { users } = useUsers();
   const [newNoteText, setNewNoteText] = useState("");
   const [addingNote, setAddingNote] = useState(false);
   const [currentUser, setCurrentUser] = useState<any>(null);
+  const usersById = new Map(users.map((user) => [user.id, user]));
 
   useEffect(() => {
     const supabase = createClient();
@@ -201,21 +205,45 @@ export default function LeadDetailPage({ params }: LeadDetailPageProps) {
                     <div className="absolute left-1.5 top-1.5 w-3.5 h-3.5 rounded-full border-2 border-white bg-[#FF5B26] shadow-sm" />
                     
                     <div className="flex-1 bg-[#FAF8F4]/50 border border-[#e7e1d5]/30 rounded-2xl p-4 space-y-1.5">
-                      <div className="flex items-center justify-between text-[10px] text-nomichi-ink/40 font-bold">
-                        <span className="flex items-center gap-1">
-                          <Clock className="w-3 h-3" />
-                          {new Date(note.created_at).toLocaleString("en-IN", {
-                            day: "2-digit",
-                            month: "short",
-                            hour: "2-digit",
-                            minute: "2-digit",
-                          })}
-                        </span>
-                        <span>Logged by Admin</span>
-                      </div>
-                      <p className="text-xs font-semibold text-nomichi-ink/80 leading-relaxed whitespace-pre-wrap">
-                        {note.note_text}
-                      </p>
+                      {(() => {
+                        const noteText = note.note_text || "";
+                        const { title: noteTitle, description: noteDesc } = getLeadNoteDisplay(noteText);
+                        const { iconColor, Icon } = getLeadNoteVisual(noteText);
+                        const authorLabel = getLeadNoteAuthorLabel(note, usersById);
+                        const authorTone = authorLabel.startsWith("Admin")
+                          ? "bg-[#FEF3C7] text-[#92400E] border-[#FCD34D]"
+                          : authorLabel.startsWith("Manager")
+                            ? "bg-[#EFF6FF] text-[#1D4ED8] border-[#BFDBFE]"
+                            : authorLabel.startsWith("Staff")
+                              ? "bg-[#F3E8FF] text-[#7C3AED] border-[#E9D5FF]"
+                              : "bg-[#F3F4F6] text-[#6B7280] border-[#E5E7EB]";
+
+                        return (
+                          <>
+                            <div className="flex items-center justify-between text-[10px] text-nomichi-ink/40 font-bold">
+                              <span className="flex items-center gap-1">
+                                <Clock className="w-3 h-3" />
+                                {new Date(note.created_at).toLocaleString("en-IN", {
+                                  day: "2-digit",
+                                  month: "short",
+                                  hour: "2-digit",
+                                  minute: "2-digit",
+                                })}
+                              </span>
+                              <span className={`rounded-full border px-2 py-0.5 text-[9px] font-black uppercase tracking-widest ${authorTone}`}>
+                                {authorLabel}
+                              </span>
+                            </div>
+                            <div className={`inline-flex w-fit items-center gap-1 rounded-full border px-2 py-0.5 text-[9px] font-black uppercase tracking-widest ${iconColor}`}>
+                              <Icon className="w-3 h-3" />
+                              {noteTitle}
+                            </div>
+                            <p className="text-xs font-semibold text-nomichi-ink/80 leading-relaxed whitespace-pre-wrap">
+                              {noteDesc}
+                            </p>
+                          </>
+                        );
+                      })()}
                     </div>
                   </div>
                 ))

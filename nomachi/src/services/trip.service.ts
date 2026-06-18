@@ -165,6 +165,7 @@ export const tripService = {
       endDate?: string;
       totalSeats: number;
       price: number;
+      tripLeaderId?: string;
       tripLeader?: string;
       meetingPoint?: string;
       notes?: string;
@@ -185,10 +186,16 @@ export const tripService = {
     const nextIndex = yearDeps.length + 1;
     const departureCode = `DEP-${startYear}-${String(nextIndex).padStart(3, "0")}`;
 
+    const tripLeaderName = departureData.tripLeader
+      ? departureData.tripLeader
+      : departureData.tripLeaderId
+        ? (await supabase.from("profiles").select("full_name").eq("id", departureData.tripLeaderId).maybeSingle()).data?.full_name || "Select Team Member"
+        : "Select Team Member";
+
     const statusJson = JSON.stringify({
       status: "active",
       code: departureCode,
-      leader: departureData.tripLeader || "Select Team Member",
+      leader: tripLeaderName,
       meeting: departureData.meetingPoint || "Airport / City",
       notes: departureData.notes || "",
     });
@@ -221,5 +228,21 @@ export const tripService = {
     ]);
 
     if (departureErr) throw departureErr;
+
+    if (departureData.tripLeaderId) {
+      const { error: primaryAssignErr } = await supabase
+        .from("leads")
+        .update({ assigned_to: departureData.tripLeaderId })
+        .eq("trip_id", trip.id);
+
+      if (primaryAssignErr) throw primaryAssignErr;
+
+      const { error: legacyAssignErr } = await supabase
+        .from("leads")
+        .update({ assigned_to: departureData.tripLeaderId })
+        .eq("trip_interest", trip.id);
+
+      if (legacyAssignErr) throw legacyAssignErr;
+    }
   },
 };
