@@ -20,7 +20,7 @@ export function AdminPageClient({ user }: AdminPageClientProps) {
       user={user}
       initialTab="trips"
       onBack={() => {
-        router.push("/");
+        router.push("/admin");
       }}
     />
   );

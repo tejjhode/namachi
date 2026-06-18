@@ -46,6 +46,7 @@ export default function AllTripsPage() {
 
   const [catalogViewMode, setCatalogViewMode] = useState<"list" | "grid">("list");
   const [activeActionDropdownId, setActiveActionDropdownId] = useState<string | null>(null);
+  const [activeActionDropdownPosition, setActiveActionDropdownPosition] = useState<{ top: number; right: number } | null>(null);
   const [activeTripForActivation, setActiveTripForActivation] = useState<any | null>(null);
   const [submitLoading, setSubmitLoading] = useState(false);
   const [error, setError] = useState("");
@@ -70,6 +71,7 @@ export default function AllTripsPage() {
       const target = event.target as Element;
       if (!target.closest('[data-dropdown-wrapper]')) {
         setActiveActionDropdownId(null);
+        setActiveActionDropdownPosition(null);
       }
     }
     
@@ -174,7 +176,21 @@ export default function AllTripsPage() {
 
   const toggleActionDropdown = (tripId: string, e: React.MouseEvent) => {
     e.stopPropagation();
-    setActiveActionDropdownId(activeActionDropdownId === tripId ? null : tripId);
+    if (activeActionDropdownId === tripId) {
+      setActiveActionDropdownId(null);
+      setActiveActionDropdownPosition(null);
+      return;
+    }
+
+    setActiveActionDropdownId(tripId);
+    const rect = (e.currentTarget as HTMLElement).getBoundingClientRect();
+    const estimatedMenuHeight = 180;
+    const openAbove = rect.bottom + estimatedMenuHeight + 12 > window.innerHeight && rect.top > estimatedMenuHeight + 12;
+
+    setActiveActionDropdownPosition({
+      top: openAbove ? rect.top - estimatedMenuHeight - 8 : rect.bottom + 8,
+      right: Math.max(12, window.innerWidth - rect.right),
+    });
   };
 
   const handleDuplicate = async (trip: any, e: React.MouseEvent) => {
@@ -441,7 +457,7 @@ export default function AllTripsPage() {
                     return (
                       <tr
                         key={trip.id}
-                        onClick={() => router.push(`/admin/trips/${trip.id}`)}
+                        onClick={() => router.push(`/admin/trips/${trip.id}/overview`)}
                         className="hover:bg-[#FAF8F4]/30 transition-colors cursor-pointer"
                       >
                         {/* TRIP TITLE & STYLE INFO */}
@@ -556,12 +572,16 @@ export default function AllTripsPage() {
                               <MoreVertical className="w-4.5 h-4.5" />
                             </button>
 
-                            {activeActionDropdownId === trip.id && (
-                              <div className="absolute right-6 top-10 w-44 bg-white border border-[#e7e1d5]/60 rounded-2xl shadow-xl z-30 p-1.5 animate-in fade-in slide-in-from-top-2 duration-150 flex flex-col text-left">
-                                <a
-                                  href={`/trips/${trip.id}`}
-                                  target="_blank"
-                                  rel="noopener noreferrer"
+                            {activeActionDropdownId === trip.id && activeActionDropdownPosition && (
+                              <div
+                                className="fixed z-50 w-44 bg-white border border-[#e7e1d5]/60 rounded-2xl shadow-xl p-1.5 animate-in fade-in slide-in-from-top-2 duration-150 flex flex-col text-left"
+                                style={{
+                                  top: activeActionDropdownPosition.top,
+                                  right: activeActionDropdownPosition.right,
+                                }}
+                              >
+                              <a
+                                  href={`/admin/trips/${trip.id}/overview`}
                                   onClick={(e) => e.stopPropagation()}
                                   className="flex items-center gap-2.5 px-3 py-2 text-xs font-bold text-nomichi-ink hover:bg-[#FAF8F4] rounded-xl border-0 bg-transparent cursor-pointer transition-all w-full text-left no-underline"
                                 >
@@ -615,7 +635,7 @@ export default function AllTripsPage() {
               return (
                 <div
                   key={trip.id}
-                  onClick={() => router.push(`/admin/trips/${trip.id}`)}
+                  onClick={() => router.push(`/admin/trips/${trip.id}/overview`)}
                   className="bg-white rounded-3xl border border-[#e7e1d5]/40 shadow-sm overflow-hidden flex flex-col hover:shadow-md transition-all cursor-pointer relative"
                 >
                   <div className="h-44 w-full relative">
@@ -627,21 +647,25 @@ export default function AllTripsPage() {
                       >
                         <MoreVertical className="w-4 h-4" />
                       </button>
-                      {activeActionDropdownId === trip.id && (
-                        <div className="absolute right-0 top-10 w-44 bg-white border border-[#e7e1d5]/60 rounded-2xl shadow-xl z-30 p-1.5 flex flex-col text-left">
+                      {activeActionDropdownId === trip.id && activeActionDropdownPosition && (
+                        <div
+                          className="fixed z-50 w-44 bg-white border border-[#e7e1d5]/60 rounded-2xl shadow-xl p-1.5 flex flex-col text-left"
+                          style={{
+                            top: activeActionDropdownPosition.top,
+                            right: activeActionDropdownPosition.right,
+                          }}
+                        >
                           <a
-                             href={`/trips/${trip.id}`}
-                             target="_blank"
-                             rel="noopener noreferrer"
+                             href={`/admin/trips/${trip.id}/overview`}
                              onClick={(e) => e.stopPropagation()}
                              className="flex items-center gap-2.5 px-3 py-2 text-xs font-bold text-nomichi-ink hover:bg-[#FAF8F4] rounded-xl border-0 bg-transparent cursor-pointer transition-all w-full text-left no-underline"
                            >
                              👁 View
                            </a>
-                           <button
-                             onClick={(e) => { e.stopPropagation(); router.push(`/admin/trips/${trip.id}`); }}
-                             className="flex items-center gap-2.5 px-3 py-2 text-xs font-bold text-nomichi-ink hover:bg-[#FAF8F4] rounded-xl border-0 bg-transparent cursor-pointer transition-all w-full text-left"
-                           >
+                          <button
+                            onClick={(e) => { e.stopPropagation(); router.push(`/admin/trips/${trip.id}`); }}
+                            className="flex items-center gap-2.5 px-3 py-2 text-xs font-bold text-nomichi-ink hover:bg-[#FAF8F4] rounded-xl border-0 bg-transparent cursor-pointer transition-all w-full text-left"
+                          >
                              ✏️ Edit
                            </button>
                            <button

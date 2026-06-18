@@ -9,7 +9,7 @@ export const leadService = {
     status?: string;
     tripId?: string | null;
   }): Promise<Lead[]> {
-    let query = supabase.from("leads").select("*, trips(id, title, destination), profiles(id, full_name, avatar_url)").order("created_at", { ascending: false });
+    let query = supabase.from("leads").select("*, trips(id, title, destination)").order("created_at", { ascending: false });
 
     if (params?.status && params.status !== "all") {
       query = query.eq("status", params.status);
@@ -25,7 +25,34 @@ export const leadService = {
 
     const { data, error } = await query;
     if (error) throw error;
-    return (data || []) as Lead[];
+
+    const leads = (data || []) as Lead[];
+    const profileIds = Array.from(
+      new Set(
+        leads
+          .map((lead) => lead.assigned_to)
+          .filter((value): value is string => Boolean(value))
+      )
+    );
+
+    if (profileIds.length === 0) {
+      return leads;
+    }
+
+    const { data: profiles, error: profilesError } = await supabase
+      .from("profiles")
+      .select("id, full_name, avatar_url")
+      .in("id", profileIds);
+
+    if (profilesError) {
+      return leads;
+    }
+
+    const profileMap = new Map((profiles || []).map((profile) => [profile.id, profile]));
+    return leads.map((lead) => ({
+      ...lead,
+      profiles: lead.assigned_to ? profileMap.get(lead.assigned_to) : undefined,
+    }));
   },
 
   async getLeadById(id: string): Promise<Lead> {

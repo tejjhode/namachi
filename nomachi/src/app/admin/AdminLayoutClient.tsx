@@ -15,7 +15,8 @@ import {
   Bell,
   Search,
   ArrowRightLeft,
-  ChevronDown
+  ChevronDown,
+  Plane
 } from "lucide-react";
 
 interface AdminLayoutClientProps {
@@ -141,6 +142,42 @@ export function AdminLayoutClient({ children, user }: AdminLayoutClientProps) {
                 </div>
               )}
             </div>
+
+            <Link
+              href="/admin/bookings"
+              className={`flex items-center gap-3.5 px-4 py-2.5 text-xs font-bold rounded-xl w-full text-left transition-all border-0 cursor-pointer no-underline ${
+                pathname === "/admin/bookings"
+                  ? "bg-[#FFEFEA] text-[#FF5B26]"
+                  : "text-nomichi-ink/75 hover:bg-nomichi-sand/10 hover:text-[#FF5B26]"
+              }`}
+            >
+              <ClipboardList className="w-4 h-4" />
+              Bookings
+            </Link>
+
+            <Link
+              href="/admin/travelers"
+              className={`flex items-center gap-3.5 px-4 py-2.5 text-xs font-bold rounded-xl w-full text-left transition-all border-0 cursor-pointer no-underline ${
+                pathname === "/admin/travelers"
+                  ? "bg-[#FFEFEA] text-[#FF5B26]"
+                  : "text-nomichi-ink/75 hover:bg-nomichi-sand/10 hover:text-[#FF5B26]"
+              }`}
+            >
+              <Users className="w-4 h-4" />
+              Travelers
+            </Link>
+
+            <Link
+              href="/admin/departures"
+              className={`flex items-center gap-3.5 px-4 py-2.5 text-xs font-bold rounded-xl w-full text-left transition-all border-0 cursor-pointer no-underline ${
+                pathname === "/admin/departures"
+                  ? "bg-[#FFEFEA] text-[#FF5B26]"
+                  : "text-nomichi-ink/75 hover:bg-nomichi-sand/10 hover:text-[#FF5B26]"
+              }`}
+            >
+              <Plane className="w-4 h-4" />
+              Departures
+            </Link>
 
 
             <Link

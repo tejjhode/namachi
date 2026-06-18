@@ -18,15 +18,20 @@ export default async function AdminAllTripsPage() {
     .eq("id", user.id)
     .single();
 
-  if (!profile || profile.role?.toLowerCase() !== "admin") {
-    redirect("/");
+  const normalizeRole = (value?: string | null) => value?.trim().toLowerCase() || "";
+  const roleFromProfile = normalizeRole(profile?.role);
+  const roleFromMetadata = normalizeRole(user.user_metadata?.role);
+  const allowedRole = [roleFromProfile, roleFromMetadata].find((role) => ["admin", "manager"].includes(role));
+
+  if (!profile && !allowedRole) {
+    redirect("/admin");
   }
 
   const userData = {
     fullName: user.user_metadata?.full_name || user.email?.split("@")[0] || "User",
     avatarUrl: user.user_metadata?.avatar_url,
     email: user.email || "",
-    role: profile.role,
+    role: allowedRole || profile?.role || user.user_metadata?.role || "User",
   };
 
   return <AdminPageClient user={userData} />;

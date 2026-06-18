@@ -63,6 +63,7 @@ import {
 } from "lucide-react";
 import { createClient } from "@/lib/supabase/client";
 import { leadService } from "@/services/lead.service";
+import { useRouter } from "next/navigation";
 
 interface AdminViewProps {
   user: {
@@ -127,6 +128,7 @@ const getNormalizedStatus = (status: string) => {
 };
 
 export default function AdminView({ user, onBack, initialTab }: AdminViewProps) {
+  const router = useRouter();
   const [activeTab, setActiveTab] = useState<AdminTab>(initialTab || "dashboard");
   const noteInputRef = useRef<HTMLInputElement>(null);
   const [tripsMenuOpen, setTripsMenuOpen] = useState(true);
@@ -148,6 +150,7 @@ export default function AdminView({ user, onBack, initialTab }: AdminViewProps) 
   const [catalogViewMode, setCatalogViewMode] = useState<"list" | "grid">("list");
   const [currentPage, setCurrentPage] = useState<number>(1);
   const [activeActionDropdownId, setActiveActionDropdownId] = useState<string | null>(null);
+  const [activeActionDropdownPosition, setActiveActionDropdownPosition] = useState<{ top: number; right: number } | null>(null);
   const [editingTripId, setEditingTripId] = useState<string | null>(null);
   const [departures, setDepartures] = useState<any[]>([]);
   const [departuresFilterTripId, setDeparturesFilterTripId] = useState<string | null>(null);
@@ -1352,16 +1355,25 @@ export default function AdminView({ user, onBack, initialTab }: AdminViewProps) 
   useEffect(() => {
     if (!activeActionDropdownId) return;
 
+    const closeDropdown = () => {
+      setActiveActionDropdownId(null);
+      setActiveActionDropdownPosition(null);
+    };
+
     const handleDocumentClick = (event: MouseEvent) => {
-      const target = event.target as Element;
-      if (!target.closest('[data-dropdown-wrapper]')) {
-        setActiveActionDropdownId(null);
+      const target = event.target as HTMLElement | null;
+      if (!target?.closest('[data-dropdown-wrapper]')) {
+        closeDropdown();
       }
     };
 
     document.addEventListener("mousedown", handleDocumentClick);
+    window.addEventListener("scroll", closeDropdown, true);
+    window.addEventListener("resize", closeDropdown);
     return () => {
       document.removeEventListener("mousedown", handleDocumentClick);
+      window.removeEventListener("scroll", closeDropdown, true);
+      window.removeEventListener("resize", closeDropdown);
     };
   }, [activeActionDropdownId]);
 
@@ -1576,6 +1588,10 @@ export default function AdminView({ user, onBack, initialTab }: AdminViewProps) 
     setActiveTab("add_trip");
   };
 
+  const handleOpenTripOverview = (trip: any) => {
+    router.push(`/admin/trips/${trip.id}/overview`);
+  };
+
   const handleStartCreateTrip = () => {
     setError("");
     setSuccess("");
@@ -1723,16 +1739,22 @@ export default function AdminView({ user, onBack, initialTab }: AdminViewProps) 
   const renderContextualDropdown = (trip: any, enqInfo: { count: number; label: string }) => {
     const handlePreview = (e: React.MouseEvent) => {
       e.stopPropagation();
-      window.open(`/trips/${trip.id}`, "_blank");
+      setActiveActionDropdownId(null);
+      setActiveActionDropdownPosition(null);
+      router.push(`/admin/trips/${trip.id}/overview`);
     };
 
     const handleEdit = (e: React.MouseEvent) => {
       e.stopPropagation();
+      setActiveActionDropdownId(null);
+      setActiveActionDropdownPosition(null);
       handleStartEditTrip(trip);
     };
 
     const handleActivate = (e: React.MouseEvent) => {
       e.stopPropagation();
+      setActiveActionDropdownId(null);
+      setActiveActionDropdownPosition(null);
       handleOpenActivateModal(trip);
     };
 
@@ -1740,6 +1762,7 @@ export default function AdminView({ user, onBack, initialTab }: AdminViewProps) 
       e.stopPropagation();
       handleDeleteTrip(trip.id);
       setActiveActionDropdownId(null);
+      setActiveActionDropdownPosition(null);
     };
 
     return (
@@ -1808,8 +1831,16 @@ export default function AdminView({ user, onBack, initialTab }: AdminViewProps) 
     e.stopPropagation();
     if (activeActionDropdownId === id) {
       setActiveActionDropdownId(null);
+      setActiveActionDropdownPosition(null);
     } else {
       setActiveActionDropdownId(id);
+      const rect = (e.currentTarget as HTMLElement).getBoundingClientRect();
+      const estimatedMenuHeight = 180;
+      const openAbove = rect.bottom + estimatedMenuHeight + 12 > window.innerHeight && rect.top > estimatedMenuHeight + 12;
+      setActiveActionDropdownPosition({
+        top: openAbove ? rect.top - estimatedMenuHeight - 8 : rect.bottom + 8,
+        right: Math.max(12, window.innerWidth - rect.right),
+      });
     }
   };
 
@@ -2522,7 +2553,7 @@ export default function AdminView({ user, onBack, initialTab }: AdminViewProps) 
                             return (
                               <tr 
                                 key={trip.id} 
-                                onClick={() => handleStartEditTrip(trip)}
+                                onClick={() => handleOpenTripOverview(trip)}
                                 className="hover:bg-[#FAF8F4]/30 transition-colors cursor-pointer"
                               >
                                 {/* TRIP TITLE & STYLE INFO */}
@@ -2633,20 +2664,15 @@ export default function AdminView({ user, onBack, initialTab }: AdminViewProps) 
                                 </td>
 
                                 {/* ACTIONS DROPDOWN */}
-                                <td className="px-6 py-4 text-right relative" onClick={(e) => e.stopPropagation()}>
-                                  <div data-dropdown-wrapper className="inline-block text-left">
+                                <td className="px-6 py-4 text-right relative overflow-visible" onClick={(e) => e.stopPropagation()}>
+                                  <div data-dropdown-wrapper className="relative inline-flex justify-end text-left">
                                     <button
+                                      type="button"
                                       onClick={(e) => toggleActionDropdown(trip.id, e)}
                                       className="p-1.5 hover:bg-[#FAF8F4] rounded-lg transition-colors border-0 bg-transparent text-nomichi-ink/50 hover:text-nomichi-ink cursor-pointer"
                                     >
                                       <MoreVertical className="w-4.5 h-4.5" />
                                     </button>
-
-                                    {activeActionDropdownId === trip.id && (
-                                      <div className="absolute right-6 top-12 w-44 bg-white/90 backdrop-blur-md border border-[#e7e1d5]/60 rounded-2xl shadow-xl z-30 p-1.5 animate-in fade-in slide-in-from-top-2 duration-150 flex flex-col text-left">
-                                        {renderContextualDropdown(trip, enqInfo)}
-                                      </div>
-                                    )}
                                   </div>
                                 </td>
                               </tr>
@@ -2674,7 +2700,7 @@ export default function AdminView({ user, onBack, initialTab }: AdminViewProps) 
                       return (
                         <div 
                           key={trip.id} 
-                          onClick={() => handleStartEditTrip(trip)}
+                          onClick={() => handleOpenTripOverview(trip)}
                           className="bg-white rounded-3xl border border-[#e7e1d5]/40 overflow-hidden shadow-sm hover:shadow-md transition-all flex flex-col cursor-pointer text-left"
                         >
                           {/* Image Banner */}
@@ -4948,6 +4974,26 @@ export default function AdminView({ user, onBack, initialTab }: AdminViewProps) 
               </div>
             </div>
           )}
+
+              {activeActionDropdownId && activeActionDropdownPosition && (
+                <div
+                  data-dropdown-wrapper
+                  className="fixed z-[9999] w-44 min-w-max bg-white/95 backdrop-blur-md border border-[#e7e1d5]/60 rounded-2xl shadow-xl p-1.5 animate-in fade-in slide-in-from-top-2 duration-150 flex flex-col text-left"
+                  style={{
+                    top: activeActionDropdownPosition.top,
+                    right: activeActionDropdownPosition.right,
+                  }}
+                  onClick={(e) => e.stopPropagation()}
+                >
+                  {(() => {
+                    const trip = trips.find((item) => item.id === activeActionDropdownId);
+                    if (!trip) return null;
+                    const tripLeads = leads.filter((l) => l.trip_id === trip.id);
+                    const enqInfo = getEnquiryDisplay(trip, tripLeads);
+                    return renderContextualDropdown(trip, enqInfo);
+                  })()}
+                </div>
+              )}
 
         </main>
       </div>
