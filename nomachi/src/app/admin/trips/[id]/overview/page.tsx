@@ -92,9 +92,9 @@ export default async function AdminTripOverviewPage({ params }: PageProps) {
   const normalizeRole = (value?: string | null) => value?.trim().toLowerCase() || "";
   const roleFromProfile = normalizeRole(profile?.role);
   const roleFromMetadata = normalizeRole(user.user_metadata?.role);
-  const allowedRole = [roleFromProfile, roleFromMetadata].find((role) => ["admin", "manager"].includes(role));
+  const allowedRole = [roleFromProfile, roleFromMetadata].find((role) => role === "admin");
 
-  if (!profile && !allowedRole) {
+  if (!allowedRole) {
     redirect("/login");
   }
 

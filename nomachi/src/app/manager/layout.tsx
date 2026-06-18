@@ -1,10 +1,10 @@
 import { redirect } from "next/navigation";
 import { createSupabaseServerClient } from "@/lib/supabase/server";
-import { AdminLayoutClient } from "./AdminLayoutClient";
+import { ManagerLayoutClient } from "./ManagerLayoutClient";
 
 export const dynamic = "force-dynamic";
 
-export default async function AdminLayout({ children }: { children: React.ReactNode }) {
+export default async function ManagerLayout({ children }: { children: React.ReactNode }) {
   const supabaseServer = await createSupabaseServerClient();
   const { data: { user } } = await supabaseServer.auth.getUser();
 
@@ -21,22 +21,27 @@ export default async function AdminLayout({ children }: { children: React.ReactN
   const normalizeRole = (value?: string | null) => value?.trim().toLowerCase() || "";
   const roleFromProfile = normalizeRole(profile?.role);
   const roleFromMetadata = normalizeRole(user.user_metadata?.role);
-  const allowedRole = [roleFromProfile, roleFromMetadata].find((role) => role === "admin");
+  const allowedRole = [roleFromProfile, roleFromMetadata].find((role) => ["admin", "manager"].includes(role));
 
   if (!allowedRole) {
     redirect("/login");
   }
 
+  // If role is ADMIN, redirect to admin dashboard
+  if (allowedRole === "admin") {
+    redirect("/admin");
+  }
+
   const userData = {
-    fullName: profile?.full_name || user.email?.split("@")[0] || "User",
+    fullName: profile?.full_name || user.email?.split("@")[0] || "Manager",
     avatarUrl: profile?.avatar_url || user.user_metadata?.avatar_url,
     email: user.email || "",
-    role: allowedRole || profile?.role || user.user_metadata?.role || "User",
+    role: "Manager",
   };
 
   return (
-    <AdminLayoutClient user={userData}>
+    <ManagerLayoutClient user={userData}>
       {children}
-    </AdminLayoutClient>
+    </ManagerLayoutClient>
   );
 }

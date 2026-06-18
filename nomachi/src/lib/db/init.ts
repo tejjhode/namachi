@@ -179,6 +179,17 @@ export async function initializeDatabase() {
   try {
     console.log("🗄️  Initializing database schema...");
 
+    // Quick check: if profiles table exists, we don't need to re-run DDL migrations
+    const { error: checkError } = await supabase
+      .from("profiles")
+      .select("id")
+      .limit(1);
+
+    if (!checkError) {
+      console.log("✅ Database schema already initialized (profiles table exists).");
+      return true;
+    }
+
     for (let i = 0; i < migrations.length; i++) {
       try {
         await supabase.rpc("exec_sql", { query_text: migrations[i] });

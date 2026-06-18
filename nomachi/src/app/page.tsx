@@ -1,8 +1,10 @@
 import Link from "next/link";
+import { redirect } from "next/navigation";
 import { UserMenu } from "@/components/UserMenu";
 import { SearchWidget } from "@/components/SearchWidget";
 import { DashboardView } from "@/components/DashboardView";
 import { createSupabaseServerClient } from "@/lib/supabase/server";
+import { normalizeRole } from "@/lib/auth/roles";
 import { 
   MapPin, 
   Calendar, 
@@ -36,6 +38,24 @@ export default async function Home({ searchParams }: PageProps) {
   // Get active user session securely
   const supabaseServer = await createSupabaseServerClient();
   const { data: { user } } = await supabaseServer.auth.getUser();
+
+  let userRole = "USER";
+  if (user) {
+    const { data: profile } = await supabaseServer
+      .from("profiles")
+      .select("role")
+      .eq("id", user.id)
+      .single();
+    userRole = normalizeRole(profile?.role || user.user_metadata?.role || "USER");
+
+    if (userRole === "ADMIN") {
+      redirect("/admin");
+    }
+
+    if (userRole === "MANAGER") {
+      redirect("/manager");
+    }
+  }
 
   // Fetch all open destinations for auto-complete listing
   const { data: allTrips } = await supabaseServer
@@ -89,18 +109,6 @@ export default async function Home({ searchParams }: PageProps) {
         .is("lead_id", null)
         .order("created_at", { ascending: true });
       if (msgs) initialChatMessages = msgs;
-    }
-  }
-
-  let userRole = "USER";
-  if (user) {
-    const { data: profile } = await supabaseServer
-      .from("profiles")
-      .select("role")
-      .eq("id", user.id)
-      .single();
-    if (profile && profile.role) {
-      userRole = profile.role;
     }
   }
 

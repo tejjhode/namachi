@@ -43,6 +43,7 @@ export async function middleware(request: NextRequest) {
   // Paths that require authentication
   const isProtectedRoute =
     pathname.startsWith("/dashboard") ||
+    pathname.startsWith("/manager") ||
     pathname.startsWith("/profile");
     
   const isAuthRoute = pathname.startsWith("/login") || pathname.startsWith("/signup");
