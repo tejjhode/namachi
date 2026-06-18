@@ -1,0 +1,4 @@
+nomachi/.env.local
+nomachi/node_modules
+nomachi/.next
+nomachi/.vscode

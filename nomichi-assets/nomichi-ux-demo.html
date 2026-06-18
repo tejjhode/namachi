@@ -1,0 +1,1174 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Nomichi UX Demo</title>
+    <style>
+      :root {
+        --rust: #d55d27;
+        --yellow: #fffe00;
+        --ink: #1c1b1a;
+        --olive: #45471d;
+        --sand: #d1b788;
+        --cream: #fffbf5;
+        --panel: #fff8ef;
+        --line: rgba(69, 71, 29, 0.12);
+        --soft: rgba(28, 27, 26, 0.64);
+        --shadow: 0 24px 80px rgba(28, 27, 26, 0.14);
+      }
+
+      * {
+        box-sizing: border-box;
+      }
+
+      html, body {
+        margin: 0;
+        min-height: 100%;
+        background:
+          radial-gradient(circle at 10% 10%, rgba(213, 93, 39, 0.08), transparent 22%),
+          radial-gradient(circle at 85% 18%, rgba(209, 183, 136, 0.18), transparent 18%),
+          linear-gradient(180deg, #fffdf8 0%, var(--cream) 100%);
+        color: var(--ink);
+        font-family: Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+        overflow: hidden;
+      }
+
+      body::before,
+      body::after {
+        content: "";
+        position: fixed;
+        inset: auto;
+        border-radius: 999px;
+        pointer-events: none;
+        opacity: 0.55;
+      }
+
+      body::before {
+        width: 380px;
+        height: 380px;
+        left: -150px;
+        top: -120px;
+        border: 1px solid rgba(213, 93, 39, 0.14);
+        transform: rotate(16deg);
+      }
+
+      body::after {
+        width: 520px;
+        height: 520px;
+        right: -220px;
+        bottom: -240px;
+        border: 1px solid rgba(69, 71, 29, 0.08);
+      }
+
+      .page {
+        width: 100vw;
+        height: 100vh;
+        padding: 28px 32px 30px;
+        position: relative;
+      }
+
+      .topbar {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        margin-bottom: 18px;
+      }
+
+      .brand {
+        display: flex;
+        flex-direction: column;
+        gap: 3px;
+        letter-spacing: 0.3em;
+        color: var(--rust);
+      }
+
+      .brand strong {
+        font-size: 48px;
+        line-height: 0.92;
+        letter-spacing: 0.12em;
+        font-weight: 900;
+        text-transform: uppercase;
+      }
+
+      .brand span {
+        color: rgba(69, 71, 29, 0.85);
+        font-size: 13px;
+        font-weight: 800;
+      }
+
+      .hero-copy {
+        max-width: 470px;
+        text-align: right;
+        margin-left: auto;
+      }
+
+      .hero-copy h1 {
+        margin: 0;
+        font-size: clamp(32px, 3.2vw, 58px);
+        line-height: 0.98;
+        letter-spacing: -0.04em;
+        color: var(--olive);
+      }
+
+      .hero-copy h1 .rust {
+        color: var(--rust);
+      }
+
+      .hero-copy p {
+        margin: 14px 0 0;
+        font-size: 18px;
+        color: rgba(28, 27, 26, 0.72);
+        line-height: 1.45;
+      }
+
+      .highlight {
+        background: var(--yellow);
+        padding: 0 6px;
+        box-decoration-break: clone;
+        -webkit-box-decoration-break: clone;
+        border-radius: 5px;
+        color: var(--ink);
+        font-weight: 800;
+      }
+
+      .stage {
+        position: absolute;
+        inset: 156px 32px 28px;
+        display: grid;
+        grid-template-columns: minmax(900px, 1fr) 360px;
+        gap: 28px;
+        align-items: center;
+      }
+
+      .desk-shell {
+        height: 100%;
+        border: 1px solid rgba(69, 71, 29, 0.18);
+        border-radius: 22px;
+        box-shadow: var(--shadow);
+        overflow: hidden;
+        background: linear-gradient(180deg, #fffaf2, #fffdfb);
+        position: relative;
+      }
+
+      .desk-shell::before {
+        content: "";
+        position: absolute;
+        inset: 0;
+        background:
+          linear-gradient(135deg, rgba(213, 93, 39, 0.04), transparent 34%),
+          linear-gradient(180deg, rgba(255, 255, 255, 0.86), transparent 18%);
+        pointer-events: none;
+      }
+
+      .app {
+        height: 100%;
+        display: grid;
+        grid-template-columns: 240px 1fr;
+        position: relative;
+      }
+
+      .sidebar {
+        background: linear-gradient(180deg, #2f3a1a 0%, #1d2410 100%);
+        color: #fff;
+        padding: 18px 16px;
+        display: flex;
+        flex-direction: column;
+        justify-content: space-between;
+      }
+
+      .sidebar .mini-brand {
+        color: #ff8a57;
+        text-transform: uppercase;
+        letter-spacing: 0.26em;
+        font-size: 14px;
+        font-weight: 800;
+        line-height: 1.2;
+        margin-bottom: 22px;
+      }
+
+      .nav {
+        display: grid;
+        gap: 8px;
+      }
+
+      .nav-item {
+        display: flex;
+        align-items: center;
+        gap: 10px;
+        padding: 11px 12px;
+        border-radius: 12px;
+        color: rgba(255, 255, 255, 0.85);
+        font-size: 14px;
+        transition: 220ms ease;
+      }
+
+      .nav-item.active,
+      .nav-item:hover {
+        background: rgba(255, 254, 0, 0.12);
+        color: #fff;
+      }
+
+      .nav-item .dot {
+        width: 8px;
+        height: 8px;
+        border-radius: 999px;
+        background: currentColor;
+        opacity: 0.8;
+      }
+
+      .profile {
+        display: flex;
+        align-items: center;
+        gap: 10px;
+        padding: 12px;
+        border: 1px solid rgba(255, 255, 255, 0.12);
+        border-radius: 14px;
+        background: rgba(255, 255, 255, 0.04);
+        font-size: 13px;
+      }
+
+      .avatar {
+        width: 30px;
+        height: 30px;
+        border-radius: 50%;
+        background: linear-gradient(135deg, #f0d6a8, #d55d27);
+      }
+
+      .main {
+        padding: 18px 18px 16px;
+        display: flex;
+        flex-direction: column;
+        gap: 14px;
+      }
+
+      .header {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        gap: 16px;
+      }
+
+      .search {
+        flex: 1;
+        max-width: 340px;
+        height: 34px;
+        border-radius: 999px;
+        border: 1px solid rgba(69, 71, 29, 0.1);
+        background: #fff;
+        display: flex;
+        align-items: center;
+        padding: 0 14px;
+        color: rgba(28, 27, 26, 0.48);
+        font-size: 12px;
+      }
+
+      .stats {
+        display: grid;
+        grid-template-columns: repeat(4, 1fr);
+        gap: 12px;
+      }
+
+      .card {
+        background: #fff;
+        border: 1px solid rgba(69, 71, 29, 0.12);
+        border-radius: 16px;
+        box-shadow: 0 18px 40px rgba(28, 27, 26, 0.05);
+      }
+
+      .stat {
+        padding: 16px;
+        min-height: 98px;
+        display: flex;
+        flex-direction: column;
+        justify-content: space-between;
+      }
+
+      .stat label {
+        color: rgba(28, 27, 26, 0.62);
+        font-size: 12px;
+      }
+
+      .stat strong {
+        font-size: 28px;
+        line-height: 1;
+        letter-spacing: -0.04em;
+      }
+
+      .delta {
+        color: #3d7c42;
+        font-size: 11px;
+        font-weight: 700;
+      }
+
+      .grid {
+        flex: 1;
+        display: grid;
+        grid-template-columns: 1.05fr 1fr 0.98fr;
+        gap: 12px;
+        min-height: 0;
+      }
+
+      .panel {
+        padding: 14px;
+        min-height: 0;
+        display: flex;
+        flex-direction: column;
+      }
+
+      .panel h3 {
+        margin: 0 0 10px;
+        font-size: 17px;
+        letter-spacing: -0.03em;
+      }
+
+      .trip-list,
+      .lead-list,
+      .detail-stack {
+        display: grid;
+        gap: 10px;
+        min-height: 0;
+      }
+
+      .trip {
+        height: 118px;
+        border-radius: 14px;
+        overflow: hidden;
+        position: relative;
+        display: flex;
+        align-items: end;
+        padding: 12px;
+        color: #fff;
+        background:
+          linear-gradient(180deg, transparent 0%, rgba(28, 27, 26, 0.82) 100%),
+          linear-gradient(135deg, #89b8d3, #d6a06d);
+      }
+
+      .trip:nth-child(2) {
+        background:
+          linear-gradient(180deg, transparent 0%, rgba(28, 27, 26, 0.82) 100%),
+          linear-gradient(135deg, #7ba27c, #d7bb7e);
+      }
+
+      .trip:nth-child(3) {
+        background:
+          linear-gradient(180deg, transparent 0%, rgba(28, 27, 26, 0.82) 100%),
+          linear-gradient(135deg, #af8b68, #5d5d3a);
+      }
+
+      .trip .meta {
+        display: flex;
+        justify-content: space-between;
+        align-items: end;
+        width: 100%;
+        gap: 8px;
+      }
+
+      .trip .title {
+        display: grid;
+        gap: 2px;
+      }
+
+      .trip .title strong {
+        font-size: 18px;
+      }
+
+      .trip .title span {
+        font-size: 12px;
+        opacity: 0.88;
+      }
+
+      .chip {
+        display: inline-flex;
+        align-items: center;
+        gap: 6px;
+        border-radius: 999px;
+        padding: 6px 10px;
+        background: rgba(255, 254, 0, 0.96);
+        color: var(--ink);
+        font-size: 11px;
+        font-weight: 800;
+      }
+
+      .lead {
+        display: grid;
+        grid-template-columns: 38px 1fr auto;
+        gap: 10px;
+        align-items: center;
+        padding: 10px;
+        border-radius: 13px;
+        background: linear-gradient(180deg, #fff, #fff9f0);
+        border: 1px solid rgba(69, 71, 29, 0.1);
+      }
+
+      .lead p {
+        margin: 0;
+        font-size: 12px;
+        color: rgba(28, 27, 26, 0.66);
+      }
+
+      .lead strong {
+        display: block;
+        margin-bottom: 2px;
+        font-size: 14px;
+      }
+
+      .tag {
+        border-radius: 999px;
+        padding: 6px 9px;
+        font-size: 11px;
+        font-weight: 800;
+      }
+
+      .new { background: rgba(117, 190, 97, 0.18); color: #3f7d34; }
+      .contacted { background: rgba(255, 190, 66, 0.16); color: #9a6100; }
+      .qualified { background: rgba(93, 131, 208, 0.16); color: #3257a0; }
+
+      .detail {
+        display: grid;
+        gap: 14px;
+      }
+
+      .lead-detail {
+        padding: 14px;
+        border-radius: 16px;
+        background: linear-gradient(180deg, #fff, #fffaf2);
+        border: 1px solid rgba(69, 71, 29, 0.12);
+      }
+
+      .lead-head {
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        margin-bottom: 12px;
+      }
+
+      .lead-head strong {
+        display: block;
+        font-size: 18px;
+      }
+
+      .pill-row {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 6px;
+        margin-bottom: 12px;
+      }
+
+      .pill {
+        padding: 6px 9px;
+        border-radius: 999px;
+        background: #f5f1e8;
+        font-size: 11px;
+        color: rgba(28, 27, 26, 0.7);
+        font-weight: 700;
+      }
+
+      .kv {
+        display: grid;
+        grid-template-columns: 110px 1fr;
+        gap: 8px 12px;
+        font-size: 12px;
+        color: rgba(28, 27, 26, 0.72);
+        padding: 10px 0 0;
+        border-top: 1px solid rgba(69, 71, 29, 0.08);
+      }
+
+      .kv b {
+        color: var(--ink);
+      }
+
+      .note {
+        padding: 14px;
+        border-left: 4px solid var(--rust);
+        background: linear-gradient(90deg, rgba(213, 93, 39, 0.08), rgba(255, 251, 245, 0.75));
+        border-radius: 14px;
+        font-size: 13px;
+        line-height: 1.55;
+      }
+
+      .ai {
+        padding: 14px;
+        background: linear-gradient(180deg, #fffef8, #fff5cc);
+        border: 1px solid rgba(255, 254, 0, 0.7);
+        border-radius: 16px;
+      }
+
+      .ai h4 {
+        margin: 0 0 8px;
+        font-size: 14px;
+      }
+
+      .ai p {
+        margin: 0;
+        font-size: 12px;
+        line-height: 1.55;
+        color: rgba(28, 27, 26, 0.76);
+      }
+
+      .cta {
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        gap: 10px;
+        margin-top: 12px;
+      }
+
+      .button {
+        border: 0;
+        border-radius: 14px;
+        padding: 12px 14px;
+        font-weight: 800;
+        color: #fff;
+        background: linear-gradient(90deg, var(--olive), #2d3314);
+        box-shadow: 0 10px 26px rgba(69, 71, 29, 0.24);
+      }
+
+      .button.alt {
+        color: var(--ink);
+        background: linear-gradient(90deg, #fffdc1, #ffe96d);
+      }
+
+      .phone-shell {
+        width: 360px;
+        margin-left: auto;
+        padding: 18px 14px;
+        border-radius: 38px;
+        border: 1px solid rgba(69, 71, 29, 0.18);
+        background: linear-gradient(180deg, #121212, #272420);
+        box-shadow: 0 24px 70px rgba(28, 27, 26, 0.26);
+        position: relative;
+        overflow: hidden;
+      }
+
+      .phone-shell::before {
+        content: "";
+        position: absolute;
+        inset: 10px;
+        border-radius: 30px;
+        background: linear-gradient(180deg, rgba(255, 255, 255, 0.04), transparent);
+        pointer-events: none;
+      }
+
+      .phone {
+        height: 100%;
+        min-height: 732px;
+        border-radius: 28px;
+        background: linear-gradient(180deg, #fffaf1, #fffdfb);
+        overflow: hidden;
+        position: relative;
+        padding: 18px 16px;
+      }
+
+      .statusbar {
+        display: flex;
+        justify-content: space-between;
+        font-size: 12px;
+        color: rgba(28, 27, 26, 0.72);
+        margin-bottom: 16px;
+      }
+
+      .mobile-head {
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        margin-bottom: 18px;
+      }
+
+      .mobile-head .wordmark {
+        color: var(--rust);
+        font-size: 28px;
+        font-weight: 900;
+        letter-spacing: 0.1em;
+      }
+
+      .mobile-head .wordmark small {
+        display: block;
+        color: rgba(69, 71, 29, 0.88);
+        letter-spacing: 0.32em;
+        font-size: 8px;
+        margin-top: 2px;
+      }
+
+      .menu {
+        width: 24px;
+        height: 20px;
+        border-top: 2px solid var(--ink);
+        border-bottom: 2px solid var(--ink);
+        position: relative;
+      }
+
+      .menu::after {
+        content: "";
+        position: absolute;
+        left: 0;
+        right: 0;
+        top: 8px;
+        border-top: 2px solid var(--ink);
+      }
+
+      .mobile-hero {
+        display: grid;
+        gap: 8px;
+        margin-bottom: 14px;
+      }
+
+      .eyebrow {
+        font-size: 11px;
+        color: var(--rust);
+        font-weight: 800;
+        letter-spacing: 0.24em;
+      }
+
+      .mobile-hero h2 {
+        margin: 0;
+        font-size: 34px;
+        line-height: 0.95;
+        letter-spacing: -0.05em;
+      }
+
+      .mobile-hero p {
+        margin: 0;
+        color: rgba(28, 27, 26, 0.74);
+        line-height: 1.45;
+        font-size: 14px;
+      }
+
+      .mobile-card {
+        border-radius: 22px;
+        background: linear-gradient(180deg, rgba(255, 254, 0, 0.22), rgba(255, 255, 255, 0.9));
+        border: 1px solid rgba(213, 93, 39, 0.12);
+        padding: 14px;
+      }
+
+      .mobile-card h3 {
+        margin: 0 0 10px;
+        font-size: 20px;
+      }
+
+      .field {
+        display: grid;
+        gap: 6px;
+        margin-bottom: 10px;
+        font-size: 12px;
+      }
+
+      .input {
+        height: 38px;
+        border-radius: 10px;
+        border: 1px solid rgba(69, 71, 29, 0.14);
+        background: rgba(255, 255, 255, 0.8);
+        display: flex;
+        align-items: center;
+        padding: 0 12px;
+        color: rgba(28, 27, 26, 0.48);
+      }
+
+      .textarea {
+        min-height: 72px;
+        align-items: start;
+        padding-top: 10px;
+      }
+
+      .submit {
+        width: 100%;
+        height: 44px;
+        border-radius: 13px;
+        border: 0;
+        color: white;
+        font-weight: 800;
+        background: linear-gradient(90deg, #39411f, #1f2610);
+        margin-top: 6px;
+      }
+
+      .footnote {
+        margin-top: 10px;
+        font-size: 11px;
+        color: rgba(28, 27, 26, 0.62);
+        display: flex;
+        align-items: center;
+        gap: 6px;
+      }
+
+      .scene {
+        position: absolute;
+        inset: 0;
+        opacity: 0;
+        pointer-events: none;
+        transition: opacity 700ms ease, transform 700ms ease;
+      }
+
+      body[data-scene="overview"] .scene.overview,
+      body[data-scene="lead"] .scene.lead,
+      body[data-scene="mobile"] .scene.mobile {
+        opacity: 1;
+        pointer-events: auto;
+        transform: translateY(0);
+      }
+
+      body[data-scene="overview"] .scene.lead,
+      body[data-scene="overview"] .scene.mobile {
+        transform: translateY(10px);
+      }
+
+      body[data-scene="lead"] .scene.overview,
+      body[data-scene="lead"] .scene.mobile {
+        transform: translateY(10px);
+      }
+
+      body[data-scene="mobile"] .scene.overview,
+      body[data-scene="mobile"] .scene.lead {
+        transform: translateY(10px);
+      }
+
+      .scene.overview {
+        opacity: 1;
+      }
+
+      .scene.mobile {
+        display: grid;
+        place-items: center;
+      }
+
+      body[data-scene="mobile"] .stage {
+        grid-template-columns: 1fr;
+        justify-items: center;
+      }
+
+      body[data-scene="mobile"] .desk-shell {
+        display: none;
+      }
+
+      body[data-scene="mobile"] .phone-shell {
+        width: 420px;
+        transform: scale(1.05);
+      }
+
+      .floating {
+        animation: float 6s ease-in-out infinite;
+      }
+
+      .pulse {
+        position: absolute;
+        width: 16px;
+        height: 16px;
+        border-radius: 50%;
+        background: rgba(255, 254, 0, 0.75);
+        filter: blur(2px);
+        animation: pulse 2.6s ease-in-out infinite;
+      }
+
+      .pulse.one { right: 26px; top: 26px; }
+      .pulse.two { left: 46%; bottom: 18px; animation-delay: .9s; }
+
+      @keyframes float {
+        0%, 100% { transform: translateY(0px); }
+        50% { transform: translateY(-10px); }
+      }
+
+      @keyframes pulse {
+        0%, 100% { transform: scale(0.9); opacity: 0.5; }
+        50% { transform: scale(1.7); opacity: 0.2; }
+      }
+
+      @media (max-width: 1280px) {
+        html, body {
+          overflow: auto;
+        }
+        .page {
+          height: auto;
+          min-height: 100vh;
+          overflow: hidden;
+        }
+        .stage {
+          position: static;
+          display: grid;
+          grid-template-columns: 1fr;
+          margin-top: 18px;
+        }
+        .hero-copy {
+          max-width: 520px;
+        }
+        .phone-shell {
+          margin: 0 auto;
+        }
+        .desk-shell {
+          min-height: 900px;
+        }
+      }
+    </style>
+  </head>
+  <body data-scene="overview">
+    <div class="page">
+      <div class="topbar">
+        <div class="brand">
+          <strong>Nomichi</strong>
+          <span>TRIP DESK</span>
+        </div>
+        <div class="hero-copy">
+          <h1>
+            Travel CRM built for <span class="rust">modern travel companies.</span>
+          </h1>
+          <p>
+            Enquiries in. Conversations smart. <span class="highlight">Trips booked.</span>
+          </p>
+        </div>
+      </div>
+
+      <div class="stage">
+        <div class="scene overview">
+          <div class="desk-shell floating">
+            <div class="pulse one"></div>
+            <div class="pulse two"></div>
+            <div class="app">
+              <aside class="sidebar">
+                <div>
+                  <div class="mini-brand">Nomichi<br />Trip Desk</div>
+                  <div class="nav">
+                    <div class="nav-item active"><span class="dot"></span>Overview</div>
+                    <div class="nav-item"><span class="dot"></span>Leads</div>
+                    <div class="nav-item"><span class="dot"></span>Trips</div>
+                    <div class="nav-item"><span class="dot"></span>Bookings</div>
+                    <div class="nav-item"><span class="dot"></span>Templates</div>
+                  </div>
+                </div>
+                <div class="profile">
+                  <div class="avatar"></div>
+                  <div>
+                    <div style="font-weight:800">Arjun Rana</div>
+                    <div style="opacity:.72">Admin</div>
+                  </div>
+                </div>
+              </aside>
+
+              <main class="main">
+                <div class="header">
+                  <div style="font-size:20px;font-weight:900;letter-spacing:-.03em">Overview</div>
+                  <div class="search">Search leads, trips, customers...</div>
+                  <div style="display:flex;gap:12px;color:rgba(28,27,26,.7);font-size:18px">🔔 ◌</div>
+                </div>
+
+                <div class="stats">
+                  <div class="card stat">
+                    <label>Total Leads</label>
+                    <strong>128</strong>
+                    <span class="delta">↑ 18% vs last 7 days</span>
+                  </div>
+                  <div class="card stat">
+                    <label>New Enquiries</label>
+                    <strong>42</strong>
+                    <span class="delta">↑ 12% vs last 7 days</span>
+                  </div>
+                  <div class="card stat">
+                    <label>Trips Booked</label>
+                    <strong>18</strong>
+                    <span class="delta">↑ 8% vs last 7 days</span>
+                  </div>
+                  <div class="card stat">
+                    <label>Conversion Rate</label>
+                    <strong>24.6%</strong>
+                    <span class="delta">↑ 5.2% vs last 7 days</span>
+                  </div>
+                </div>
+
+                <div class="grid">
+                  <section class="card panel">
+                    <h3>Public Trips</h3>
+                    <div class="trip-list">
+                      <div class="trip">
+                        <div class="meta">
+                          <div class="title">
+                            <span>HIMALAYAS</span>
+                            <strong>Spiti Explorer</strong>
+                            <span>7 Days · Group Trip</span>
+                          </div>
+                          <div class="chip">POPULAR</div>
+                        </div>
+                      </div>
+                      <div class="trip">
+                        <div class="meta">
+                          <div class="title">
+                            <span>SOUTH INDIA</span>
+                            <strong>Kerala Backwaters</strong>
+                            <span>5 Days · Private Trip</span>
+                          </div>
+                          <div style="font-weight:900;font-size:18px">₹18,900</div>
+                        </div>
+                      </div>
+                      <div class="trip">
+                        <div class="meta">
+                          <div class="title">
+                            <span>RAJASTHAN</span>
+                            <strong>Rajasthan Trails</strong>
+                            <span>6 Days · Group Trip</span>
+                          </div>
+                          <div style="font-weight:900;font-size:18px">₹21,500</div>
+                        </div>
+                      </div>
+                    </div>
+                  </section>
+
+                  <section class="card panel">
+                    <h3>Leads</h3>
+                    <div class="lead-list">
+                      <div class="lead">
+                        <div class="avatar"></div>
+                        <div>
+                          <strong>Neha Iyer</strong>
+                          <p>Kerala Backwaters · 2 Pax · 5 minutes ago</p>
+                        </div>
+                        <div class="tag new">New</div>
+                      </div>
+                      <div class="lead">
+                        <div class="avatar" style="background:linear-gradient(135deg,#d3b27b,#45471d)"></div>
+                        <div>
+                          <strong>Ananya Shah</strong>
+                          <p>Spiti Explorer · 3 Pax · 40 minutes ago</p>
+                        </div>
+                        <div class="tag contacted">Contacted</div>
+                      </div>
+                      <div class="lead">
+                        <div class="avatar" style="background:linear-gradient(135deg,#f2d48d,#d55d27)"></div>
+                        <div>
+                          <strong>Ritika Nair</strong>
+                          <p>Rajasthan Trails · 2 Pax · 2 hours ago</p>
+                        </div>
+                        <div class="tag qualified">Qualified</div>
+                      </div>
+                      <div class="lead">
+                        <div class="avatar" style="background:linear-gradient(135deg,#8cb3d5,#d1b788)"></div>
+                        <div>
+                          <strong>Simran Kaur</strong>
+                          <p>Kumaon · 4 Pax · Today</p>
+                        </div>
+                        <div class="tag qualified">Quoted</div>
+                      </div>
+                    </div>
+                  </section>
+
+                  <section class="card panel detail">
+                    <h3>Lead Detail</h3>
+                    <div class="lead-detail">
+                      <div class="lead-head">
+                        <div>
+                          <strong>Neha Iyer</strong>
+                          <div style="font-size:12px;color:rgba(28,27,26,.62)">Lead · #NOM-1287</div>
+                        </div>
+                        <div class="tag new">New</div>
+                      </div>
+                      <div class="pill-row">
+                        <span class="pill">Owner: Arjun</span>
+                        <span class="pill">Trip: Kerala Backwaters</span>
+                        <span class="pill">WhatsApp ready</span>
+                      </div>
+                      <div class="kv">
+                        <div>Email</div><b>neha.iyer@gmail.com</b>
+                        <div>Phone</div><b>+91 98765 43210</b>
+                        <div>Budget</div><b>₹15,000 – ₹20,000</b>
+                        <div>Enquiry</div><b>Today, 11:32 AM</b>
+                        <div>Message</div><b>Looking for a slow trip with houseboat stay and local experiences.</b>
+                      </div>
+                    </div>
+
+                    <div class="note">
+                      <b>Notes timeline</b><br />
+                      Spoke with Neha. Interested in Alleppey houseboat with 4-star stay. Sharing itinerary.
+                    </div>
+
+                    <div class="ai">
+                      <h4>WhatsApp Draft</h4>
+                      <p>
+                        Hi Neha. Thanks for reaching out to Nomichi Trip Desk. I have a quiet Kerala route in mind with
+                        a houseboat night, local meals, and a slower pace that keeps the days open.
+                      </p>
+                    </div>
+
+                    <div class="cta">
+                      <button class="button">Use this message</button>
+                      <button class="button alt">Open lead</button>
+                    </div>
+                  </section>
+                </div>
+              </main>
+            </div>
+          </div>
+        </div>
+
+        <div class="scene lead">
+          <div class="desk-shell floating">
+            <div class="app">
+              <aside class="sidebar">
+                <div>
+                  <div class="mini-brand">Nomichi<br />Trip Desk</div>
+                  <div class="nav">
+                    <div class="nav-item"><span class="dot"></span>Overview</div>
+                    <div class="nav-item active"><span class="dot"></span>Leads</div>
+                    <div class="nav-item"><span class="dot"></span>Trips</div>
+                    <div class="nav-item"><span class="dot"></span>Bookings</div>
+                    <div class="nav-item"><span class="dot"></span>Templates</div>
+                  </div>
+                </div>
+                <div class="profile">
+                  <div class="avatar"></div>
+                  <div>
+                    <div style="font-weight:800">Mitali</div>
+                    <div style="opacity:.72">Sales</div>
+                  </div>
+                </div>
+              </aside>
+
+              <main class="main">
+                <div class="header">
+                  <div style="font-size:20px;font-weight:900;letter-spacing:-.03em">Leads</div>
+                  <div class="search">Search leads, trips, customers...</div>
+                  <div style="display:flex;gap:12px;color:rgba(28,27,26,.7);font-size:18px">☎ ✉︎ ⋯</div>
+                </div>
+
+                <div class="grid" style="grid-template-columns: 1.05fr 1fr 1fr;">
+                  <section class="card panel">
+                    <h3>Pipeline</h3>
+                    <div class="lead-list">
+                      <div class="lead">
+                        <div class="avatar"></div>
+                        <div><strong>Ananya Shah</strong><p>Spiti Explorer · New</p></div>
+                        <div class="tag contacted">Call back</div>
+                      </div>
+                      <div class="lead">
+                        <div class="avatar" style="background:linear-gradient(135deg,#d3b27b,#45471d)"></div>
+                        <div><strong>Karan Mehta</strong><p>Meghalaya · Qualified</p></div>
+                        <div class="tag new">Owner: Rhea</div>
+                      </div>
+                      <div class="lead">
+                        <div class="avatar" style="background:linear-gradient(135deg,#8cb3d5,#d1b788)"></div>
+                        <div><strong>Pooja Desai</strong><p>Rajasthan · Confirmed</p></div>
+                        <div class="tag qualified">Booked</div>
+                      </div>
+                    </div>
+                  </section>
+
+                  <section class="card panel detail">
+                    <h3>Call Log</h3>
+                    <div class="lead-detail">
+                      <div class="lead-head">
+                        <div>
+                          <strong>Ananya Shah</strong>
+                          <div style="font-size:12px;color:rgba(28,27,26,.62)">Slow trip fit · Small group</div>
+                        </div>
+                        <div class="tag contacted">Contacted</div>
+                      </div>
+                      <div class="pill-row">
+                        <span class="pill">Owner: Rhea</span>
+                        <span class="pill">Next action: Send sample itinerary</span>
+                      </div>
+                      <div class="kv">
+                        <div>Phone</div><b>+91 98765 43210</b>
+                        <div>Preferred month</div><b>October</b>
+                        <div>Group type</div><b>Solo</b>
+                        <div>Status</div><b>Qualified</b>
+                        <div>Call note</div><b>Wants quiet mornings, not a rushed plan.</b>
+                      </div>
+                    </div>
+                    <div class="note">Added note at 11:45 AM: Shared route map, stay type, and pacing. Ready for vibe check.</div>
+                    <div class="ai">
+                      <h4>Call Summary</h4>
+                      <p>
+                        Strong fit for slow travel. She wants calm days, a small group, and time to enjoy the road.
+                        Next step: send itinerary and confirm interest.
+                      </p>
+                    </div>
+                  </section>
+
+                  <section class="card panel">
+                    <h3>WhatsApp Draft</h3>
+                    <div class="ai" style="min-height: 310px">
+                      <h4>Draft ready</h4>
+                      <p>
+                        Hi Ananya, thanks for reaching out to Nomichi. I have a Spiti route that keeps the days
+                        spacious, with scenic stays and a pace that lets the landscape breathe.
+                        <br /><br />
+                        If you'd like, I can share a sample itinerary and seat options next.
+                      </p>
+                    </div>
+                    <div class="cta">
+                      <button class="button">Use draft</button>
+                      <button class="button alt">Edit</button>
+                    </div>
+                  </section>
+                </div>
+              </main>
+            </div>
+          </div>
+        </div>
+
+        <div class="scene mobile">
+          <div class="phone-shell floating">
+            <div class="phone">
+              <div class="statusbar">
+                <span>9:41</span>
+                <span>▂▂▂ ▣ 100%</span>
+              </div>
+              <div class="mobile-head">
+                <div class="wordmark">Nomichi <small>TRIP DESK</small></div>
+                <div class="menu"></div>
+              </div>
+              <div class="mobile-hero">
+                <div class="eyebrow">WANDER · CONNECT · BELONG</div>
+                <h2>We plan trips, you make memories.</h2>
+                <p>Thoughtful journeys across India and beyond. Crafted for explorers, by explorers.</p>
+              </div>
+              <div class="mobile-card">
+                <h3>Plan Your Trip</h3>
+                <div class="field">
+                  <div>Full Name</div>
+                  <div class="input">Your full name</div>
+                </div>
+                <div class="field">
+                  <div>Email</div>
+                  <div class="input">you@example.com</div>
+                </div>
+                <div class="field">
+                  <div>Destination</div>
+                  <div class="input">Where do you want to go?</div>
+                </div>
+                <div class="field">
+                  <div>Travel Date</div>
+                  <div class="input">Select date</div>
+                </div>
+                <div class="field">
+                  <div>Travelers</div>
+                  <div class="input">2 Travelers</div>
+                </div>
+                <div class="field">
+                  <div>Budget (per person)</div>
+                  <div class="input">Select budget</div>
+                </div>
+                <div class="field">
+                  <div>Message (optional)</div>
+                  <div class="input textarea">Anything else we should know?</div>
+                </div>
+                <button class="submit">Submit Enquiry</button>
+                <div class="footnote">⚡ We usually reply within a few hours.</div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <script>
+      const scenes = ["overview", "lead", "mobile"];
+      const params = new URLSearchParams(location.search);
+      const forced = params.get("scene");
+      if (forced) {
+        document.body.dataset.scene = forced;
+      } else {
+        let index = 0;
+        document.body.dataset.scene = scenes[index];
+        setInterval(() => {
+          index = (index + 1) % scenes.length;
+          document.body.dataset.scene = scenes[index];
+        }, 3200);
+      }
+    </script>
+  </body>
+</html>
