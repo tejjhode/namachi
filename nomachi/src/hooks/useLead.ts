@@ -29,7 +29,7 @@ export function useLead(id: string | null) {
     if (!id) return;
     try {
       await leadService.updateLeadStatus(id, status);
-      setLead((prev) => (prev ? { ...prev, status } : null));
+      await fetchLead();
     } catch (err: any) {
       setError(err.message || "Failed to change lead status.");
       throw err;
@@ -40,14 +40,7 @@ export function useLead(id: string | null) {
     if (!id) throw new Error("No lead ID specified");
     try {
       const newNote = await leadService.addLeadNote(id, noteText, authorId);
-      setLead((prev) => {
-        if (!prev) return null;
-        const currentNotes = prev.lead_notes || [];
-        return {
-          ...prev,
-          lead_notes: [...currentNotes, newNote],
-        };
-      });
+      await fetchLead();
       return newNote;
     } catch (err: any) {
       setError(err.message || "Failed to add note.");

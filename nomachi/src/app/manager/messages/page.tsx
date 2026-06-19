@@ -3,7 +3,6 @@ import { createSupabaseServerClient, supabase } from "@/lib/supabase/server";
 import { isManagerOrAdminRole, normalizeRole } from "@/lib/auth/roles";
 import { ManagerMessagesClient } from "./ManagerMessagesClient";
 
-export const dynamic = "force-dynamic";
 
 export default async function ManagerMessagesPage({
   searchParams,

@@ -3,7 +3,6 @@ import { createSupabaseServerClient, supabase } from "@/lib/supabase/server";
 import { isManagerOrAdminRole, normalizeRole } from "@/lib/auth/roles";
 import { encryptMessageServer } from "@/lib/utils/chat-encryption.server";
 
-export const dynamic = "force-dynamic";
 
 export async function POST(request: Request) {
   try {

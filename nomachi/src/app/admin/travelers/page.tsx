@@ -2,7 +2,6 @@ import { createSupabaseServerClient } from "@/lib/supabase/server";
 import { redirect } from "next/navigation";
 import { Mail, MapPin, Phone, Users } from "lucide-react";
 
-export const dynamic = "force-dynamic";
 
 const formatDateTime = (value?: string | null) => {
   if (!value) return "—";

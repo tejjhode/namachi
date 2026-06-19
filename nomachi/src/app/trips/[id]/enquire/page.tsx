@@ -2,7 +2,6 @@ import { createSupabaseServerClient } from "@/lib/supabase/server";
 import { notFound, redirect } from "next/navigation";
 import { TripEnquiryView } from "@/components/TripEnquiryView";
 
-export const dynamic = "force-dynamic";
 
 interface PageProps {
   params: Promise<{
@@ -16,9 +15,8 @@ export default async function TripEnquiryPage({ params }: PageProps) {
   
   const supabaseServer = await createSupabaseServerClient();
   
-  // Get active session
-  const { data: { session } } = await supabaseServer.auth.getSession();
-  const user = session?.user;
+  // Get authenticated user securely
+  const { data: { user } } = await supabaseServer.auth.getUser();
   
   if (!user) {
     redirect("/login");

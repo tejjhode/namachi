@@ -3,7 +3,6 @@ import { isManagerOrAdminRole, normalizeRole } from "@/lib/auth/roles";
 import { redirect } from "next/navigation";
 import { ManagerSettingsClient } from "./ManagerSettingsClient";
 
-export const dynamic = "force-dynamic";
 
 export default async function ManagerSettingsPage() {
   const client = await createSupabaseServerClient();

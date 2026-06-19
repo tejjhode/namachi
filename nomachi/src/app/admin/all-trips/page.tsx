@@ -2,7 +2,6 @@ import { redirect } from "next/navigation";
 import { createSupabaseServerClient } from "@/lib/supabase/server";
 import { AdminPageClient } from "./AdminPageClient";
 
-export const dynamic = "force-dynamic";
 
 export default async function AdminAllTripsPage() {
   const supabaseServer = await createSupabaseServerClient();

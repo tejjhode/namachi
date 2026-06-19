@@ -9,7 +9,6 @@ import {
   ArrowRight,
 } from "lucide-react";
 
-export const dynamic = "force-dynamic";
 
 type RecentLead = {
   id: string;

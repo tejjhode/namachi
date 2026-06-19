@@ -3,7 +3,6 @@ import { isManagerOrAdminRole, normalizeRole } from "@/lib/auth/roles";
 import { redirect } from "next/navigation";
 import { ManagerTasksClient } from "./ManagerTasksClient";
 
-export const dynamic = "force-dynamic";
 
 type EntityKind = "Lead" | "Trip" | "Traveler" | "Departure" | "Booking";
 

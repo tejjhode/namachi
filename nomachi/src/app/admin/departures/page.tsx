@@ -2,7 +2,6 @@ import { createSupabaseServerClient } from "@/lib/supabase/server";
 import { redirect } from "next/navigation";
 import { CalendarDays, MapPin, Plane, Users } from "lucide-react";
 
-export const dynamic = "force-dynamic";
 
 const parseDepartureStatus = (value?: string | null) => {
   if (!value) return { status: "active", code: "—", leader: "Unassigned", meeting: "—" };

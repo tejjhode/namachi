@@ -1,5 +1,6 @@
 import { createClient } from "@/lib/supabase/client";
 import { Lead, LeadNote } from "@/types/admin.types";
+import { taskService } from "./task.service";
 
 const supabase = createClient();
 
@@ -118,6 +119,13 @@ export const leadService = {
       .single();
 
     if (error) throw error;
+
+    try {
+      await taskService.evaluateLeadWorkflow(id);
+    } catch (e) {
+      console.warn("Failed to evaluate lead workflow on update:", e);
+    }
+
     return data as Lead;
   },
 

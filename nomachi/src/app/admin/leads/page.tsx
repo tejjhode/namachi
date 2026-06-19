@@ -4,6 +4,7 @@ import { useLeads } from "@/hooks/useLeads";
 import { useUsers } from "@/hooks/useUsers";
 import { tripService } from "@/services/trip.service";
 import { leadService } from "@/services/lead.service";
+import { taskService } from "@/services/task.service";
 import { Trip, Lead, LeadNote } from "@/types/admin.types";
 import {
   Loader2,
@@ -138,6 +139,24 @@ export default function LeadsPage() {
       
       // Auto-log assignment in timeline
       await leadService.addLeadNote(selectedLead.id, `Lead assigned to ${assigneeName}.`, currentUser.id);
+
+      // Auto-generate tasks for the manager when assigned (not when unassigning)
+      if (profileId) {
+        try {
+          const tripName = selectedLead.trips?.title || selectedLead.trip_interest || "";
+          await taskService.createTasksForLeadAssignment({
+            leadId: selectedLead.id,
+            leadName: selectedLead.name,
+            leadStatus: selectedLead.status,
+            tripName,
+            enquiryId: selectedLead.enquiry_id,
+            assignedTo: profileId,
+            createdBy: currentUser.id,
+          });
+        } catch (taskErr) {
+          console.warn("Failed to auto-generate tasks for assigned lead:", taskErr);
+        }
+      }
       
       fetchLeadDetail(selectedLead.id);
       refreshLeads();
@@ -863,7 +882,7 @@ export default function LeadsPage() {
                                       {u.avatar_url ? (
                                         <img src={u.avatar_url} alt="" className="w-full h-full object-cover" />
                                       ) : (
-                                        u.full_name?.charAt(0) || "—"
+                                   u.full_name?.charAt(0) || "—"
                                       )}
                                     </div>
                                     <span className="truncate">{u.full_name}</span>

@@ -1,0 +1,4 @@
+{
+    "chat.utilityModel": "aitk-foundry/Microsoft Foundry/claude-haiku-4-5",
+    "chat.utilitySmallModel": "aitk-foundry/Microsoft Foundry/claude-sonnet-4-5"
+}

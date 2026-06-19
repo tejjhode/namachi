@@ -3,7 +3,6 @@ import { isManagerOrAdminRole, normalizeRole } from "@/lib/auth/roles";
 import { notFound, redirect } from "next/navigation";
 import { ManagerTripDetailsClient } from "./ManagerTripDetailsClient";
 
-export const dynamic = "force-dynamic";
 
 interface PageProps {
   params: Promise<{

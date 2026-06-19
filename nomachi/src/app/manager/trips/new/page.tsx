@@ -3,7 +3,6 @@ import { createSupabaseServerClient } from "@/lib/supabase/server";
 import { isManagerOrAdminRole, normalizeRole } from "@/lib/auth/roles";
 import { NewManagerTripClient } from "./NewManagerTripClient";
 
-export const dynamic = "force-dynamic";
 
 export default async function NewManagerTripPage() {
   const client = await createSupabaseServerClient();

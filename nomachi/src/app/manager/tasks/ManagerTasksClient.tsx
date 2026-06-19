@@ -197,10 +197,10 @@ const workflowMilestones = [
 ];
 
 const getWorkflowStageIndex = (step: number) => {
-  if (step <= 2) return 0;
-  if (step <= 5) return 1;
+  if (step <= 3) return 0;
+  if (step <= 6) return 1;
   if (step <= 8) return 2;
-  if (step <= 11) return 3;
+  if (step <= 10) return 3;
   return 4;
 };
 
@@ -217,6 +217,13 @@ export function ManagerTasksClient({ tasks: initialTasks, leads, trips, departur
   const [taskCreateOpen, setTaskCreateOpen] = useState(false);
   const [subtaskCheckedStates, setSubtaskCheckedStates] = useState<Record<string, boolean[]>>({});
   const [currentUserId, setCurrentUserId] = useState<string>("");
+  const [meetingDate, setMeetingDate] = useState<string>(() => {
+    const d = new Date();
+    d.setDate(d.getDate() + 1);
+    d.setHours(16, 0, 0, 0);
+    const pad = (num: number) => String(num).padStart(2, '0');
+    return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}T${pad(d.getHours())}:${pad(d.getMinutes())}`;
+  });
 
   const pageSize = 8;
 
@@ -291,7 +298,7 @@ export function ManagerTasksClient({ tasks: initialTasks, leads, trips, departur
       setCurrentPage(1);
       return;
     }
-    if (!filteredTasks.some((t) => t.id === selectedTaskId)) {
+    if (selectedTaskId && !filteredTasks.some((t) => t.id === selectedTaskId)) {
       setSelectedTaskId(filteredTasks[0].id);
     }
   }, [filteredTasks, selectedTaskId]);
@@ -306,12 +313,54 @@ export function ManagerTasksClient({ tasks: initialTasks, leads, trips, departur
     setCurrentPage(1);
   };
 
-  const handleUpdateStatus = async (taskId: string, newStatus: TaskStatus) => {
+  const handleUpdateStatus = async (taskId: string, newStatus: TaskStatus, options?: { meetingDate?: string }) => {
     try {
-      const updated = await taskService.updateTaskStatus(taskId, newStatus);
-      setTasks((current) =>
-        current.map((t) => (t.id === taskId ? { ...t, status: updated.status as TaskStatus } : t))
-      );
+      const updated = await taskService.updateTaskStatus(taskId, newStatus, options);
+      
+      // Re-fetch all tasks from the database and map them back to TaskItem schema to support live workflow updates
+      const dbTasks = await taskService.getTasks();
+      const mapped = dbTasks.map((t: any) => {
+        let entityKind: EntityKind = "Lead";
+        if (t.source_kind === "trip") entityKind = "Trip";
+        else if (t.source_kind === "departure") entityKind = "Departure";
+        else if (t.related_id?.startsWith("TRAV")) entityKind = "Traveler";
+        
+        const assigneeUser = team.find(tm => tm.id === t.assigned_to);
+        const creatorUser = team.find(tm => tm.id === t.created_by);
+
+        return {
+          id: t.id,
+          title: t.title,
+          description: t.description || "",
+          relatedTo: t.related_to || "General",
+          relatedId: t.related_id || "TASK",
+          sourceKind: t.source_kind as TaskSourceKind,
+          sourceId: t.source_id || "",
+          entityKind,
+          type: t.type as TaskType,
+          priority: t.priority as TaskPriority,
+          dueDate: t.due_date || new Date().toISOString(),
+          status: t.status as TaskStatus,
+          assignee: {
+            name: assigneeUser?.full_name || "Unassigned",
+            role: assigneeUser?.role || "Manager",
+            avatar: assigneeUser?.avatar_url || null
+          },
+          createdBy: {
+            name: creatorUser?.full_name || "Admin",
+            avatar: creatorUser?.avatar_url || null,
+            date: t.created_at || new Date().toISOString()
+          },
+          details: t.details || "",
+          subtasks: (t.subtasks || []).map((st: any) => st.title),
+          subtaskCompletedStates: (t.subtasks || []).map((st: any) => st.completed),
+          step: t.step || 5,
+          tripTitle: t.related_to,
+          tripCode: t.related_id
+        };
+      });
+
+      setTasks(mapped);
     } catch (err: any) {
       alert(err.message || "Failed to update task status.");
     }
@@ -581,7 +630,7 @@ export function ManagerTasksClient({ tasks: initialTasks, leads, trips, departur
       </div>
 
       {/* Main Grid View */}
-      <div className="grid grid-cols-1 xl:grid-cols-[minmax(0,1fr)_372px] gap-6 items-start">
+      <div className={`grid grid-cols-1 gap-6 items-start transition-all duration-300 ${selectedTaskId ? "xl:grid-cols-[minmax(0,1fr)_372px]" : "xl:grid-cols-1"}`}>
         {/* Left Side: Search + Dropdowns + Table card */}
         <div className="space-y-5">
           {/* Table Search & Dropdowns card */}
@@ -672,7 +721,7 @@ export function ManagerTasksClient({ tasks: initialTasks, leads, trips, departur
           {/* Table card */}
           <div className="bg-white rounded-3xl border border-[#e7e1d5]/40 shadow-sm overflow-hidden">
             <div className="overflow-x-auto">
-              <table className="w-full border-collapse text-left text-xs">
+              <table className="w-full min-w-[950px] border-collapse text-left text-xs">
                 <thead>
                   <tr className="bg-[#FAF8F4] border-b border-[#e7e1d5]/30 text-nomichi-ink/40 font-bold uppercase tracking-wider text-[10px]">
                     <th className="px-6 py-4 w-10"></th>
@@ -700,14 +749,17 @@ export function ManagerTasksClient({ tasks: initialTasks, leads, trips, departur
                       return (
                         <tr
                           key={t.id}
-                          onClick={() => setSelectedTaskId(t.id)}
+                          onClick={() => setSelectedTaskId((prev) => (prev === t.id ? "" : t.id))}
                           className={`cursor-pointer transition-colors ${isSelected ? "bg-[#FFF8F4]/80" : "hover:bg-[#FAF8F4]/50"}`}
                         >
                           <td className="px-6 py-4 text-center">
                             <input
                               type="checkbox"
                               checked={isSelected}
-                              onChange={() => setSelectedTaskId(t.id)}
+                              onChange={(e) => {
+                                e.stopPropagation();
+                                setSelectedTaskId((prev) => (prev === t.id ? "" : t.id));
+                              }}
                               className="h-4 w-4 rounded border-[#e7e1d5] text-[#FF5B26] focus:ring-[#FF5B26]"
                             />
                           </td>
@@ -721,39 +773,38 @@ export function ManagerTasksClient({ tasks: initialTasks, leads, trips, departur
                                 <span className="text-[10px] text-nomichi-ink/40 font-semibold truncate block mt-0.5">{t.description}</span>
                               </div>
                             </div>
-                          </td>
-                          <td className="px-6 py-4 font-bold text-nomichi-ink">
+                          </td>                           <td className="px-6 py-4 font-bold text-nomichi-ink whitespace-nowrap">
                             <span>{t.relatedTo}</span>
                             <span className="text-[9px] block text-[#FF5B26] uppercase mt-1 font-black tracking-wide">
                               {t.relatedId}
                             </span>
                           </td>
-                          <td className="px-6 py-4">
-                            <span className={`px-2.5 py-1 rounded-full text-[10px] font-black uppercase ${typeMeta[t.type]?.className || ''}`}>
+                          <td className="px-6 py-4 whitespace-nowrap">
+                            <span className={`px-2.5 py-1 rounded-full text-[10px] font-black uppercase whitespace-nowrap ${typeMeta[t.type]?.className || ''}`}>
                               {typeMeta[t.type]?.label || t.type}
                             </span>
                           </td>
-                          <td className="px-6 py-4">
-                            <span className={`px-2.5 py-1 rounded-full text-[10px] font-black uppercase ${
+                          <td className="px-6 py-4 whitespace-nowrap">
+                            <span className={`px-2.5 py-1 rounded-full text-[10px] font-black uppercase whitespace-nowrap ${
                               t.priority === "High" ? "bg-red-50 text-red-700" :
                               t.priority === "Medium" ? "bg-amber-50 text-amber-700" : "bg-emerald-50 text-emerald-700"
                             }`}>
                               {t.priority}
                             </span>
                           </td>
-                          <td className="px-6 py-4 text-left font-semibold text-nomichi-ink/80">
+                          <td className="px-6 py-4 text-left font-semibold text-nomichi-ink/80 whitespace-nowrap">
                             <span>{formatDate(t.dueDate)}</span>
                             <span className={`text-[10px] block mt-0.5 font-bold ${t.status === 'overdue' ? 'text-rose-600' : 'text-nomichi-ink/45'}`}>
                               {daysAwayLabel(t.dueDate, t.status)}
                             </span>
                           </td>
-                          <td className="px-6 py-4">
-                            <span className={`px-2.5 py-1 rounded-full text-[10px] font-black uppercase ${taskStatusMeta[t.status]?.className || ''}`}>
+                          <td className="px-6 py-4 whitespace-nowrap">
+                            <span className={`px-2.5 py-1 rounded-full text-[10px] font-black uppercase whitespace-nowrap ${taskStatusMeta[t.status]?.className || ''}`}>
                               {taskStatusMeta[t.status]?.label || t.status}
                             </span>
                           </td>
-                          <td className="px-6 py-4">
-                            <div className="flex items-center gap-2.5 text-left">
+                          <td className="px-6 py-4 whitespace-nowrap">
+                            <div className="flex items-center gap-2.5 text-left whitespace-nowrap">
                               <div className="w-8 h-8 rounded-full border border-[#e7e1d5]/50 bg-[#FFECE5] flex items-center justify-center font-bold text-[#FF5B26] text-xs shrink-0 overflow-hidden">
                                 {t.assignee.avatar ? (
                                   <img src={t.assignee.avatar} alt="Avatar" className="w-full h-full object-cover" />
@@ -826,7 +877,9 @@ export function ManagerTasksClient({ tasks: initialTasks, leads, trips, departur
         </div>
 
         {/* Right Side: Task detail panel */}
-        <aside className="bg-white rounded-3xl border border-[#e7e1d5]/40 shadow-sm overflow-hidden xl:sticky xl:top-6">
+        <aside className={`bg-white rounded-3xl border border-[#e7e1d5]/40 shadow-sm overflow-hidden xl:sticky xl:top-6 transition-all duration-300 ${
+          selectedTaskId ? "block opacity-100" : "hidden opacity-0"
+        }`}>
           {/* Panel Header */}
           <div className="px-5 py-4 border-b border-[#e7e1d5]/30 flex items-center justify-between">
             <div className="flex items-center gap-3 text-left">
@@ -1004,12 +1057,39 @@ export function ManagerTasksClient({ tasks: initialTasks, leads, trips, departur
 
               {/* Action Buttons */}
               <div className="pt-4 border-t border-[#e7e1d5]/20 space-y-2.5">
+                {activeTask.step === 4 && (
+                  <div className="mb-2.5 space-y-1.5">
+                    <label className="text-[10px] font-black uppercase text-nomichi-ink/40 tracking-wider block">Meeting Date & Time</label>
+                    <input
+                      type="datetime-local"
+                      value={meetingDate}
+                      onChange={(e) => setMeetingDate(e.target.value)}
+                      className="w-full h-11 px-3.5 border border-[#e7e1d5] rounded-xl focus:outline-none focus:border-[#FF5B26] text-xs font-semibold bg-white"
+                    />
+                  </div>
+                )}
                 <button
-                  onClick={() => handleUpdateStatus(activeTask.id, "completed")}
+                  onClick={() => handleUpdateStatus(activeTask.id, "completed", activeTask.step === 4 ? { meetingDate } : undefined)}
                   className="w-full py-3 bg-[#16A34A] hover:bg-[#16A34A]/90 text-white font-bold rounded-xl flex items-center justify-center gap-2 cursor-pointer transition-all shadow-sm border-0"
                 >
                   <CheckCircle2 className="w-4 h-4" />
-                  Mark as Complete
+                  {(() => {
+                    switch (activeTask.step) {
+                      case 1: return "✓ Mark as Contacted";
+                      case 2: return "✓ Brochure Sent";
+                      case 3: return "✓ Follow Up Complete";
+                      case 4: return "Schedule Call";
+                      case 5: return "✓ Vibe Check Passed";
+                      case 6: return "✓ Payment Received";
+                      case 7: return "✓ Passport Collected";
+                      case 8: return "✓ Emergency Contact Collected";
+                      case 9: return "✓ Assign Departure";
+                      case 10: return "✓ Itinerary Sent";
+                      case 11: return "✓ Reminder Sent";
+                      case 12: return "✓ Readiness Checked";
+                      default: return "Mark as Complete";
+                    }
+                  })()}
                 </button>
                 <button
                   onClick={() => handleUpdateStatus(activeTask.id, "in progress")}

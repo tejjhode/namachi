@@ -3,7 +3,6 @@ import { createSupabaseServerClient, supabase } from "@/lib/supabase/server";
 import { isManagerOrAdminRole, normalizeRole } from "@/lib/auth/roles";
 import { ManagerTripsClient } from "./ManagerTripsClient";
 
-export const dynamic = "force-dynamic";
 
 type TripRecord = {
   id: string;

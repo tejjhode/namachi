@@ -2,7 +2,6 @@ import { redirect } from "next/navigation";
 import { createSupabaseServerClient } from "@/lib/supabase/server";
 import { AdminLayoutClient } from "./AdminLayoutClient";
 
-export const dynamic = "force-dynamic";
 
 export default async function AdminLayout({ children }: { children: React.ReactNode }) {
   const supabaseServer = await createSupabaseServerClient();

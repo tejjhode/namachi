@@ -24,7 +24,6 @@ import {
   Headphones
 } from "lucide-react";
 
-export const dynamic = "force-dynamic";
 
 interface PageProps {
   searchParams?: {
@@ -57,17 +56,20 @@ export default async function Home({ searchParams }: PageProps) {
     }
   }
 
-  // Fetch all open destinations for auto-complete listing
+  // Fetch all public destinations for auto-complete listing
   const { data: allTrips } = await supabaseServer
     .from("trips")
     .select("destination")
-    .in("status", ["Open", "active"]);
+    .in("status", ["Open", "Open for Enquiries", "active"]);
   const uniqueDestinations = Array.from(
     new Set(allTrips?.map((t) => t.destination).filter(Boolean) || [])
   ) as string[];
 
-  // Fetch filtered open trips from Supabase
-  let tripsQuery = supabaseServer.from("trips").select("*").in("status", ["Open", "active"]);
+  // Fetch filtered public trips from Supabase
+  let tripsQuery = supabaseServer
+    .from("trips")
+    .select("*")
+    .in("status", ["Open", "Open for Enquiries", "active"]);
 
   const destinationQuery = searchParams?.destination;
   if (destinationQuery) {

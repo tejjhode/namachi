@@ -3,7 +3,6 @@ import { isManagerOrAdminRole, normalizeRole } from "@/lib/auth/roles";
 import { redirect } from "next/navigation";
 import { ManagerActivityClient } from "./ManagerActivityClient";
 
-export const dynamic = "force-dynamic";
 
 type ActivityRow = {
   id: string;
@@ -141,7 +140,7 @@ export default async function ManagerActivityPage() {
     redirect("/admin");
   }
 
-  const [activityResult, leadsResult, tripsResult, departuresResult, messagesResult, teamResult] = await Promise.all([
+  const [activityResult, leadsResult, tripsResult, departuresResult, messagesResult, teamResult, notesResult] = await Promise.all([
     supabase.from("activities").select("*").order("created_at", { ascending: false }).limit(250),
     supabase
       .from("leads")
@@ -165,6 +164,11 @@ export default async function ManagerActivityPage() {
       .select("id, full_name, avatar_url, role, created_at")
       .order("created_at", { ascending: false })
       .limit(25),
+    supabase
+      .from("lead_notes")
+      .select("id, lead_id, content, created_at, created_by")
+      .order("created_at", { ascending: false })
+      .limit(200)
   ]);
 
   const activities = (activityResult.data || []) as ActivityRow[];
@@ -173,6 +177,7 @@ export default async function ManagerActivityPage() {
   const departures = (departuresResult.data || []) as DepartureRow[];
   const messages = (messagesResult.data || []) as ChatMessageRow[];
   const team = (teamResult.data || []) as Array<ProfileRow & { created_at?: string | null }>;
+  const leadNotes = (notesResult.data || []) as any[];
 
   const profileMap = new Map(team.map((item) => [item.id, item]));
   const leadMap = new Map(leads.map((item) => [item.id, item]));
@@ -301,6 +306,10 @@ export default async function ManagerActivityPage() {
         email: profile?.email || user.email || "",
       }}
       activities={activitiesToShow.sort((left, right) => right.sortTime - left.sortTime)}
+      leads={leads as any[]}
+      trips={trips as any[]}
+      departures={departures as any[]}
+      team={team as any[]}
     />
   );
 }
