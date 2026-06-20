@@ -154,6 +154,7 @@ export const notificationService = {
               body: payload.body,
               priority: payload.priority || "Medium",
               type: payload.type,
+              source_id: payload.source_id || undefined,
             }),
           }).catch((err) => console.error("Notification delivery dispatch error:", err));
         }

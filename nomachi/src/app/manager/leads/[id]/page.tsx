@@ -9,6 +9,7 @@ import { createClient } from "@/lib/supabase/client";
 import { isManagerOrAdminRole, normalizeRole } from "@/lib/auth/roles";
 import { getLeadNoteAuthorLabel, getLeadNoteDisplay, getLeadNoteVisual } from "@/lib/lead-notes";
 import { taskService } from "@/services/task.service";
+import { notificationService } from "@/services/notification.service";
 import {
   ArrowLeft,
   CheckCircle2,
@@ -385,15 +386,31 @@ export default function ManagerLeadDetailPage({ params }: ManagerLeadDetailPageP
       window.open(mailLink, "_blank");
     }
 
+    // Trigger background SMTP rich HTML email notification
+    if (leadData?.email && leadData?.id) {
+      try {
+        await notificationService.notifyTraveler(
+          leadData.email,
+          "Brochure Shared",
+          "We've prepared your trip brochure and itinerary details.",
+          "Brochure Shared",
+          leadData.id,
+          "High"
+        );
+      } catch (notifErr) {
+        console.error("Failed to send background brochure shared notification:", notifErr);
+      }
+    }
+
     const shareBrochureTask = tasks.find(t => t.step === 2 && t.status !== "completed");
     if (shareBrochureTask) {
       await handleCompleteTask(shareBrochureTask.id);
-      alert("Brochure link opened and task marked as complete!");
+      alert("Brochure link opened, background email dispatched, and task marked as complete!");
     } else {
       try {
         await addNote(`Share Brochure: Shared trip itinerary brochure (${brochureUrl}) via WhatsApp/Email`, currentUser.id);
         await handleUpdateStatusDirect("contacted");
-        alert("Brochure link opened and shared action logged successfully!");
+        alert("Brochure link opened, background email dispatched, and shared action logged successfully!");
       } catch (err) {
         console.error(err);
       }

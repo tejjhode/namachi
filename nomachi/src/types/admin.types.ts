@@ -55,6 +55,12 @@ export interface Lead {
   enquiry_id?: string;
   assigned_to?: string;
   user_id?: string;
+  is_lead?: boolean;
+  message?: string;
+  preferred_month?: string;
+  group_type?: string;
+  hope_trip_feels_like?: string;
+  dietary_and_accessibility?: string;
   profiles?: {
     id: string;
     full_name: string;

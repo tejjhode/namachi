@@ -6,6 +6,7 @@ interface UseLeadsFilters {
   search?: string;
   status?: string;
   tripId?: string | null;
+  isLead?: boolean;
 }
 
 export function useLeads(initialFilters?: UseLeadsFilters) {

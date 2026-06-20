@@ -15,8 +15,12 @@ export const leadService = {
     search?: string;
     status?: string;
     tripId?: string | null;
+    isLead?: boolean;
   }): Promise<Lead[]> {
     let query = supabase.from("leads").select("*, trips(id, title, destination)").order("created_at", { ascending: false });
+
+    const isLeadFilter = params?.isLead !== undefined ? params.isLead : true;
+    query = query.eq("is_lead", isLeadFilter);
 
     if (params?.status && params.status !== "all") {
       query = query.eq("status", params.status);

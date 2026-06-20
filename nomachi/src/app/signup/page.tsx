@@ -4,6 +4,7 @@ import Link from "next/link";
 import { createClient } from "@/lib/supabase/client";
 import { useState } from "react";
 import { Shield, Headphones, Mail, Lock, Eye, EyeOff, Luggage, Globe, Star, Heart, User } from "lucide-react";
+import { notificationService } from "@/services/notification.service";
 
 const supabase = createClient();
 
@@ -53,7 +54,7 @@ export default function SignupPage() {
     try {
       setLoading(true);
       setError("");
-      const { error } = await supabase.auth.signUp({
+      const { data, error } = await supabase.auth.signUp({
         email,
         password,
         options: {
@@ -63,6 +64,23 @@ export default function SignupPage() {
         },
       });
       if (error) throw error;
+
+      // Send Welcome Notification
+      if (data?.user) {
+        try {
+          await notificationService.notifyTraveler(
+            email,
+            "Welcome to Nomichi",
+            "Your Nomichi account has been successfully created.",
+            "Welcome to Nomichi",
+            data.user.id,
+            "High"
+          );
+        } catch (notifErr) {
+          console.error("Welcome notification trigger failed:", notifErr);
+        }
+      }
+
       setSuccess(true);
     } catch (err: any) {
       setError(err.message);

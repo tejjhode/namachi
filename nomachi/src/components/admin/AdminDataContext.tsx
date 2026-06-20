@@ -23,6 +23,12 @@ export interface Lead {
   notes?: string;
   group_size?: number;
   created_at?: string;
+  is_lead?: boolean;
+  message?: string;
+  preferred_month?: string;
+  group_type?: string;
+  hope_trip_feels_like?: string;
+  dietary_and_accessibility?: string;
   trips?: {
     title: string;
   };

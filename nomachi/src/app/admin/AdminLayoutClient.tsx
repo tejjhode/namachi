@@ -7,6 +7,7 @@ import { notificationService, Notification } from "@/services/notification.servi
 import { usePathname, useRouter } from "next/navigation";
 import {
   LayoutDashboard,
+  Inbox,
   Users,
   ClipboardList,
   Compass,
@@ -151,6 +152,12 @@ export function AdminLayoutClient({ children, user }: AdminLayoutClientProps) {
       active: pathname === "/admin"
     },
     {
+      label: "Enquiries",
+      href: "/admin/enquiries",
+      icon: Inbox,
+      active: pathname.startsWith("/admin/enquiries")
+    },
+    {
       label: "Leads",
       href: "/admin/leads",
       icon: Users,
@@ -195,6 +202,18 @@ export function AdminLayoutClient({ children, user }: AdminLayoutClientProps) {
             >
               <LayoutDashboard className="w-4 h-4" />
               Dashboard
+            </Link>
+
+            <Link
+              href="/admin/enquiries"
+              className={`flex items-center gap-3.5 px-4 py-2.5 text-xs font-bold rounded-xl w-full text-left transition-all border-0 cursor-pointer no-underline ${
+                pathname.startsWith("/admin/enquiries")
+                  ? "bg-[#FFEFEA] text-[#FF5B26]"
+                  : "text-nomichi-ink/75 hover:bg-nomichi-sand/10 hover:text-[#FF5B26]"
+              }`}
+            >
+              <Inbox className="w-4 h-4" />
+              Enquiries
             </Link>
 
             <Link

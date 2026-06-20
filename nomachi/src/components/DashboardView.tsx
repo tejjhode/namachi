@@ -2383,120 +2383,140 @@ export function DashboardView({ user, leads = [], trips = [], initialChatMessage
 
                 <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-4 items-center">
                   {/* Preference dropdown */}
-                  <div className="bg-[#FAF8F4] border border-[#e7e1d5]/60 rounded-2xl px-4 py-2.5 flex items-center gap-3 relative">
-                    <div className="w-8 h-8 rounded-full bg-[#FFFFFF]/80 flex items-center justify-center text-nomichi-ink/65 shrink-0 shadow-sm border border-[#e7e1d5]/20">
+                  <div className="bg-[#FAF8F4] border border-[#e7e1d5]/60 hover:border-[#FF5B26]/30 transition-all rounded-2xl pl-4 pr-9 py-2.5 flex items-center gap-3 relative cursor-pointer group">
+                    <select 
+                      value={prefFilter}
+                      onChange={(e) => setPrefFilter(e.target.value)}
+                      className="absolute inset-0 w-full h-full opacity-0 cursor-pointer z-10"
+                    >
+                      <option value="All Preferences">All Preferences</option>
+                      <option value="Solo Traveller">Solo Traveller</option>
+                      <option value="Adventure">Adventure</option>
+                      <option value="Mountains">Mountains</option>
+                      <option value="Nature">Nature</option>
+                      <option value="Small Groups">Small Groups</option>
+                    </select>
+                    
+                    <div className="w-8 h-8 rounded-full bg-[#FFFFFF]/80 flex items-center justify-center text-nomichi-ink/65 shrink-0 shadow-sm border border-[#e7e1d5]/20 group-hover:scale-102 transition-transform">
                       <SlidersHorizontal className="w-4 h-4" />
                     </div>
                     <div className="flex-1 min-w-0 text-left">
                       <span className="block text-[8px] font-extrabold text-nomichi-ink/40 uppercase tracking-widest leading-none">Travel Preference</span>
-                      <select 
-                        value={prefFilter}
-                        onChange={(e) => setPrefFilter(e.target.value)}
-                        className="w-full bg-transparent border-0 p-0 text-xs font-bold text-nomichi-ink focus:outline-none cursor-pointer appearance-none mt-1.5 leading-none"
-                      >
-                        <option value="All Preferences">All Preferences</option>
-                        <option value="Solo Traveller">Solo Traveller</option>
-                        <option value="Adventure">Adventure</option>
-                        <option value="Mountains">Mountains</option>
-                        <option value="Nature">Nature</option>
-                        <option value="Small Groups">Small Groups</option>
-                      </select>
+                      <span className="block text-xs font-bold text-nomichi-ink mt-1.5 leading-none truncate pr-1">
+                        {prefFilter}
+                      </span>
                     </div>
-                    <ChevronDown className="w-3.5 h-3.5 text-nomichi-ink/40 pointer-events-none ml-2 shrink-0" />
+                    <ChevronDown className="w-3.5 h-3.5 text-nomichi-ink/40 pointer-events-none absolute right-3 top-1/2 -translate-y-1/2" />
                   </div>
 
                   {/* Month dropdown */}
-                  <div className="bg-[#FAF8F4] border border-[#e7e1d5]/60 rounded-2xl px-4 py-2.5 flex items-center gap-3 relative">
-                    <div className="w-8 h-8 rounded-full bg-[#FFFFFF]/80 flex items-center justify-center text-nomichi-ink/65 shrink-0 shadow-sm border border-[#e7e1d5]/20">
+                  <div className="bg-[#FAF8F4] border border-[#e7e1d5]/60 hover:border-[#FF5B26]/30 transition-all rounded-2xl pl-4 pr-9 py-2.5 flex items-center gap-3 relative cursor-pointer group">
+                    <select 
+                      value={monthFilter}
+                      onChange={(e) => setMonthFilter(e.target.value)}
+                      className="absolute inset-0 w-full h-full opacity-0 cursor-pointer z-10"
+                    >
+                      <option value="Any Month">Any Month</option>
+                      <option value="January">January</option>
+                      <option value="February">February</option>
+                      <option value="March">March</option>
+                      <option value="April">April</option>
+                      <option value="May">May</option>
+                      <option value="June">June</option>
+                      <option value="July">July</option>
+                      <option value="August">August</option>
+                      <option value="September">September</option>
+                      <option value="October">October</option>
+                      <option value="November">November</option>
+                      <option value="December">December</option>
+                    </select>
+
+                    <div className="w-8 h-8 rounded-full bg-[#FFFFFF]/80 flex items-center justify-center text-nomichi-ink/65 shrink-0 shadow-sm border border-[#e7e1d5]/20 group-hover:scale-102 transition-transform">
                       <Calendar className="w-4 h-4" />
                     </div>
                     <div className="flex-1 min-w-0 text-left">
                       <span className="block text-[8px] font-extrabold text-nomichi-ink/40 uppercase tracking-widest leading-none">Preferred Month</span>
-                      <select 
-                        value={monthFilter}
-                        onChange={(e) => setMonthFilter(e.target.value)}
-                        className="w-full bg-transparent border-0 p-0 text-xs font-bold text-nomichi-ink focus:outline-none cursor-pointer appearance-none mt-1.5 leading-none"
-                      >
-                        <option value="Any Month">Any Month</option>
-                        <option value="January">January</option>
-                        <option value="February">February</option>
-                        <option value="March">March</option>
-                        <option value="April">April</option>
-                        <option value="May">May</option>
-                        <option value="June">June</option>
-                        <option value="July">July</option>
-                        <option value="August">August</option>
-                        <option value="September">September</option>
-                        <option value="October">October</option>
-                        <option value="November">November</option>
-                        <option value="December">December</option>
-                      </select>
+                      <span className="block text-xs font-bold text-nomichi-ink mt-1.5 leading-none truncate pr-1">
+                        {monthFilter}
+                      </span>
                     </div>
-                    <ChevronDown className="w-3.5 h-3.5 text-nomichi-ink/40 pointer-events-none ml-2 shrink-0" />
+                    <ChevronDown className="w-3.5 h-3.5 text-nomichi-ink/40 pointer-events-none absolute right-3 top-1/2 -translate-y-1/2" />
                   </div>
 
                   {/* Location dropdown */}
-                  <div className="bg-[#FAF8F4] border border-[#e7e1d5]/60 rounded-2xl px-4 py-2.5 flex items-center gap-3 relative">
-                    <div className="w-8 h-8 rounded-full bg-[#FFFFFF]/80 flex items-center justify-center text-nomichi-ink/65 shrink-0 shadow-sm border border-[#e7e1d5]/20">
+                  <div className="bg-[#FAF8F4] border border-[#e7e1d5]/60 hover:border-[#FF5B26]/30 transition-all rounded-2xl pl-4 pr-9 py-2.5 flex items-center gap-3 relative cursor-pointer group">
+                    <select 
+                      value={regionFilter}
+                      onChange={(e) => setRegionFilter(e.target.value)}
+                      className="absolute inset-0 w-full h-full opacity-0 cursor-pointer z-10"
+                    >
+                      <option value="Any">Any Location</option>
+                      <option value="In Country">In Country</option>
+                      <option value="Out Country">Out Country</option>
+                    </select>
+
+                    <div className="w-8 h-8 rounded-full bg-[#FFFFFF]/80 flex items-center justify-center text-nomichi-ink/65 shrink-0 shadow-sm border border-[#e7e1d5]/20 group-hover:scale-102 transition-transform">
                       <MapPin className="w-4 h-4" />
                     </div>
                     <div className="flex-1 min-w-0 text-left">
                       <span className="block text-[8px] font-extrabold text-nomichi-ink/40 uppercase tracking-widest leading-none">Location</span>
-                      <select 
-                        value={regionFilter}
-                        onChange={(e) => setRegionFilter(e.target.value)}
-                        className="w-full bg-transparent border-0 p-0 text-xs font-bold text-nomichi-ink focus:outline-none cursor-pointer appearance-none mt-1.5 leading-none"
-                      >
-                        <option value="Any">Any Location</option>
-                        <option value="In Country">In Country</option>
-                        <option value="Out Country">Out Country</option>
-                      </select>
+                      <span className="block text-xs font-bold text-nomichi-ink mt-1.5 leading-none truncate pr-1">
+                        {regionFilter === "Any" ? "Any Location" : regionFilter}
+                      </span>
                     </div>
-                    <ChevronDown className="w-3.5 h-3.5 text-nomichi-ink/40 pointer-events-none ml-2 shrink-0" />
+                    <ChevronDown className="w-3.5 h-3.5 text-nomichi-ink/40 pointer-events-none absolute right-3 top-1/2 -translate-y-1/2" />
                   </div>
 
                   {/* Trip Type dropdown */}
-                  <div className="bg-[#FAF8F4] border border-[#e7e1d5]/60 rounded-2xl px-4 py-2.5 flex items-center gap-3 relative">
-                    <div className="w-8 h-8 rounded-full bg-[#FFFFFF]/80 flex items-center justify-center text-nomichi-ink/65 shrink-0 shadow-sm border border-[#e7e1d5]/20">
+                  <div className="bg-[#FAF8F4] border border-[#e7e1d5]/60 hover:border-[#FF5B26]/30 transition-all rounded-2xl pl-4 pr-9 py-2.5 flex items-center gap-3 relative cursor-pointer group">
+                    <select 
+                      value={typeFilter}
+                      onChange={(e) => setTypeFilter(e.target.value)}
+                      className="absolute inset-0 w-full h-full opacity-0 cursor-pointer z-10"
+                    >
+                      <option value="All Types">All Types</option>
+                      <option value="Cultural">Cultural</option>
+                      <option value="Relaxed">Relaxed</option>
+                      <option value="Leisurely">Leisurely</option>
+                      <option value="Explorer">Explorer</option>
+                      <option value="Adventure">Adventure</option>
+                    </select>
+
+                    <div className="w-8 h-8 rounded-full bg-[#FFFFFF]/80 flex items-center justify-center text-nomichi-ink/65 shrink-0 shadow-sm border border-[#e7e1d5]/20 group-hover:scale-102 transition-transform">
                       <Briefcase className="w-4 h-4" />
                     </div>
                     <div className="flex-1 min-w-0 text-left">
                       <span className="block text-[8px] font-extrabold text-nomichi-ink/40 uppercase tracking-widest leading-none">Trip Type</span>
-                      <select 
-                        value={typeFilter}
-                        onChange={(e) => setTypeFilter(e.target.value)}
-                        className="w-full bg-transparent border-0 p-0 text-xs font-bold text-nomichi-ink focus:outline-none cursor-pointer appearance-none mt-1.5 leading-none"
-                      >
-                        <option value="All Types">All Types</option>
-                        <option value="Cultural">Cultural</option>
-                        <option value="Relaxed">Relaxed</option>
-                        <option value="Leisurely">Leisurely</option>
-                        <option value="Explorer">Explorer</option>
-                        <option value="Adventure">Adventure</option>
-                      </select>
+                      <span className="block text-xs font-bold text-nomichi-ink mt-1.5 leading-none truncate pr-1">
+                        {typeFilter}
+                      </span>
                     </div>
-                    <ChevronDown className="w-3.5 h-3.5 text-nomichi-ink/40 pointer-events-none ml-2 shrink-0" />
+                    <ChevronDown className="w-3.5 h-3.5 text-nomichi-ink/40 pointer-events-none absolute right-3 top-1/2 -translate-y-1/2" />
                   </div>
 
                   {/* Budget Range dropdown */}
-                  <div className="bg-[#FAF8F4] border border-[#e7e1d5]/60 rounded-2xl px-4 py-2.5 flex items-center gap-3 relative">
-                    <div className="w-8 h-8 rounded-full bg-[#FFFFFF]/80 flex items-center justify-center text-nomichi-ink/65 shrink-0 shadow-sm border border-[#e7e1d5]/20">
+                  <div className="bg-[#FAF8F4] border border-[#e7e1d5]/60 hover:border-[#FF5B26]/30 transition-all rounded-2xl pl-4 pr-9 py-2.5 flex items-center gap-3 relative cursor-pointer group">
+                    <select 
+                      value={budgetFilter}
+                      onChange={(e) => setBudgetFilter(e.target.value)}
+                      className="absolute inset-0 w-full h-full opacity-0 cursor-pointer z-10"
+                    >
+                      <option value="Any Budget">Any Budget</option>
+                      <option value="Under ₹80,000">Under ₹80,000</option>
+                      <option value="₹80,000 - ₹1,20,000">₹80,000 - ₹1,20,000</option>
+                      <option value="Over ₹1,20,000">Over ₹1,20,000</option>
+                    </select>
+
+                    <div className="w-8 h-8 rounded-full bg-[#FFFFFF]/80 flex items-center justify-center text-nomichi-ink/65 shrink-0 shadow-sm border border-[#e7e1d5]/20 group-hover:scale-102 transition-transform">
                       <Wallet className="w-4 h-4" />
                     </div>
                     <div className="flex-1 min-w-0 text-left">
                       <span className="block text-[8px] font-extrabold text-nomichi-ink/40 uppercase tracking-widest leading-none">Budget Range</span>
-                      <select 
-                        value={budgetFilter}
-                        onChange={(e) => setBudgetFilter(e.target.value)}
-                        className="w-full bg-transparent border-0 p-0 text-xs font-bold text-nomichi-ink focus:outline-none cursor-pointer appearance-none mt-1.5 leading-none"
-                      >
-                        <option value="Any Budget">Any Budget</option>
-                        <option value="Under ₹80,000">Under ₹80,000</option>
-                        <option value="₹80,000 - ₹1,20,000">₹80,000 - ₹1,20,000</option>
-                        <option value="Over ₹1,20,000">Over ₹1,20,000</option>
-                      </select>
+                      <span className="block text-xs font-bold text-nomichi-ink mt-1.5 leading-none truncate pr-1">
+                        {budgetFilter}
+                      </span>
                     </div>
-                    <ChevronDown className="w-3.5 h-3.5 text-nomichi-ink/40 pointer-events-none ml-2 shrink-0" />
+                    <ChevronDown className="w-3.5 h-3.5 text-nomichi-ink/40 pointer-events-none absolute right-3 top-1/2 -translate-y-1/2" />
                   </div>
                 </div>
 

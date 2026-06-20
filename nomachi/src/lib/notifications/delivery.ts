@@ -21,6 +21,7 @@ export async function sendEmailViaSMTP(payload: {
   to: string;
   subject: string;
   body: string;
+  html?: string;
   priority: string;
   type: string;
 }): Promise<boolean> {
@@ -50,6 +51,7 @@ export async function sendEmailViaSMTP(payload: {
         to: payload.to,
         subject: payload.subject,
         text: payload.body,
+        html: payload.html,
       });
 
       console.log(`[SMTP Live] Email successfully delivered to ${payload.to}. MessageId: ${info.messageId}`);

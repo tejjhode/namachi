@@ -54,6 +54,7 @@ export default function NewLeadPage() {
         group_size: form.group_size,
         notes: form.notes || undefined,
         status: form.status,
+        is_lead: true,
       };
 
       await leadService.createLead(leadData);
