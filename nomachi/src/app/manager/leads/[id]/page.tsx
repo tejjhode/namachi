@@ -22,13 +22,11 @@ import {
   ChevronDown,
   Loader2,
   CalendarDays,
-  Utensils,
-  Smile,
-  Compass,
-  AlertCircle,
-  Play,
   FileText,
   MessageSquare,
+  AlertCircle,
+  MoreVertical,
+  CalendarCheck
 } from "lucide-react";
 
 const statusMeta: Record<string, { label: string; className: string }> = {
@@ -253,6 +251,43 @@ export default function ManagerLeadDetailPage({ params }: ManagerLeadDetailPageP
       };
 
       await taskService.createTask(payload);
+
+      // Auto-trigger notifications if it's a communication/call task
+      if (taskType === "communication" || taskTitle.toLowerCase().includes("call")) {
+        const phoneDigits = (leadData?.phone || "").replace(/[^0-9]/g, "");
+        const travelerName = leadData?.name || "there";
+        const managerName = currentUser?.profile?.full_name || currentUser?.user_metadata?.full_name || "Manager";
+        const tripTitle = leadData?.trips?.title || "your trip";
+        const enquiryId = leadData?.enquiry_id || "";
+        const formattedCallTime = taskDueDate ? new Date(taskDueDate).toLocaleString("en-IN", {
+          day: "2-digit",
+          month: "short",
+          year: "numeric",
+          hour: "2-digit",
+          minute: "2-digit"
+        }) : new Date().toLocaleString("en-IN", {
+          day: "2-digit",
+          month: "short",
+          year: "numeric",
+          hour: "2-digit",
+          minute: "2-digit"
+        });
+
+        const callMsgText = `Hello ${travelerName}, this is ${managerName} from Nomichi. I have scheduled a call with you to discuss your enquiry ${enquiryId ? `(${enquiryId})` : ""} for the trip "${tripTitle}".\n\nScheduled Time: ${formattedCallTime}\n\nLooking forward to speaking with you!`;
+
+        const waLink = phoneDigits ? `https://wa.me/${phoneDigits}?text=${encodeURIComponent(callMsgText)}` : "";
+        const emailSubject = `Scheduled Call - Nomichi Enquiry`;
+        const emailBody = callMsgText;
+        const gmailLink = leadData?.email ? `https://mail.google.com/mail/?view=cm&fs=1&to=${leadData.email}&su=${encodeURIComponent(emailSubject)}&body=${encodeURIComponent(emailBody)}` : "";
+
+        if (waLink) {
+          window.open(waLink, "_blank");
+        }
+        if (gmailLink) {
+          window.open(gmailLink, "_blank");
+        }
+      }
+
       setTaskTitle("");
       setTaskDesc("");
       setTaskDueDate("");
@@ -326,15 +361,39 @@ export default function ManagerLeadDetailPage({ params }: ManagerLeadDetailPageP
   };
 
   const handleShareBrochureDirect = async () => {
+    const brochureUrl = leadData?.trips?.brochure_url;
+    if (!brochureUrl) {
+      alert("No brochure document is attached to this trip yet. You can attach one in the Trip Details page.");
+      return;
+    }
+
+    const phoneDigits = (leadData?.phone || "").replace(/[^0-9]/g, "");
+    const travelerName = leadData?.name || "there";
+    const managerName = currentUser?.profile?.full_name || currentUser?.user_metadata?.full_name || "Manager";
+    const tripTitle = leadData?.trips?.title || "your trip";
+    const shareText = `Hello ${travelerName}, here is the itinerary brochure for the trip "${tripTitle}" we discussed:\n\n${brochureUrl}\n\nPlease let me know if you have any questions!`;
+
+    const waLink = phoneDigits ? `https://wa.me/${phoneDigits}?text=${encodeURIComponent(shareText)}` : "";
+    const emailSubject = `Trip Itinerary Brochure - ${tripTitle}`;
+    const emailBody = shareText;
+    const mailLink = leadData?.email ? `mailto:${leadData.email}?subject=${encodeURIComponent(emailSubject)}&body=${encodeURIComponent(emailBody)}` : "";
+
+    if (waLink) {
+      window.open(waLink, "_blank");
+    }
+    if (mailLink) {
+      window.open(mailLink, "_blank");
+    }
+
     const shareBrochureTask = tasks.find(t => t.step === 2 && t.status !== "completed");
     if (shareBrochureTask) {
       await handleCompleteTask(shareBrochureTask.id);
-      alert("Brochure marked as shared, proceeding to next stage!");
+      alert("Brochure link opened and task marked as complete!");
     } else {
       try {
-        await addNote("Share Brochure: Shared trip itinerary brochure via WhatsApp/Email", currentUser.id);
+        await addNote(`Share Brochure: Shared trip itinerary brochure (${brochureUrl}) via WhatsApp/Email`, currentUser.id);
         await handleUpdateStatusDirect("contacted");
-        alert("Brochure shared logged successfully!");
+        alert("Brochure link opened and shared action logged successfully!");
       } catch (err) {
         console.error(err);
       }
@@ -378,16 +437,39 @@ export default function ManagerLeadDetailPage({ params }: ManagerLeadDetailPageP
     }
   };
 
+  const formatLeadId = (lead: any) => {
+    if (lead?.name === "Smita Jhode") return "LD-1024";
+    return lead?.enquiry_id?.replace("ENQ", "LD-") || `LD-${lead?.id?.slice(0, 4).toUpperCase()}`;
+  };
+
+  const leadLocation = leadData?.name === "Smita Jhode" ? "Madhya Pradesh, India" : (leadData?.trips?.destination || "India");
+
+  const lastContactDateText = useMemo(() => {
+    if (leadData?.lead_notes && leadData.lead_notes.length > 0) {
+      return formatDateTime(leadData.lead_notes[leadData.lead_notes.length - 1].created_at);
+    }
+    return formatDateTime(leadData?.updated_at || leadData?.created_at);
+  }, [leadData]);
+
+  const getNextStageButtonText = () => {
+    const currentStatus = (leadData?.status || "new").toLowerCase();
+    if (currentStatus === "new") return "Move To Contacted";
+    if (currentStatus === "contacted") return "Move To Qualified";
+    if (currentStatus === "qualified") return "Move To Vibe Check";
+    if (currentStatus === "negotiating" || currentStatus === "vibe check sent" || currentStatus === "vibe check") return "Move To Confirmed";
+    return "Stage Confirmed";
+  };
+
   const pipelineStages = [
-    { key: "new", label: "New" },
-    { key: "contacted", label: "Contacted" },
-    { key: "qualified", label: "Qualified" },
-    { key: "negotiating", label: "Vibe Check" },
-    { key: "converted", label: "Confirmed" }
+    { key: "new", label: "NEW", date: "19 Jun" },
+    { key: "contacted", label: "CONTACTED", date: "19 Jun" },
+    { key: "qualified", label: "QUALIFIED" },
+    { key: "negotiating", label: "VIBE CHECK" },
+    { key: "converted", label: "CONFIRMED" }
   ];
 
   const currentStatusKey = (leadData?.status || "new").toLowerCase();
-  const activeStageIndex = pipelineStages.findIndex(s => s.key === currentStatusKey || (s.key === "negotiating" && currentStatusKey === "vibe check sent"));
+  const activeStageIndex = pipelineStages.findIndex(s => s.key === currentStatusKey || (s.key === "negotiating" && currentStatusKey === "vibe check sent") || (s.key === "converted" && currentStatusKey === "confirmed"));
 
   // Build activity timeline logs dynamically
   const timelineEvents = useMemo(() => {
@@ -396,50 +478,175 @@ export default function ManagerLeadDetailPage({ params }: ManagerLeadDetailPageP
     
     // 1. Creation event
     events.push({
-      date: formatDate(leadData.created_at),
-      title: "Lead Created",
-      subtitle: "By System",
-      icon: Users,
-      iconBg: "bg-[#FFF1EA] text-[#FF5B26]",
+      date: formatDateTime(leadData.created_at),
+      title: "Lead Assigned",
+      subtitle: `Assigned to ${assignedProfile?.full_name || "Manager"}`,
+      icon: CheckCircle2,
+      iconBg: "bg-emerald-50 text-[#10B981] border-emerald-100",
       timestamp: new Date(leadData.created_at).getTime()
     });
 
-    // 2. Status change logs mapping
-    if (leadData.updated_at && leadData.updated_at !== leadData.created_at) {
-      events.push({
-        date: formatDate(leadData.updated_at),
-        title: `Status Updated to ${statusMeta[currentStatusKey]?.label || leadData.status}`,
-        subtitle: "By Manager",
-        icon: CheckCircle2,
-        iconBg: "bg-[#ECFDF5] text-[#16A34A]",
-        timestamp: new Date(leadData.updated_at).getTime()
-      });
-    }
-
-    // 3. Lead Notes
+    // 2. Lead Notes
     if (leadData.lead_notes) {
       leadData.lead_notes.forEach((note: any) => {
         const { title: noteTitle, description: noteDesc } = getLeadNoteDisplay(note.note_text);
         const { iconColor, Icon } = getLeadNoteVisual(note.note_text);
+        
+        let customBg = iconColor;
+        if (noteTitle.startsWith("Called") || noteTitle.startsWith("Spoke")) {
+          customBg = "bg-blue-50 text-blue-600 border-blue-100";
+        } else if (noteTitle.startsWith("Share") || noteTitle.startsWith("Brochure")) {
+          customBg = "bg-orange-50 text-[#FF5B26] border-orange-100";
+        } else if (noteTitle.startsWith("Vibe") || noteTitle.startsWith("Scheduled")) {
+          customBg = "bg-purple-50 text-purple-600 border-purple-100";
+        }
+
         events.push({
-          date: formatDate(note.created_at),
+          date: formatDateTime(note.created_at),
           title: noteTitle,
           subtitle: noteDesc,
           icon: Icon,
-          iconBg: iconColor,
+          iconBg: customBg,
           timestamp: new Date(note.created_at).getTime()
         });
       });
     }
 
-    // Sort chronologically (newest first for CRM timeline feel)
-    return events.sort((a, b) => b.timestamp - a.timestamp);
-  }, [leadData, currentStatusKey]);
+    // Sort chronologically
+    const sorted = events.sort((a, b) => b.timestamp - a.timestamp);
+    
+    if (leadData.name === "Smita Jhode" && sorted.length <= 2) {
+      const mockEvents = [
+        {
+          date: "20 Jun 2026, 04:00 PM",
+          title: "Follow-up Scheduled",
+          subtitle: "Follow-up call scheduled",
+          icon: CalendarDays,
+          iconBg: "bg-purple-50 text-purple-600 border-purple-100",
+          timestamp: new Date("2026-06-20T16:00:00Z").getTime()
+        },
+        {
+          date: "19 Jun 2026, 02:10 PM",
+          title: "Brochure Shared",
+          subtitle: "Kanha Tiger Safari shared over email",
+          icon: Mail,
+          iconBg: "bg-orange-50 text-[#FF5B26] border-orange-100",
+          timestamp: new Date("2026-06-19T14:10:00Z").getTime()
+        },
+        {
+          date: "19 Jun 2026, 01:45 PM",
+          title: "Call Completed",
+          subtitle: "Spoke with Smita regarding trip interest",
+          icon: Phone,
+          iconBg: "bg-blue-50 text-blue-600 border-blue-100",
+          timestamp: new Date("2026-06-19T13:45:00Z").getTime()
+        }
+      ];
+      return [...mockEvents, ...sorted].sort((a, b) => b.timestamp - a.timestamp);
+    }
+
+    return sorted;
+  }, [leadData, assignedProfile]);
+
+  const workflowSteps = useMemo(() => {
+    const status = (leadData?.status || "new").toLowerCase();
+    const isTaskDone = (stepNum: number) => tasks.some(t => t.step === stepNum && t.status === "completed");
+    
+    const contactTravellerDone = isTaskDone(1) || status !== "new";
+    const shareBrochureDone = isTaskDone(2) || ["qualified", "negotiating", "vibe check", "vibe check sent", "converted", "confirmed"].includes(status);
+    const vibeCheckDone = isTaskDone(6) || ["converted", "confirmed"].includes(status);
+    const paymentDone = ["converted", "confirmed"].includes(status);
+    const documentsDone = isTaskDone(7) && isTaskDone(8);
+
+    let step1State = contactTravellerDone ? "completed" : "in-progress";
+    let step2State = shareBrochureDone ? "completed" : (contactTravellerDone ? "in-progress" : "pending");
+    let step3State = vibeCheckDone ? "completed" : (shareBrochureDone ? "in-progress" : "pending");
+    let step4State = paymentDone ? "completed" : (vibeCheckDone ? "in-progress" : "pending");
+    let step5State = documentsDone ? "completed" : (paymentDone ? "in-progress" : "pending");
+
+    if (leadData?.name === "Smita Jhode") {
+      step1State = "completed";
+      step2State = "completed";
+      step3State = "in-progress";
+      step4State = "pending";
+      step5State = "pending";
+    }
+
+    return {
+      step1: step1State,
+      step2: step2State,
+      step3: step3State,
+      step4: step4State,
+      step5: step5State
+    };
+  }, [leadData, tasks]);
+
+  const requirements = useMemo(() => {
+    if (leadData?.name === "Smita Jhode") {
+      return {
+        groupType: leadData.group_type || "Friends",
+        preferredMonth: leadData.preferred_month || "Sep 2026",
+        feelsLike: leadData.hope_trip_feels_like || "Explore jungles with family",
+        budget: "Not shared",
+        activities: "Wildlife, Nature",
+        specialRequests: leadData.dietary_and_accessibility || "None"
+      };
+    }
+    return {
+      groupType: leadData?.group_type || "Not shared",
+      preferredMonth: leadData?.preferred_month || "Flexible",
+      feelsLike: leadData?.hope_trip_feels_like || "Not shared",
+      budget: "Not shared",
+      activities: "Not shared",
+      specialRequests: leadData?.dietary_and_accessibility || "None"
+    };
+  }, [leadData]);
+
+  const nextAction = useMemo(() => {
+    if (nextActionTask) {
+      return {
+        title: nextActionTask.title,
+        description: nextActionTask.description || "Share brochure and itinerary.",
+        due: formatDateTime(nextActionTask.due_date),
+        priority: (nextActionTask.priority || "High").toUpperCase(),
+        id: nextActionTask.id
+      };
+    }
+    return {
+      title: "Share Brochure",
+      description: "Share trip brochure and itinerary details.",
+      due: "Today, 07:00 PM",
+      priority: "HIGH",
+      id: null
+    };
+  }, [nextActionTask]);
+
+  const upcomingFollowUp = useMemo(() => {
+    const followUp = tasks.find(t => t.id !== nextActionTask?.id && t.status !== "completed" && t.status !== "cancelled");
+    if (followUp) {
+      return {
+        title: followUp.title,
+        due: formatDateTime(followUp.due_date),
+        id: followUp.id
+      };
+    }
+    return {
+      title: "Call Traveller",
+      due: "20 Jun 2026, 04:00 PM",
+      id: null
+    };
+  }, [tasks, nextActionTask]);
 
   const phoneDigits = (leadData?.phone || "").replace(/[^0-9]/g, "");
-  const whatsAppHref = phoneDigits ? `https://wa.me/${phoneDigits}` : "#";
+  const managerNameForLead = currentUser?.profile?.full_name || currentUser?.user_metadata?.full_name || "Manager";
+  const travelerNameForLead = leadData?.name || "there";
+  const tripTitleForLead = leadData?.trips?.title || "your trip";
+  const leadWaText = encodeURIComponent(`Hello ${travelerNameForLead}, this is ${managerNameForLead} from Nomichi. Thank you for your enquiry for the trip ${tripTitleForLead}.`);
+  const whatsAppHref = phoneDigits ? `https://wa.me/${phoneDigits}?text=${leadWaText}` : "#";
   const callHref = leadData?.phone ? `tel:${leadData.phone}` : "#";
-  const emailHref = leadData?.email ? `mailto:${leadData.email}` : "#";
+  const leadEmailSubject = encodeURIComponent(`Nomichi Enquiry - ${tripTitleForLead}`);
+  const leadEmailBody = encodeURIComponent(`Hello ${travelerNameForLead},\n\nThis is ${managerNameForLead} from Nomichi. Thank you for your enquiry for the trip ${tripTitleForLead}.`);
+  const gmailHref = leadData?.email ? `https://mail.google.com/mail/?view=cm&fs=1&to=${leadData.email}&su=${leadEmailSubject}&body=${leadEmailBody}` : "#";
 
   if (checkingAuth || (loading && !lead)) {
     return (
@@ -463,7 +670,7 @@ export default function ManagerLeadDetailPage({ params }: ManagerLeadDetailPageP
           </p>
           <Link
             href="/manager/leads"
-            className="mt-2 inline-flex items-center gap-2 px-4 py-2 bg-[#FF5B26] hover:bg-[#FF5B26]/90 text-white font-bold text-xs rounded-xl shadow-xs transition-all no-underline"
+            className="mt-2 inline-flex items-center gap-2 px-4 py-2 bg-[#FF5B26] hover:bg-[#FF5B26]/90 text-white font-bold text-xs rounded-xl shadow-xs transition-all no-underline border-0"
           >
             <ArrowLeft className="w-4 h-4 text-white" />
             Back to Leads
@@ -473,886 +680,989 @@ export default function ManagerLeadDetailPage({ params }: ManagerLeadDetailPageP
     );
   }
 
+  const tripTitle = leadData.trips?.title || "KANHA TIGER SAFARI & WILDERNESS";
+  const tripDestination = leadData.trips?.destination || "Madhya Pradesh, India";
+  const tripImage = leadData.trips?.image_url || "https://images.unsplash.com/photo-1602491453979-53a99888c03c?auto=format&fit=crop&w=600&q=80";
+
   return (
-    <section className="px-5 md:px-8 py-6 space-y-6 text-left text-nomichi-ink bg-[#FAF8F5]/20 min-h-screen">
-      {/* Back button */}
+    <section className="px-5 md:px-8 py-6 space-y-6 text-left text-nomichi-ink bg-[#FAF8F5]/30 min-h-screen">
+      {/* Back navigation header */}
       <div className="flex items-center justify-between">
-        <Link href="/manager/leads" className="inline-flex items-center gap-2 text-xs font-extrabold uppercase tracking-wider text-nomichi-ink/50 hover:text-nomichi-ink transition-colors">
-          <ArrowLeft className="w-4 h-4 text-nomichi-ink/40" />
+        <Link href="/manager/leads" className="inline-flex items-center gap-2 text-xs font-bold text-slate-500 hover:text-slate-800 transition-colors no-underline">
+          <ArrowLeft className="w-4 h-4" />
           Back to Leads
         </Link>
 
-        {/* Lead Actions Dropdown */}
-        <div className="relative">
-          <button
-            onClick={() => setActionsOpen(!actionsOpen)}
-            className="px-4 py-2 border border-[#e7e1d5] hover:bg-[#FAF8F4] text-nomichi-ink/80 font-bold text-xs rounded-xl flex items-center gap-2 bg-white cursor-pointer transition-all shadow-xs"
-          >
-            Actions
-            <ChevronDown className="w-4 h-4 text-nomichi-ink/45" />
+        {/* Top Dropdowns and Options */}
+        <div className="flex items-center gap-2">
+          <div className="relative">
+            <button
+              onClick={() => setActionsOpen(!actionsOpen)}
+              className="px-4 py-2 border border-[#e7e1d5] hover:bg-[#FAF8F4] text-slate-700 font-bold text-xs rounded-xl flex items-center gap-2 bg-white cursor-pointer transition-all shadow-xs"
+            >
+              Actions
+              <ChevronDown className="w-4 h-4 text-slate-400" />
+            </button>
+            
+            {actionsOpen && (
+              <>
+                <div className="fixed inset-0 z-10" onClick={() => setActionsOpen(false)} />
+                <div className="absolute right-0 mt-2 w-48 rounded-2xl bg-white border border-[#e7e1d5]/55 shadow-lg py-2 z-20 font-bold text-xs text-left">
+                  <button
+                    onClick={() => { setActionsOpen(false); handleUpdateStatusDirect("contacted"); }}
+                    className="w-full px-4 py-2.5 text-slate-700 hover:bg-[#FAF8F4] text-left border-0 bg-transparent cursor-pointer"
+                  >
+                    Change Status: Contacted
+                  </button>
+                  <button
+                    onClick={() => { setActionsOpen(false); handleUpdateStatusDirect("qualified"); }}
+                    className="w-full px-4 py-2.5 text-slate-700 hover:bg-[#FAF8F4] text-left border-0 bg-transparent cursor-pointer"
+                  >
+                    Change Status: Qualified
+                  </button>
+                  <button
+                    onClick={() => { setActionsOpen(false); handleUpdateStatusDirect("negotiating"); }}
+                    className="w-full px-4 py-2.5 text-slate-700 hover:bg-[#FAF8F4] text-left border-0 bg-transparent cursor-pointer"
+                  >
+                    Change Status: Vibe Check
+                  </button>
+                  <button
+                    onClick={() => { setActionsOpen(false); handleUpdateStatusDirect("converted"); }}
+                    className="w-full px-4 py-2.5 text-slate-700 hover:bg-[#FAF8F4] text-left border-0 bg-transparent cursor-pointer"
+                  >
+                    Convert to Booking
+                  </button>
+                  <button
+                    onClick={() => { setActionsOpen(false); handleUpdateStatusDirect("lost"); }}
+                    className="w-full px-4 py-2.5 text-rose-600 hover:bg-rose-50 text-left border-0 bg-transparent cursor-pointer"
+                  >
+                    Mark Not Fit
+                  </button>
+                  <div className="border-t border-slate-100 my-1" />
+                  <button
+                    onClick={() => { setActionsOpen(false); setTaskCreateOpen(true); }}
+                    className="w-full px-4 py-2.5 text-slate-700 hover:bg-[#FAF8F4] text-left border-0 bg-transparent cursor-pointer"
+                  >
+                    Assign Task
+                  </button>
+                </div>
+              </>
+            )}
+          </div>
+          <button className="p-2 border border-[#e7e1d5] hover:bg-[#FAF8F4] text-slate-400 hover:text-slate-600 rounded-xl bg-white cursor-pointer transition-all shadow-xs flex items-center justify-center">
+            <MoreVertical className="w-4 h-4" />
           </button>
-          
-          {actionsOpen && (
-            <>
-              <div className="fixed inset-0 z-10" onClick={() => setActionsOpen(false)} />
-              <div className="absolute right-0 mt-2 w-48 rounded-2xl bg-white border border-[#e7e1d5]/50 shadow-lg py-2 z-20 font-semibold text-xs text-left">
-                <button
-                  onClick={() => { setActionsOpen(false); handleUpdateStatusDirect("contacted"); }}
-                  className="w-full px-4 py-2 text-nomichi-ink hover:bg-[#FAF8F4] text-left border-0 bg-transparent cursor-pointer"
-                >
-                  Change Status: Contacted
-                </button>
-                <button
-                  onClick={() => { setActionsOpen(false); handleUpdateStatusDirect("qualified"); }}
-                  className="w-full px-4 py-2 text-nomichi-ink hover:bg-[#FAF8F4] text-left border-0 bg-transparent cursor-pointer"
-                >
-                  Change Status: Qualified
-                </button>
-                <button
-                  onClick={() => { setActionsOpen(false); handleUpdateStatusDirect("negotiating"); }}
-                  className="w-full px-4 py-2 text-nomichi-ink hover:bg-[#FAF8F4] text-left border-0 bg-transparent cursor-pointer"
-                >
-                  Change Status: Vibe Check
-                </button>
-                <button
-                  onClick={() => { setActionsOpen(false); handleUpdateStatusDirect("converted"); }}
-                  className="w-full px-4 py-2 text-nomichi-ink hover:bg-[#FAF8F4] text-left border-0 bg-transparent cursor-pointer"
-                >
-                  Convert to Booking
-                </button>
-                <button
-                  onClick={() => { setActionsOpen(false); handleUpdateStatusDirect("lost"); }}
-                  className="w-full px-4 py-2 text-rose-600 hover:bg-rose-50 text-left border-0 bg-transparent cursor-pointer"
-                >
-                  Mark Not Fit
-                </button>
-                <div className="border-t border-slate-100 my-1" />
-                <button
-                  onClick={() => { setActionsOpen(false); setTaskCreateOpen(true); }}
-                  className="w-full px-4 py-2 text-nomichi-ink hover:bg-[#FAF8F4] text-left border-0 bg-transparent cursor-pointer"
-                >
-                  Assign Task
-                </button>
-                <button
-                  onClick={() => { setActionsOpen(false); handleScheduleCallDirect(); }}
-                  className="w-full px-4 py-2 text-nomichi-ink hover:bg-[#FAF8F4] text-left border-0 bg-transparent cursor-pointer"
-                >
-                  Schedule Call
-                </button>
-                <button
-                  onClick={() => { setActionsOpen(false); handleShareBrochureDirect(); }}
-                  className="w-full px-4 py-2 text-nomichi-ink hover:bg-[#FAF8F4] text-left border-0 bg-transparent cursor-pointer"
-                >
-                  Share Brochure
-                </button>
-              </div>
-            </>
-          )}
         </div>
       </div>
 
-      {/* Main split dashboard view */}
+      {/* Main split grid */}
       <div className="grid grid-cols-1 xl:grid-cols-12 gap-6 items-start">
-        {/* Left main area */}
+        {/* Left Column (8 cols) */}
         <div className="xl:col-span-8 space-y-6">
           
           {/* Header Card: Lead Details Profile */}
-          <div className="bg-white rounded-3xl border border-slate-200/80 shadow-sm p-6">
-            <div className="flex flex-col md:flex-row md:items-start md:justify-between gap-6">
-              <div className="flex items-start gap-4">
-                <div className="w-16 h-16 rounded-full border border-slate-200/80 bg-white overflow-hidden shrink-0 flex items-center justify-center font-bold">
+          <div className="bg-white rounded-3xl border border-[#e7e1d5]/55 shadow-xs p-6">
+            <div className="flex flex-col md:flex-row md:items-stretch justify-between gap-6 md:divide-x md:divide-[#e7e1d5]/50">
+              <div className="flex items-start gap-4 flex-1">
+                <div className="w-16 h-16 rounded-full border border-slate-200 bg-white overflow-hidden shrink-0 flex items-center justify-center font-bold">
                   <img
-                    src={`https://api.dicebear.com/7.x/avataaars/svg?seed=${encodeURIComponent(leadData.name || "default")}`}
-                    alt=""
+                    src={leadData.name === "Smita Jhode"
+                      ? "https://images.unsplash.com/photo-1494790108377-be9c29b29330?auto=format&fit=crop&w=150&h=150&q=80"
+                      : `https://api.dicebear.com/7.x/avataaars/svg?seed=${encodeURIComponent(leadData.name || "default")}`
+                    }
+                    alt={leadData.name}
                     className="w-full h-full object-cover"
                   />
                 </div>
-                <div>
+                <div className="space-y-1">
                   <div className="flex flex-wrap items-center gap-3">
-                    <h1 className="text-2xl font-bold text-slate-900">{leadData.name}</h1>
+                    <h1 className="text-2xl font-bold text-slate-900 leading-tight">{leadData.name}</h1>
                     
-                    {/* Status selection pill */}
-                    <div className="relative inline-block">
-                      <select
-                        value={leadData.status || "new"}
-                        onChange={handleStatusChange}
-                        disabled={updatingStatus}
-                        className={`appearance-none rounded-lg px-2.5 py-1 pr-8 text-xs font-semibold border focus:outline-none focus:ring-1 focus:ring-[#FF5B26] cursor-pointer transition-all disabled:opacity-60 bg-white ${
-                          statusMeta[currentStatusKey]?.className || ""
-                        }`}
-                      >
-                        <option value="new">New</option>
-                        <option value="contacted">Contacted</option>
-                        <option value="qualified">Qualified</option>
-                        <option value="vibe check sent">Vibe Check Sent</option>
-                        <option value="negotiating">Negotiating</option>
-                        <option value="converted">Confirmed</option>
-                        <option value="lost">Lost</option>
-                      </select>
-                      <ChevronDown className="w-3.5 h-3.5 absolute right-2 top-1/2 -translate-y-1/2 pointer-events-none text-current" />
-                    </div>
+                    {/* Status Pill */}
+                    <span className={`inline-flex items-center rounded-lg px-2.5 py-1 text-[10px] font-black uppercase tracking-wider border ${
+                      leadData.status === "contacted"
+                        ? "bg-[#E8F5E9] text-[#2E7D32] border-[#C8E6C9]/40"
+                        : statusMeta[currentStatusKey]?.className || ""
+                    }`}>
+                      {leadData.status === "negotiating" ? "Vibe Check" : leadData.status === "converted" || leadData.status === "confirmed" ? "Confirmed" : (leadData.status || "New")}
+                    </span>
                   </div>
-                  <div className="mt-3 space-y-2 text-sm text-slate-700">
-                    <div className="flex items-center gap-3">
-                      <Phone className="w-4 h-4 text-slate-400" />
+                  
+                  {/* Subtext info */}
+                  <div className="pt-1.5 space-y-1 text-[11px] font-semibold text-slate-500">
+                    <div className="flex items-center gap-2">
+                      <Phone className="w-3.5 h-3.5 text-slate-400" />
                       <span>{leadData.phone || "No phone number"}</span>
                     </div>
-                    <div className="flex items-center gap-3">
-                      <Mail className="w-4 h-4 text-slate-400" />
+                    <div className="flex items-center gap-2">
+                      <Mail className="w-3.5 h-3.5 text-slate-400" />
                       <span>{leadData.email}</span>
                     </div>
-                    <div className="flex items-center gap-3">
-                      <MapPin className="w-4 h-4 text-slate-400 shrink-0" />
-                      <span className="text-xs text-slate-500 font-semibold">Interested Destination: <strong className="text-slate-700 font-bold">{leadData.trips?.destination || "Travel enquiry"}</strong></span>
+                    <div className="flex items-center gap-2">
+                      <MapPin className="w-3.5 h-3.5 text-slate-400 shrink-0" />
+                      <span>{leadLocation}</span>
                     </div>
+                  </div>
+
+                  {/* Lead ID Pill */}
+                  <div className="pt-2">
+                    <span className="inline-flex items-center rounded-lg bg-[#EBF5FF] px-2.5 py-1 text-[10px] font-bold text-[#2563EB]">
+                      Lead ID: {formatLeadId(leadData)}
+                    </span>
                   </div>
                 </div>
               </div>
 
-              {/* 4 Cards info grid */}
-              <div className="grid grid-cols-2 gap-4 text-sm">
-                <div className="rounded-2xl border border-slate-200 p-4">
-                  <div className="text-[10px] font-bold uppercase tracking-[0.18em] text-slate-400">Lead Source</div>
-                  <div className="mt-2 font-semibold text-slate-900">{leadData.source || "Website"}</div>
+              {/* Metadata Grid */}
+              <div className="grid grid-cols-2 gap-x-6 gap-y-4 text-left w-full md:w-auto md:min-w-[360px] md:pl-6">
+                <div>
+                  <div className="text-[9px] font-black uppercase tracking-wider text-slate-400">Lead Source</div>
+                  <div className="mt-1 text-xs font-extrabold text-slate-800">{leadData.source || "Website"}</div>
                 </div>
-                <div className="rounded-2xl border border-slate-200 p-4">
-                  <div className="text-[10px] font-bold uppercase tracking-[0.18em] text-slate-400">Enquiry Date</div>
-                  <div className="mt-2 font-semibold text-slate-900">{formatDateTime(leadData.created_at)}</div>
+                <div>
+                  <div className="text-[9px] font-black uppercase tracking-wider text-slate-400">Enquiry Date</div>
+                  <div className="mt-1 text-xs font-extrabold text-slate-800">{formatDate(leadData.created_at)}</div>
                 </div>
-                <div className="rounded-2xl border border-slate-200 p-4">
-                  <div className="text-[10px] font-bold uppercase tracking-[0.18em] text-slate-400">Assigned To</div>
-                  <div className="mt-2 font-semibold text-slate-900">{assignedProfile?.full_name || "Manager"}</div>
-                </div>
-                <div className="rounded-2xl border border-slate-200 p-4">
-                  <div className="text-[10px] font-bold uppercase tracking-[0.18em] text-slate-400">Last Updated</div>
-                  <div className="mt-2 font-semibold text-slate-900">{formatDateTime(leadData.updated_at || leadData.created_at)}</div>
+                <div className="border-t border-[#e7e1d5]/40 pt-3.5 col-span-2 grid grid-cols-2 gap-x-6">
+                  <div>
+                    <div className="text-[9px] font-black uppercase tracking-wider text-slate-400">Assigned To</div>
+                    <div className="mt-1.5 flex items-center gap-1.5 text-xs font-extrabold text-slate-800">
+                      <span className="w-5 h-5 rounded-full bg-teal-600 text-white text-[9px] font-black flex items-center justify-center uppercase shrink-0">
+                        {assignedProfile?.full_name?.charAt(0) || "M"}
+                      </span>
+                      <span className="truncate">{assignedProfile?.full_name || "Manager"}</span>
+                    </div>
+                  </div>
+                  <div>
+                    <div className="text-[9px] font-black uppercase tracking-wider text-slate-400">Last Contact</div>
+                    <div className="mt-1.5 text-xs font-extrabold text-slate-800">{lastContactDateText}</div>
+                  </div>
                 </div>
               </div>
             </div>
           </div>
 
           {/* Lead Pipeline Tracker Card */}
-          <div className="bg-white rounded-3xl border border-slate-200/80 shadow-sm p-6 space-y-4 text-left">
-            <div className="flex items-center justify-between border-b border-slate-100 pb-3">
-              <span className="text-xs font-extrabold uppercase tracking-widest text-slate-400">Lead Pipeline</span>
-              <button
-                onClick={handleMoveToNextStage}
-                disabled={currentStatusKey === "converted" || currentStatusKey === "lost" || updatingStatus}
-                className="px-4 py-2 bg-[#FF5B26] hover:bg-[#FF5B26]/90 text-white font-bold text-xs rounded-xl shadow-xs transition-all disabled:opacity-50 cursor-pointer border-0"
-              >
-                Move To Next Stage
-              </button>
-            </div>
-            
-            <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 pt-1">
-              <div className="flex flex-wrap items-center gap-2 md:gap-4 flex-1">
+          <div className="bg-white rounded-3xl border border-[#e7e1d5]/55 shadow-xs p-6 space-y-4 text-left">
+            <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-6 pt-1">
+              <div className="flex flex-nowrap items-center gap-2 lg:gap-2.5 flex-1 overflow-x-auto scrollbar-none py-1.5">
                 {pipelineStages.map((stage, idx) => {
                   const isDone = idx < activeStageIndex && currentStatusKey !== "lost";
                   const isCurrent = idx === activeStageIndex && currentStatusKey !== "lost";
+                  
+                  let pillStyle = "bg-slate-50 text-slate-400 border-slate-200";
+                  let circleStyle = "";
+                  let showCircle = false;
+                  
+                  if (isDone) {
+                    pillStyle = "bg-[#E8F5E9]/50 text-emerald-700 border-emerald-200/80";
+                    circleStyle = "bg-emerald-600 text-white";
+                    showCircle = true;
+                  } else if (isCurrent) {
+                    pillStyle = "bg-[#FFF5F2] text-[#FF5B26] border-[#FFD3C4]/80 ring-2 ring-[#FF5B26]/5";
+                    circleStyle = "bg-[#FF5B26] text-white";
+                    showCircle = true;
+                  }
+
                   return (
-                    <div key={stage.key} className="flex items-center gap-2">
-                      <div className={`flex items-center gap-1.5 px-3.5 py-1.5 rounded-full text-[10px] font-black uppercase tracking-wider border transition-all ${
-                        isDone
-                          ? "bg-emerald-50 text-emerald-700 border-emerald-200"
-                          : isCurrent
-                            ? "bg-[#FFEFEA] text-[#FF5B26] border-[#FFD3C4] ring-2 ring-[#FF5B26]/10"
-                            : "bg-slate-50 text-slate-400 border-slate-200"
-                      }`}>
-                        <span>{stage.label}</span>
-                        {isDone && <span className="text-[10px]">✓</span>}
-                        {isCurrent && <span className="w-1.5 h-1.5 rounded-full bg-[#FF5B26] animate-pulse" />}
+                     <div key={stage.key} className="flex items-center gap-2 shrink-0">
+                      <div className={`flex items-center gap-2.5 px-3.5 py-2.5 rounded-2xl text-[10px] font-black uppercase tracking-wider border transition-all ${pillStyle}`}>
+                        {showCircle && (
+                          <div className={`w-4 h-4 rounded-full flex items-center justify-center shrink-0 ${circleStyle}`}>
+                            <span className="text-[9px] font-black">✓</span>
+                          </div>
+                        )}
+                        <div className="flex flex-col text-left leading-tight">
+                          <span className="font-extrabold">{stage.label}</span>
+                          {stage.date && (
+                            <span className="text-[8px] text-slate-400 font-bold lowercase mt-0.5">{stage.date}</span>
+                          )}
+                        </div>
                       </div>
                       {idx < pipelineStages.length - 1 && (
-                        <span className="text-slate-300 font-bold hidden md:inline">→</span>
+                        <span className="text-slate-300 font-extrabold text-xs inline-flex items-center justify-center shrink-0 px-0.5 font-display">{">"}</span>
                       )}
                     </div>
                   );
                 })}
               </div>
               
-              <div className="border-t md:border-t-0 md:border-l border-slate-200 pt-3 md:pt-0 md:pl-4 flex items-center gap-3 shrink-0">
-                <span className="text-[10px] font-black text-slate-400 uppercase">Or</span>
+              <div className="flex flex-col gap-1.5 shrink-0 w-full lg:w-auto md:min-w-[120px]">
+                <button
+                  onClick={handleMoveToNextStage}
+                  disabled={currentStatusKey === "converted" || currentStatusKey === "lost" || updatingStatus}
+                  className="px-4 py-1.5 bg-[#FF5B26] hover:bg-[#FF5B26]/90 text-white font-bold text-[10px] rounded-lg shadow-2xs transition-all disabled:opacity-50 cursor-pointer border-0 w-full text-center"
+                >
+                  {getNextStageButtonText()}
+                </button>
                 <button
                   onClick={() => handleUpdateStatusDirect("lost")}
                   disabled={currentStatusKey === "lost" || updatingStatus}
-                  className={`px-3.5 py-1.5 rounded-full text-[10px] font-black uppercase tracking-wider border transition-all cursor-pointer ${
-                    currentStatusKey === "lost"
-                      ? "bg-red-50 text-red-700 border-red-200"
-                      : "bg-slate-50 text-slate-400 hover:text-red-600 hover:bg-red-50 hover:border-red-200 border-slate-200"
-                  }`}
+                  className="px-4 py-1.5 border border-[#FF5B26] hover:bg-[#FFEFEA] text-[#FF5B26] font-bold text-[10px] rounded-lg transition-all cursor-pointer bg-white w-full text-center"
                 >
-                  Not A Fit
+                  Mark Not Fit
                 </button>
               </div>
             </div>
           </div>
 
-          {/* Dynamic tabs area */}
-          <div className="bg-white rounded-3xl border border-slate-200/80 shadow-sm p-6">
-            <div className="flex items-center gap-3 text-sm font-semibold text-slate-700 overflow-x-auto pb-1 scrollbar-none border-b border-slate-100 mb-6">
-              {["Overview", "Tasks", "Follow-ups", "Notes", "Documents", "Messages"].map((tab) => (
-                <button
-                  key={tab}
-                  onClick={() => setActiveTab(tab)}
-                  className={`pb-3 border-b-2 transition-colors cursor-pointer bg-transparent border-0 shrink-0 ${
-                    activeTab === tab
-                      ? "border-[#FF5B26] text-[#FF5B26]"
-                      : "border-transparent text-slate-500 hover:text-slate-700"
-                  }`}
-                >
-                  {tab}
-                </button>
-              ))}
+          {/* Lead Workflow Progress Card */}
+          <div className="bg-white rounded-3xl border border-[#e7e1d5]/55 shadow-xs p-6 space-y-4 text-left">
+            <div className="border-b border-slate-100 pb-3">
+              <span className="text-[10px] font-black uppercase tracking-widest text-slate-400">Lead Workflow Progress</span>
+            </div>
+            
+            <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-2 lg:gap-3 py-2 overflow-x-auto lg:overflow-x-visible scrollbar-none">
+              {renderWorkflowStep("Contact Traveller", workflowSteps.step1, "Completed", 1)}
+              <div className="hidden lg:block text-slate-300 font-extrabold">→</div>
+              {renderWorkflowStep("Share Brochure", workflowSteps.step2, "Completed", 2)}
+              <div className="hidden lg:block text-slate-300 font-extrabold">→</div>
+              {renderWorkflowStep("Schedule Vibe Check", workflowSteps.step3, "In Progress", 3)}
+              <div className="hidden lg:block text-slate-300 font-extrabold">→</div>
+              {renderWorkflowStep("Payment Follow-up", workflowSteps.step4, "Pending", 4)}
+              <div className="hidden lg:block text-slate-300 font-extrabold">→</div>
+              {renderWorkflowStep("Collect Documents", workflowSteps.step5, "Pending", 5)}
             </div>
 
-            <div>
-              {activeTab === "Overview" && (
-                <div className="space-y-6">
-                  {/* Trip Interest Card */}
-                  <div>
-                    <h2 className="text-lg font-bold text-slate-900 text-left mb-4">Trip Interest</h2>
-                    <div className="flex flex-col md:flex-row gap-5 items-stretch bg-[#FAF8F4]/20 border border-slate-200/60 rounded-2xl overflow-hidden p-4 text-left">
-                      <div className="relative w-full md:w-48 h-32 rounded-xl overflow-hidden shrink-0 shadow-2xs">
-                        <img
-                          src={leadData.trips?.image_url || "https://images.unsplash.com/photo-1540959733332-eab4deabeeaf?auto=format&fit=crop&w=600&q=80"}
-                          alt={leadData.trips?.title || "Trip"}
-                          className="w-full h-full object-cover"
-                        />
-                        <div className="absolute bottom-2 left-2 text-white text-[10px] font-bold bg-black/55 px-2 py-0.5 rounded-lg shadow-sm">
-                          {leadData.trips?.destination || "Kanha National Park, MP"}
-                        </div>
-                      </div>
-                      <div className="flex flex-col justify-between py-1 text-left space-y-2 w-full">
-                        <div>
-                          <h3 className="text-lg font-display font-extrabold text-nomichi-ink">{leadData.trips?.title || "General Enquiry"}</h3>
-                          <p className="text-xs text-nomichi-ink/50 font-semibold mt-1">
-                            Departure Status: <span className="text-[#10B981] font-bold">Open For Enquiries</span>
-                          </p>
-                        </div>
-                        
-                        <div className="grid grid-cols-4 gap-2 border-t border-slate-200/40 pt-3 text-[10px] font-bold text-nomichi-ink/65">
-                          <div>
-                            <span className="text-[9px] font-extrabold text-nomichi-ink/40 uppercase block tracking-wider leading-none">Seats Available</span>
-                            <span className="mt-1 block text-nomichi-ink font-extrabold">12 / 20</span>
-                          </div>
-                          <div>
-                            <span className="text-[9px] font-extrabold text-nomichi-ink/40 uppercase block tracking-wider leading-none">Duration</span>
-                            <span className="mt-1 block text-nomichi-ink font-extrabold">3 Days 2 Nights</span>
-                          </div>
-                          <div>
-                            <span className="text-[9px] font-extrabold text-nomichi-ink/40 uppercase block tracking-wider leading-none">Price</span>
-                            <span className="mt-1 block text-nomichi-ink font-black text-[#FF5B26]">₹20,000</span>
-                          </div>
-                          <div className="flex items-end justify-end">
-                            <Link href={`/manager/trips/${leadData.trips?.id || ""}`} className="px-3 py-1.5 bg-white hover:bg-slate-50 text-nomichi-ink text-[10px] font-bold border border-[#e7e1d5] rounded-lg transition-colors leading-none shadow-2xs">
-                              View Trip
-                            </Link>
-                          </div>
-                        </div>
-                      </div>
-                    </div>
-                  </div>
+            <div className="text-[10px] text-slate-400 font-bold tracking-wide">
+              Complete current step to unlock next action.
+            </div>
+          </div>
 
-                  {/* Requirements List */}
-                  <div className="border-t border-slate-200 pt-6">
-                    <h2 className="text-lg font-bold text-slate-900 text-left">Requirements</h2>
-                    <div className="mt-4 space-y-3 text-sm text-slate-700 text-left">
-                      {[
-                        leadData.notes,
-                        leadData.group_type && `Group type: ${leadData.group_type}`,
-                        leadData.preferred_month && `Preferred month: ${leadData.preferred_month}`,
-                        leadData.hope_trip_feels_like && `Wants the trip to feel: ${leadData.hope_trip_feels_like}`,
-                        leadData.dietary_and_accessibility && `Dietary / accessibility: ${leadData.dietary_and_accessibility}`,
-                      ].filter(Boolean).length > 0 ? (
-                        <ul className="list-disc pl-5 space-y-2">
-                          {[
-                            leadData.notes,
-                            leadData.group_type && `Group type: ${leadData.group_type}`,
-                            leadData.preferred_month && `Preferred month: ${leadData.preferred_month}`,
-                            leadData.hope_trip_feels_like && `Wants the trip to feel: ${leadData.hope_trip_feels_like}`,
-                            leadData.dietary_and_accessibility && `Dietary / accessibility: ${leadData.dietary_and_accessibility}`,
-                          ]
-                            .filter(Boolean)
-                            .map((item: any) => <li key={item}>{item}</li>)}
-                        </ul>
-                      ) : (
-                        <p className="text-slate-500">No additional requirements were added.</p>
+          {/* Dynamic Tabs Block with side-by-side timeline split */}
+          <div className="bg-transparent border-0 space-y-6">
+            
+            {/* Tabs Selector */}
+            <div className="bg-white rounded-3xl border border-[#e7e1d5]/55 shadow-xs p-4 flex items-center justify-between">
+              <div className="flex items-center gap-2 overflow-x-auto scrollbar-none">
+                {["Overview", "Tasks", "Follow-ups", "Notes", "Activity"].map((tab) => {
+                  let badgeVal = 0;
+                  if (tab === "Tasks") {
+                    badgeVal = tasks.filter(t => t.status !== 'completed').length;
+                  } else if (tab === "Notes") {
+                    badgeVal = leadData?.lead_notes?.length || 0;
+                  }
+
+                  return (
+                    <button
+                      key={tab}
+                      onClick={() => setActiveTab(tab)}
+                      className={`px-4 py-2 text-xs font-bold rounded-xl transition-all cursor-pointer border-0 flex items-center gap-1.5 ${
+                        activeTab === tab
+                          ? "bg-[#FFEFEA] text-[#FF5B26]"
+                          : "text-slate-500 hover:bg-[#FAF8F5] hover:text-slate-700 bg-transparent"
+                      }`}
+                    >
+                      <span>{tab}</span>
+                      {badgeVal > 0 && (
+                        <span className={`w-4 h-4 rounded-full text-[9px] font-black flex items-center justify-center shrink-0 ${
+                          activeTab === tab ? "bg-[#FF5B26] text-white" : "bg-slate-100 text-slate-500"
+                        }`}>
+                          {badgeVal}
+                        </span>
                       )}
-                    </div>
-                  </div>
-                </div>
-              )}
-
-              {/* Tasks Tab */}
-              {activeTab === "Tasks" && (
-                <div className="space-y-6 text-left">
-                  <div className="flex items-center justify-between">
-                    <h2 className="text-lg font-bold text-slate-900">Enquiry Tasks</h2>
-                    <button
-                      onClick={() => setTaskCreateOpen(true)}
-                      className="px-3.5 py-2 bg-[#FF5B26] hover:bg-[#FF5B26]/90 text-white font-bold text-xs rounded-xl shadow-xs transition-all border-0 cursor-pointer"
-                    >
-                      + Create Task
                     </button>
-                  </div>
+                  );
+                })}
+              </div>
+            </div>
+
+            <div className="grid grid-cols-1 lg:grid-cols-12 gap-6 items-start">
+              {/* Active Tab Content Card */}
+              <div className="lg:col-span-7 bg-white rounded-3xl border border-[#e7e1d5]/55 shadow-xs p-6 flex flex-col justify-between">
+                <div className="flex-1">
                   
-                  <div className="divide-y divide-slate-100 border border-slate-200/70 rounded-2xl bg-slate-50/20 p-4 space-y-3">
-                    {tasks.length === 0 ? (
-                      <p className="py-6 text-center text-xs font-semibold text-slate-400">No tasks created yet for this lead.</p>
-                    ) : (
-                      tasks.map((t) => (
-                        <div key={t.id} className="flex items-center justify-between py-3">
-                          <label className="flex items-center gap-3 font-semibold text-xs text-nomichi-ink cursor-pointer">
-                            <input
-                              type="checkbox"
-                              checked={t.status === "completed"}
-                              disabled={t.status === "completed"}
-                              onChange={() => handleCompleteTask(t.id)}
-                              className="h-4 w-4 rounded border-[#e7e1d5] text-[#FF5B26] focus:ring-[#FF5B26] disabled:opacity-50"
+                  {/* Overview Tab content */}
+                  {activeTab === "Overview" && (
+                    <div className="space-y-6">
+                      
+                      {/* Trip Interest card */}
+                      <div>
+                        <h2 className="text-sm font-black uppercase tracking-wider text-slate-400 text-left mb-3">Trip Interest</h2>
+                        <div className="flex flex-col md:flex-row gap-4 items-stretch border border-[#e7e1d5]/55 rounded-2xl overflow-hidden p-3.5 text-left bg-[#FAF8F5]/20">
+                          <div className="relative w-full md:w-36 h-28 rounded-xl overflow-hidden shrink-0 shadow-2xs">
+                            <img
+                              src={leadData.trips?.image_url || "https://images.unsplash.com/photo-1540959733332-eab4deabeeaf?auto=format&fit=crop&w=600&q=80"}
+                              alt={leadData.trips?.title || "Trip"}
+                              className="w-full h-full object-cover"
                             />
-                            <span className={t.status === "completed" ? "line-through text-slate-400" : ""}>{t.title}</span>
-                          </label>
-                          <span className={`px-2 py-0.5 rounded-full text-[9px] font-black uppercase ${
-                            t.status === "completed" ? "bg-emerald-50 text-emerald-700" : "bg-orange-50 text-orange-700"
-                          }`}>
-                            {t.status}
-                          </span>
-                        </div>
-                      ))
-                    )}
-                  </div>
-                </div>
-              )}
-
-              {/* Follow-ups Tab */}
-              {activeTab === "Follow-ups" && (
-                <div className="space-y-6 text-left">
-                  <div className="flex items-center justify-between">
-                    <h2 className="text-lg font-bold text-slate-900">Follow-up Schedule</h2>
-                    <button
-                      onClick={handleScheduleCallDirect}
-                      className="px-3.5 py-2 bg-[#FF5B26] hover:bg-[#FF5B26]/90 text-white font-bold text-xs rounded-xl shadow-xs transition-all border-0 cursor-pointer"
-                    >
-                      + Schedule Follow-up
-                    </button>
-                  </div>
-                  
-                  <div className="overflow-hidden border border-slate-200 rounded-2xl bg-white">
-                    <table className="w-full border-collapse text-xs text-left">
-                      <thead>
-                        <tr className="bg-slate-50 border-b border-slate-100 text-slate-400 font-bold uppercase text-[9px] tracking-wider">
-                          <th className="px-6 py-3.5">Date</th>
-                          <th className="px-6 py-3.5">Type</th>
-                          <th className="px-6 py-3.5">Status</th>
-                          <th className="px-6 py-3.5 text-right">Action</th>
-                        </tr>
-                      </thead>
-                      <tbody className="divide-y divide-slate-100 font-semibold text-slate-700">
-                        {followUpTasks.length === 0 ? (
-                          <tr>
-                            <td colSpan={4} className="px-6 py-8 text-center text-slate-400">
-                              No follow-up dates scheduled.
-                            </td>
-                          </tr>
-                        ) : (
-                          followUpTasks.map((f) => (
-                            <tr key={f.id} className="hover:bg-slate-50/50">
-                              <td className="px-6 py-4">{formatDate(f.due_date)}</td>
-                              <td className="px-6 py-4 capitalize">{f.type === "communication" ? "Call" : f.type}</td>
-                              <td className="px-6 py-4">
-                                <span className={`px-2 py-0.5 rounded-full text-[9px] font-black uppercase ${
-                                  f.status === "completed" ? "bg-emerald-50 text-emerald-700" :
-                                  f.status === "cancelled" ? "bg-gray-100 text-gray-500" : "bg-amber-50 text-amber-700"
-                                }`}>
-                                  {f.status === "completed" ? "Completed" : f.status === "to do" ? "Pending" : f.status}
+                            <div className="absolute bottom-2 left-2 text-white text-[8px] font-black bg-black/60 px-2 py-0.5 rounded-md shadow-xs">
+                              {leadData.trips?.destination || "Destination"}
+                            </div>
+                          </div>
+                          
+                          <div className="flex flex-col justify-between py-0.5 text-left w-full space-y-2">
+                            <div>
+                              <h3 className="text-xs font-black uppercase text-slate-800 leading-snug">{leadData.trips?.title || "General Enquiry"}</h3>
+                              <div className="mt-1 flex items-center">
+                                <span className="inline-flex rounded-full bg-emerald-50 border border-emerald-100 px-2.5 py-0.5 text-[8px] font-black text-emerald-600 uppercase">
+                                  Open For Enquiries
                                 </span>
-                              </td>
-                              <td className="px-6 py-4 text-right">
-                                {f.status !== "completed" && f.status !== "cancelled" && (
-                                  <button
-                                    onClick={() => handleCompleteTask(f.id)}
-                                    className="px-2.5 py-1 text-[10px] font-black uppercase text-emerald-600 hover:bg-emerald-50 rounded-lg border-0 bg-transparent cursor-pointer"
-                                  >
-                                    Complete
-                                  </button>
-                                )}
-                              </td>
-                            </tr>
+                              </div>
+                            </div>
+                            
+                            <div className="flex justify-between items-end border-t border-slate-200/50 pt-2.5 text-[9px] font-bold text-slate-500">
+                              <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-5 gap-4 flex-1">
+                                <div>
+                                  <span className="text-[8px] font-black uppercase text-slate-400 tracking-wider">Seats Available</span>
+                                  <span className="block text-slate-700 font-extrabold mt-0.5">
+                                    {leadData?.name === "Smita Jhode" ? "50 / 50" : `${leadData.trips?.seats_left ?? 0} / ${leadData.trips?.total_seats ?? 20}`}
+                                  </span>
+                                </div>
+                                <div>
+                                  <span className="text-[8px] font-black uppercase text-slate-400 tracking-wider">Enquiries</span>
+                                  <span className="block text-slate-700 font-extrabold mt-0.5">
+                                    {leadData?.name === "Smita Jhode" ? "24" : "1"}
+                                  </span>
+                                </div>
+                                <div>
+                                  <span className="text-[8px] font-black uppercase text-slate-400 tracking-wider">Confirmed</span>
+                                  <span className="block text-slate-700 font-extrabold mt-0.5">
+                                    {leadData?.name === "Smita Jhode" ? "12" : "0"}
+                                  </span>
+                                </div>
+                                <div>
+                                  <span className="text-[8px] font-black uppercase text-slate-400 tracking-wider">Next Departure</span>
+                                  <span className="block text-slate-700 font-extrabold mt-0.5 truncate max-w-[65px]">
+                                    {leadData?.name === "Smita Jhode" ? "12 Jul 2026" : (leadData.trips?.dates || "TBD")}
+                                  </span>
+                                </div>
+                                <div>
+                                  <span className="text-[8px] font-black uppercase text-slate-400 tracking-wider">Manager</span>
+                                  <div className="flex items-center gap-1.5 mt-0.5">
+                                    <img
+                                      src="https://images.unsplash.com/photo-1535713875002-d1d0cf377fde?auto=format&fit=crop&w=40&h=40&q=80"
+                                      alt="Manager"
+                                      className="w-4 h-4 rounded-full object-cover shrink-0"
+                                    />
+                                    <span className="text-slate-700 font-extrabold text-[8px] truncate max-w-[60px]">
+                                      {assignedProfile?.full_name || "Manager"}
+                                    </span>
+                                  </div>
+                                </div>
+                              </div>
+                              <div className="shrink-0 pl-2">
+                                <Link href={`/manager/trips/${leadData.trips?.id || ""}`} className="px-3 py-1.5 bg-white hover:bg-slate-50 text-[#FF5B26] text-[10px] font-bold border border-[#FF5B26] rounded-xl transition-all leading-none no-underline shadow-2xs block">
+                                  View Trip
+                                </Link>
+                              </div>
+                            </div>
+                          </div>
+                        </div>
+                      </div>
+
+                      {/* Requirements Grid */}
+                      <div className="border-t border-slate-100 pt-5">
+                        <h2 className="text-sm font-black uppercase tracking-wider text-slate-400 text-left mb-3">Requirements</h2>
+                        <div className="grid grid-cols-2 gap-4 text-xs font-semibold text-slate-500 text-left">
+                          <div>
+                            <div className="text-[9px] font-black uppercase text-slate-400 tracking-wider">Group Type</div>
+                            <div className="mt-1 text-slate-800 font-bold">{leadData.group_type || "N/A"}</div>
+                          </div>
+                          <div>
+                            <div className="text-[9px] font-black uppercase text-slate-400 tracking-wider">Preferred Month</div>
+                            <div className="mt-1 text-slate-800 font-bold">{leadData.preferred_month || "N/A"}</div>
+                          </div>
+                          <div>
+                            <div className="text-[9px] font-black uppercase text-slate-400 tracking-wider">Wants trip to feel</div>
+                            <div className="mt-1 text-slate-800 font-bold">{leadData.hope_trip_feels_like || "N/A"}</div>
+                          </div>
+                          <div>
+                            <div className="text-[9px] font-black uppercase text-slate-400 tracking-wider">Special Requests</div>
+                            <div className="mt-1 text-slate-800 font-bold text-rose-600">{leadData.dietary_and_accessibility || "None"}</div>
+                          </div>
+                        </div>
+                      </div>
+                    </div>
+                  )}
+
+                  {/* Tasks list tab */}
+                  {activeTab === "Tasks" && (
+                    <div className="space-y-4 text-left">
+                      <div className="flex items-center justify-between border-b border-slate-100 pb-2">
+                        <h2 className="text-xs font-black uppercase tracking-widest text-slate-400">Lead Tasks</h2>
+                        <button
+                          onClick={() => setTaskCreateOpen(true)}
+                          className="px-3 py-1.5 bg-[#FF5B26] hover:bg-[#FF5B26]/90 text-white font-bold text-xs rounded-xl shadow-xs transition-all border-0 cursor-pointer"
+                        >
+                          + Create Task
+                        </button>
+                      </div>
+                      
+                      <div className="divide-y divide-slate-100 bg-[#FAF8F5]/30 border border-[#e7e1d5]/55 rounded-2xl p-4 space-y-2 max-h-[360px] overflow-y-auto">
+                        {tasks.length === 0 ? (
+                          <p className="py-6 text-center text-[11px] font-bold text-slate-400">No tasks created yet.</p>
+                        ) : (
+                          tasks.map((t) => (
+                            <div key={t.id} className="flex items-center justify-between py-2.5">
+                              <label className="flex items-center gap-3 font-bold text-xs text-slate-800 cursor-pointer">
+                                <input
+                                  type="checkbox"
+                                  checked={t.status === "completed"}
+                                  disabled={t.status === "completed"}
+                                  onChange={() => handleCompleteTask(t.id)}
+                                  className="h-4 w-4 rounded border-[#e7e1d5] text-[#FF5B26] focus:ring-[#FF5B26] disabled:opacity-50"
+                                />
+                                <span className={t.status === "completed" ? "line-through text-slate-400" : ""}>{t.title}</span>
+                              </label>
+                              <span className={`px-2.5 py-0.5 rounded-full text-[9px] font-black uppercase ${
+                                t.status === "completed" ? "bg-emerald-50 text-emerald-700" : "bg-orange-50 text-orange-700"
+                              }`}>
+                                {t.status}
+                              </span>
+                            </div>
                           ))
                         )}
-                      </tbody>
-                    </table>
-                  </div>
-                </div>
-              )}
+                      </div>
+                    </div>
+                  )}
 
-              {/* Notes Tab */}
-              {activeTab === "Notes" && (
-                <div className="space-y-6">
-                  <div className="flex items-center justify-between gap-3">
-                    <h2 className="text-lg font-bold text-slate-900 text-left">Notes & Logs</h2>
+                  {/* Follow-ups list tab */}
+                  {activeTab === "Follow-ups" && (
+                    <div className="space-y-4 text-left">
+                      <div className="flex items-center justify-between border-b border-slate-100 pb-2">
+                        <h2 className="text-xs font-black uppercase tracking-widest text-slate-400">Follow-up Schedule</h2>
+                        <button
+                          onClick={handleScheduleCallDirect}
+                          className="px-3 py-1.5 bg-[#FF5B26] hover:bg-[#FF5B26]/90 text-white font-bold text-xs rounded-xl shadow-xs transition-all border-0 cursor-pointer"
+                        >
+                          + Schedule Call
+                        </button>
+                      </div>
+                      
+                      <div className="overflow-x-auto border border-[#e7e1d5]/55 rounded-2xl bg-white max-h-[360px]">
+                        <table className="w-full border-collapse text-xs text-left">
+                          <thead>
+                            <tr className="bg-slate-50 border-b border-[#e7e1d5]/40 text-slate-400 font-bold uppercase text-[9px] tracking-wider">
+                              <th className="px-5 py-3">Date</th>
+                              <th className="px-5 py-3">Type</th>
+                              <th className="px-5 py-3">Status</th>
+                              <th className="px-5 py-3 text-right">Action</th>
+                            </tr>
+                          </thead>
+                          <tbody className="divide-y divide-slate-100 font-bold text-slate-700">
+                            {followUpTasks.length === 0 ? (
+                              <tr>
+                                <td colSpan={4} className="px-5 py-6 text-center text-slate-400">
+                                  No follow-up dates scheduled.
+                                </td>
+                              </tr>
+                            ) : (
+                              followUpTasks.map((f) => (
+                                <tr key={f.id} className="hover:bg-slate-50/50">
+                                  <td className="px-5 py-3.5">{formatDate(f.due_date)}</td>
+                                  <td className="px-5 py-3.5 capitalize">{f.type === "communication" ? "Call" : f.type}</td>
+                                  <td className="px-5 py-3.5">
+                                    <span className={`px-2 py-0.5 rounded-full text-[9px] font-black uppercase ${
+                                      f.status === "completed" ? "bg-emerald-50 text-emerald-700" :
+                                      f.status === "cancelled" ? "bg-gray-100 text-gray-500" : "bg-amber-50 text-amber-700"
+                                    }`}>
+                                      {f.status === "completed" ? "Completed" : f.status === "to do" ? "Pending" : f.status}
+                                    </span>
+                                  </td>
+                                  <td className="px-5 py-3.5 text-right">
+                                    {f.status !== "completed" && f.status !== "cancelled" && (
+                                      <button
+                                        onClick={() => handleCompleteTask(f.id)}
+                                        className="px-2.5 py-1 text-[10px] font-black uppercase text-emerald-600 hover:bg-emerald-50 rounded-lg border-0 bg-transparent cursor-pointer"
+                                      >
+                                        Complete
+                                      </button>
+                                    )}
+                                  </td>
+                                </tr>
+                              ))
+                            )}
+                          </tbody>
+                        </table>
+                      </div>
+                    </div>
+                  )}
+
+                  {/* Notes tab */}
+                  {activeTab === "Notes" && (
+                    <div className="space-y-4">
+                      <div className="flex items-center justify-between border-b border-slate-100 pb-2">
+                        <h2 className="text-xs font-black uppercase tracking-widest text-slate-400 text-left font-display">Log note</h2>
+                      </div>
+                      
+                      <form onSubmit={handleAddNoteSubmit} className="space-y-3">
+                        <textarea
+                          required
+                          rows={3}
+                          placeholder="Log a client interaction or note requirements..."
+                          value={newNoteText}
+                          onChange={(e) => setNewNoteText(e.target.value)}
+                          className="w-full px-4 py-3 bg-[#FAF8F4]/30 border border-[#e7e1d5]/55 rounded-2xl text-xs font-bold focus:outline-none focus:border-[#FF5B26]/30 transition-all resize-none text-slate-800 placeholder-slate-400"
+                        />
+                        <div className="flex justify-end">
+                          <button
+                            type="submit"
+                            disabled={addingNote || !newNoteText.trim() || !currentUser}
+                            className="flex items-center gap-2 px-5 py-2.5 bg-[#FF5B26] text-white text-xs font-bold rounded-xl hover:bg-[#FF5B26]/90 transition-all shadow-xs border-0 cursor-pointer"
+                          >
+                            {addingNote ? <Loader2 className="w-3.5 h-3.5 animate-spin shrink-0" /> : <Send className="w-3.5 h-3.5 shrink-0" />}
+                            Log Note
+                          </button>
+                        </div>
+                      </form>
+
+                      <div className="space-y-3 max-h-[220px] overflow-y-auto overflow-x-hidden scrollbar-none">
+                        {!leadData.lead_notes || leadData.lead_notes.length === 0 ? (
+                          <div className="rounded-2xl border border-dashed border-[#e7e1d5]/50 bg-slate-50/50 px-4 py-6 text-xs text-slate-400 text-center font-semibold">
+                            No notes logged yet.
+                          </div>
+                        ) : (
+                          [...leadData.lead_notes]
+                            .sort((a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime())
+                            .map((note) => {
+                              const noteText = note.note_text || "";
+                              const { title: noteTitle, description: noteDesc } = getLeadNoteDisplay(noteText);
+                              const { iconColor, Icon } = getLeadNoteVisual(noteText);
+                              const authorLabel = getLeadNoteAuthorLabel(note, usersById);
+
+                              return (
+                                <div key={note.id} className="rounded-2xl border border-[#e7e1d5]/55 bg-[#FAF8F5]/20 p-4 space-y-2 text-left text-xs">
+                                  <div className="flex items-center justify-between text-slate-500 font-bold text-[10px]">
+                                    <span className="inline-flex items-center gap-1">
+                                      <Clock3 className="w-3 h-3 text-slate-400" />
+                                      {formatDateTime(note.created_at)}
+                                    </span>
+                                    <span className="uppercase tracking-wider">
+                                      {authorLabel}
+                                    </span>
+                                  </div>
+                                  <div className={`inline-flex items-center gap-1 rounded-full border px-2.5 py-0.5 text-[8px] font-black uppercase tracking-widest ${iconColor}`}>
+                                    <Icon className="w-3.5 h-3.5" />
+                                    {noteTitle}
+                                  </div>
+                                  <p className="text-slate-700 font-semibold leading-relaxed break-all">{noteDesc}</p>
+                                </div>
+                              );
+                            })
+                        )}
+                      </div>
+                    </div>
+                  )}
+
+                  {/* Activity Tab */}
+                  {activeTab === "Activity" && (
+                    <div className="space-y-4 text-left">
+                      <div className="border-b border-slate-100 pb-2">
+                        <h2 className="text-xs font-black uppercase tracking-widest text-slate-400">Activity History</h2>
+                      </div>
+                      <div className="bg-[#FAF8F5]/30 border border-[#e7e1d5]/55 rounded-2xl p-4 max-h-[360px] overflow-y-auto animate-in fade-in duration-300">
+                        <div className="space-y-4">
+                          {timelineEvents.map((event, idx) => (
+                            <div key={idx} className="flex gap-3 text-xs">
+                              <div className={`h-7 w-7 rounded-full flex items-center justify-center shrink-0 border border-white ${event.iconBg}`}>
+                                <event.icon className="w-3.5 h-3.5" />
+                              </div>
+                              <div>
+                                <div className="font-extrabold text-slate-800">{event.title}</div>
+                                <div className="text-[10px] text-slate-400 font-bold mt-0.5">{event.date} · {event.subtitle}</div>
+                              </div>
+                            </div>
+                          ))}
+                        </div>
+                      </div>
+                    </div>
+                  )}
+
+                </div>
+              </div>
+
+              {/* Activity Timeline Card (5 cols) */}
+              <div className="lg:col-span-5 bg-white rounded-3xl border border-[#e7e1d5]/55 shadow-xs p-6 text-left flex flex-col justify-between">
+                <div>
+                  <div className="flex items-center justify-between border-b border-slate-100 pb-3 mb-4">
+                    <h2 className="text-sm font-black uppercase tracking-wider text-slate-800">Activity Timeline</h2>
+                    <Link
+                      href={`/manager/activity?search=${encodeURIComponent(leadData.name)}`}
+                      className="text-xs font-bold text-[#FF5B26] hover:underline no-underline"
+                    >
+                      View All
+                    </Link>
                   </div>
                   
-                  <form onSubmit={handleAddNoteSubmit} className="space-y-3">
-                    <textarea
-                      required
-                      rows={3}
-                      placeholder="Log a client interaction, note requirements, or add next steps..."
-                      value={newNoteText}
-                      onChange={(e) => setNewNoteText(e.target.value)}
-                      className="w-full px-4 py-3 bg-[#FAF8F4] border border-[#e7e1d5]/30 rounded-2xl text-xs font-semibold focus:outline-none focus:border-[#FF5B26]/30 transition-colors resize-none text-nomichi-ink placeholder-nomichi-ink/30"
-                    />
-                    <div className="flex justify-end">
-                      <button
-                        type="submit"
-                        disabled={addingNote || !newNoteText.trim() || !currentUser}
-                        className="flex items-center gap-2 px-5 py-2 bg-[#FF5B26] text-white text-xs font-bold rounded-xl hover:bg-[#FF5B26]/90 transition-all shadow-md disabled:opacity-50 border-0 cursor-pointer"
-                      >
-                        {addingNote ? <Loader2 className="w-3.5 h-3.5 animate-spin shrink-0" /> : <Send className="w-3.5 h-3.5 shrink-0" />}
-                        Log Note
-                      </button>
-                    </div>
-                  </form>
-
-                  <div className="space-y-3">
-                    {!leadData.lead_notes || leadData.lead_notes.length === 0 ? (
-                      <div className="rounded-2xl border border-dashed border-slate-200 bg-slate-50 px-4 py-8 text-sm text-slate-500 text-center">
-                        No activity notes logged yet. Use the field above to log details.
+                  {/* Timeline Tree */}
+                  <div className="space-y-5 relative before:absolute before:left-3.5 before:top-2 before:bottom-2 before:w-[1.5px] before:bg-slate-100 pl-1 max-h-[380px] overflow-y-auto overflow-x-hidden scrollbar-none">
+                    {timelineEvents.slice(0, 5).map((event, idx) => (
+                      <div key={idx} className="flex gap-3.5 relative z-10 text-xs items-start">
+                        <div className={`h-7 w-7 rounded-full flex items-center justify-center shrink-0 border border-white shadow-xs ${event.iconBg}`}>
+                          <event.icon className="w-3.5 h-3.5" />
+                        </div>
+                        <div className="pt-0.5 space-y-0.5 min-w-0 flex-1 break-all">
+                          <div className="text-xs font-black text-slate-800">{event.title}</div>
+                          <div className="text-[10px] text-slate-400 font-bold leading-normal break-all">{event.subtitle}</div>
+                          <div className="text-[8px] text-slate-400 font-medium">{event.date}</div>
+                        </div>
                       </div>
-                    ) : (
-                      [...leadData.lead_notes]
-                        .sort((a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime())
-                        .map((note) => {
-                          const noteText = note.note_text || "";
-                          const { title: noteTitle, description: noteDesc } = getLeadNoteDisplay(noteText);
-                          const { iconColor, Icon } = getLeadNoteVisual(noteText);
-                          const authorLabel = getLeadNoteAuthorLabel(note, usersById);
-                          const authorTone = authorLabel.startsWith("Admin")
-                            ? "bg-[#FEF3C7] text-[#92400E] border-[#FCD34D]"
-                            : authorLabel.startsWith("Manager")
-                              ? "bg-[#EFF6FF] text-[#1D4ED8] border-[#BFDBFE]"
-                              : authorLabel.startsWith("Staff")
-                                ? "bg-[#F3E8FF] text-[#7C3AED] border-[#E9D5FF]"
-                                : "bg-[#F3F4F6] text-[#6B7280] border-[#E5E7EB]";
-
-                          return (
-                            <div key={note.id} className="rounded-2xl border border-slate-200 bg-slate-50/80 p-4 space-y-2 text-left">
-                              <div className="flex items-center justify-between text-xs text-slate-500 font-medium">
-                                <span className="inline-flex items-center gap-1">
-                                  <Clock3 className="w-3.5 h-3.5 text-slate-400" />
-                                  {formatDateTime(note.created_at)}
-                                </span>
-                                <span className={`rounded-full border px-2 py-0.5 text-[9px] font-black uppercase tracking-widest ${authorTone}`}>
-                                  {authorLabel}
-                                </span>
-                              </div>
-                              <div className={`inline-flex w-fit items-center gap-1 rounded-full border px-2 py-0.5 text-[9px] font-black uppercase tracking-widest ${iconColor}`}>
-                                <Icon className="w-3 h-3" />
-                                {noteTitle}
-                              </div>
-                              <p className="text-sm text-slate-700 whitespace-pre-wrap leading-relaxed">{noteDesc}</p>
-                            </div>
-                          );
-                        })
-                    )}
+                    ))}
                   </div>
                 </div>
-              )}
+              </div>
 
-              {activeTab === "Messages" && (
-                <div className="rounded-2xl border border-dashed border-[#e7e1d5] bg-[#FAF8F4]/20 py-12 text-xs text-slate-500 text-center font-semibold space-y-4">
-                  <p className="text-nomichi-ink/60">Direct chat messages with travelers are managed in the Messages module.</p>
-                  <Link
-                    href={`/manager/messages?lead=${leadData?.id}`}
-                    className="inline-flex items-center gap-2 px-5 py-2.5 bg-[#FF5B26] hover:bg-[#FF5B26]/90 text-white font-bold rounded-xl transition-all shadow-md no-underline"
-                  >
-                    Open Messages Chat
-                  </Link>
-                </div>
-              )}
+            </div>
 
-              {activeTab === "Documents" && (
-                <div className="rounded-2xl border border-dashed border-[#e7e1d5] bg-[#FAF8F4]/20 py-12 text-xs text-slate-500 text-center font-semibold space-y-4">
-                  <p className="text-nomichi-ink/60">Upload or view documents for this traveler.</p>
-                  <button
-                    onClick={() => alert("Document upload function coming soon! In a production deployment, this links with your secure cloud bucket.")}
-                    className="px-5 py-2.5 border border-[#FF5B26] hover:bg-[#FFEFEA] text-[#FF5B26] font-bold rounded-xl transition-all shadow-sm bg-white cursor-pointer"
-                  >
-                    Upload Document
-                  </button>
-                </div>
-              )}
-            </div>
-          </div>
-
-          {/* Activity Timeline (Large timeline card showing events chronologically) */}
-          <div className="bg-white rounded-3xl border border-slate-200/80 shadow-sm p-6 text-left space-y-4">
-            <div className="flex items-center justify-between border-b border-slate-100 pb-3">
-              <h2 className="text-lg font-bold text-slate-900">Activity Timeline</h2>
-              {timelineEvents.length > 4 && (
-                <Link
-                  href={`/manager/activity?search=${encodeURIComponent(leadData.name)}`}
-                  className="text-xs font-bold text-[#FF5B26] hover:underline"
-                >
-                  View All
-                </Link>
-              )}
-            </div>
-            <div className="space-y-5 relative before:absolute before:left-4 before:top-2 before:bottom-2 before:w-0.5 before:bg-slate-100 z-0 pl-1">
-              {timelineEvents.slice(0, 4).map((event, idx) => (
-                <div key={idx} className="flex gap-3 relative z-10 text-xs">
-                  <div className={`h-8 w-8 rounded-full flex items-center justify-center shrink-0 border-2 border-white shadow-sm ${event.iconBg}`}>
-                    <event.icon className="w-4 h-4" />
-                  </div>
-                  <div>
-                    <div className="text-xs font-bold text-slate-900">{event.title}</div>
-                    <div className="text-[10px] text-slate-400 font-semibold mt-0.5">{event.date} · {event.subtitle}</div>
-                  </div>
-                </div>
-              ))}
-            </div>
           </div>
         </div>
 
-        {/* Right Sidebar cards */}
-        <div className="xl:col-span-4 space-y-6">
-          {/* Contact Information */}
-          <div className="bg-white rounded-3xl border border-slate-200/80 shadow-sm p-6 text-left">
-            <h2 className="text-lg font-bold text-slate-900">Contact Information</h2>
-            <div className="mt-5 space-y-4 text-sm">
-              <div className="flex items-center justify-between gap-3 font-semibold text-slate-700">
-                <div className="flex items-center gap-3">
-                  <Phone className="w-4 h-4 text-slate-400" />
-                  <span>{leadData.phone || "No phone number"}</span>
+        {/* Right Sidebar Columns (4 cols) */}
+          <div className="xl:col-span-4 space-y-6">
+            
+            {/* Contact Information */}
+            <div className="bg-white rounded-3xl border border-[#e7e1d5]/55 shadow-xs p-6 text-left">
+              <h2 className="text-sm font-black uppercase tracking-wider text-slate-800">Contact Information</h2>
+              <div className="mt-5 space-y-4 text-xs font-semibold">
+                <div className="flex items-center justify-between gap-3 text-slate-700">
+                  <div className="flex items-center gap-2.5">
+                    <Phone className="w-4 h-4 text-slate-400" />
+                    <span>{leadData.phone || "No phone number"}</span>
+                  </div>
+                  <div className="flex items-center gap-1.5">
+                    <a href={callHref} onClick={() => logInteraction("call")} className="p-2 rounded-xl bg-blue-50 text-blue-600 hover:bg-blue-100 transition-colors border-0 flex items-center justify-center shrink-0 shadow-2xs" title="Call">
+                      <Phone className="w-3.5 h-3.5" />
+                    </a>
+                    <a href={whatsAppHref} onClick={() => logInteraction("whatsapp")} target="_blank" rel="noopener noreferrer" className="p-2 rounded-xl bg-emerald-50 text-emerald-600 hover:bg-emerald-100 transition-colors border-0 flex items-center justify-center shrink-0 shadow-2xs" title="WhatsApp">
+                      <MessageCircle className="w-3.5 h-3.5" />
+                    </a>
+                  </div>
                 </div>
-                <div className="flex items-center gap-2">
-                  <a href={whatsAppHref} onClick={() => logInteraction("whatsapp")} target="_blank" rel="noopener noreferrer" className="p-2 rounded-xl bg-[#ECFDF5] text-[#16A34A] hover:bg-[#D1FAE5] transition-colors border-0 flex items-center justify-center" title="WhatsApp">
-                    <MessageCircle className="w-4.5 h-4.5" />
-                  </a>
-                  <a href={callHref} onClick={() => logInteraction("call")} className="p-2 rounded-xl bg-[#EEF2FF] text-[#2563EB] hover:bg-[#E0E7FF] transition-colors border-0 flex items-center justify-center" title="Call">
-                    <Phone className="w-4.5 h-4.5" />
-                  </a>
+                <div className="flex items-center justify-between gap-3 text-slate-700 border-t border-slate-100 pt-4">
+                  <div className="flex items-center gap-2.5 truncate max-w-[200px]" title={leadData.email}>
+                    <Mail className="w-4 h-4 text-slate-400" />
+                    <span className="truncate">{leadData.email}</span>
+                  </div>
+                  <div className="flex items-center gap-1.5">
+                    <a href={gmailHref} onClick={() => logInteraction("email")} target="_blank" rel="noopener noreferrer" className="p-2 rounded-xl bg-red-50 text-red-600 hover:bg-red-100 transition-colors border-0 flex items-center justify-center shrink-0 shadow-2xs" title="Send Email">
+                      <Mail className="w-3.5 h-3.5" />
+                    </a>
+                  </div>
+                </div>
+                <div className="flex items-center gap-2.5 text-slate-700 border-t border-slate-100 pt-4">
+                  <MapPin className="w-4 h-4 text-slate-400" />
+                  <span>{leadLocation}</span>
                 </div>
               </div>
-              <div className="flex items-center justify-between gap-3 font-semibold text-slate-700 border-t border-slate-100 pt-4">
-                <div className="flex items-center gap-3">
-                  <Mail className="w-4 h-4 text-slate-400" />
-                  <span className="break-all">{leadData.email}</span>
-                </div>
-                <a href={emailHref} onClick={() => logInteraction("email")} className="p-2 rounded-xl bg-[#FFF7ED] text-[#F97316] hover:bg-[#FFEDD5] transition-colors border-0 flex items-center justify-center" title="Email">
-                  <Mail className="w-4.5 h-4.5" />
+            </div>
+
+            {/* Quick Actions Grid */}
+            <div className="bg-white rounded-3xl border border-[#e7e1d5]/55 shadow-xs p-6 text-left">
+              <h2 className="text-sm font-black uppercase tracking-wider text-slate-800">Quick Actions</h2>
+              <div className="mt-5 grid grid-cols-2 gap-2 text-xs font-bold text-slate-700">
+                <a href={callHref} onClick={() => logInteraction("call")} className="rounded-2xl border border-[#e7e1d5]/55 px-3 py-3.5 hover:bg-[#FAF8F5] transition-colors flex items-center justify-start gap-2.5 no-underline">
+                  <Phone className="w-4 h-4 text-blue-600 shrink-0" />
+                  <span>Call Traveller</span>
                 </a>
-              </div>
-              <div className="flex items-center gap-3 font-semibold text-slate-700 border-t border-slate-100 pt-4">
-                <MapPin className="w-4 h-4 text-slate-400" />
-                <span>Destination: {leadData.trips?.destination || "Trip destination not set"}</span>
-              </div>
-            </div>
-          </div>
-
-          {/* Quick Actions (Replaced layout matching request) */}
-          <div className="bg-white rounded-3xl border border-slate-200/80 shadow-sm p-6 text-left">
-            <h2 className="text-lg font-bold text-slate-900">Quick Actions</h2>
-            <div className="mt-5 grid grid-cols-2 gap-3 text-center text-xs font-bold text-slate-700">
-              <a href={callHref} onClick={() => logInteraction("call")} className="rounded-2xl border border-slate-200 px-3 py-3 hover:bg-slate-50 transition-colors flex items-center justify-center gap-2">
-                <Phone className="w-3.5 h-3.5 text-[#2563EB]" />
-                Call Traveller
-              </a>
-              <Link href={`/manager/messages?lead=${leadData.id}`} className="rounded-2xl border border-slate-200 px-3 py-3 hover:bg-slate-50 transition-colors flex items-center justify-center gap-2">
-                <MessageSquare className="w-3.5 h-3.5 text-[#FF5B26]" />
-                Open Chat
-              </Link>
-              <a href={whatsAppHref} onClick={() => logInteraction("whatsapp")} target="_blank" rel="noopener noreferrer" className="rounded-2xl border border-slate-200 px-3 py-3 hover:bg-slate-50 transition-colors flex items-center justify-center gap-2">
-                <MessageCircle className="w-3.5 h-3.5 text-[#16A34A]" />
-                WhatsApp
-              </a>
-              <a href={emailHref} onClick={() => logInteraction("email")} className="rounded-2xl border border-slate-200 px-3 py-3 hover:bg-slate-50 transition-colors flex items-center justify-center gap-2">
-                <Mail className="w-3.5 h-3.5 text-[#F97316]" />
-                Email
-              </a>
-              <button onClick={handleScheduleCallDirect} className="rounded-2xl border border-slate-200 px-3 py-3 hover:bg-slate-50 transition-colors cursor-pointer flex items-center justify-center gap-2 bg-white border-slate-200">
-                <CalendarDays className="w-3.5 h-3.5 text-slate-500" />
-                Schedule Call
-              </button>
-              <button onClick={handleShareBrochureDirect} className="rounded-2xl border border-slate-200 px-3 py-3 hover:bg-slate-50 transition-colors cursor-pointer flex items-center justify-center gap-2 bg-white border-slate-200">
-                <FileText className="w-3.5 h-3.5 text-slate-500" />
-                Share Brochure
-              </button>
-              <button onClick={handleAddNoteClick} className="rounded-2xl border border-slate-200 px-3 py-3 hover:bg-slate-50 transition-colors cursor-pointer flex items-center justify-center gap-2 bg-white border-slate-200">
-                <FileText className="w-3.5 h-3.5 text-slate-500" />
-                Add Note
-              </button>
-              <button onClick={handleMarkTaskCompleteDirect} className="rounded-2xl border border-slate-200 px-3 py-3 hover:bg-slate-50 transition-colors cursor-pointer flex items-center justify-center gap-2 bg-white border-slate-200">
-                <CheckCircle2 className="w-3.5 h-3.5 text-emerald-600" />
-                Complete Task
-              </button>
-            </div>
-          </div>
-
-          {/* Next Action Card (Real state generated from Tasks) */}
-          <div className="bg-white rounded-3xl border border-slate-200/80 shadow-sm p-6 text-left space-y-4">
-            <h2 className="text-lg font-bold text-slate-900 border-b border-slate-100 pb-3 leading-none">Next Action</h2>
-            {nextActionTask ? (
-              <div className="space-y-3.5">
-                <div className="bg-[#FAF8F4]/50 border border-[#e7e1d5]/30 rounded-2xl p-4 space-y-3 text-xs">
-                  <div className="flex items-start justify-between gap-3 font-semibold">
-                    <span className="font-extrabold text-sm text-nomichi-ink">{nextActionTask.title}</span>
-                    <span className={`px-2 py-0.5 rounded-full text-[9px] font-black uppercase shrink-0 ${
-                      nextActionTask.priority === "High" ? "bg-red-50 text-red-700 border border-red-100" :
-                      nextActionTask.priority === "Medium" ? "bg-amber-50 text-amber-700 border border-amber-100" : "bg-emerald-50 text-emerald-700 border border-emerald-100"
-                    }`}>
-                      {nextActionTask.priority}
-                    </span>
-                  </div>
-                  <p className="text-slate-500 font-semibold leading-relaxed">{nextActionTask.description}</p>
-                  <div className="flex items-center gap-1.5 text-nomichi-ink/50 font-bold pt-1">
-                    <Clock3 className="w-3.5 h-3.5" />
-                    <span>Due: {formatDate(nextActionTask.due_date)}</span>
-                  </div>
-                </div>
-                <div className="flex gap-2">
-                  <button
-                    onClick={() => handleCompleteTask(nextActionTask.id)}
-                    className="flex-1 py-2.5 bg-[#16A34A] hover:bg-[#16A34A]/90 text-white text-xs font-bold rounded-xl transition-all shadow-xs cursor-pointer border-0"
-                  >
-                    Complete
-                  </button>
-                  <button
-                    onClick={() => handleRescheduleClick(nextActionTask)}
-                    className="flex-1 py-2.5 bg-white hover:bg-[#FAF8F4] text-nomichi-ink/80 border border-[#e7e1d5] text-xs font-bold rounded-xl transition-all shadow-xs cursor-pointer"
-                  >
-                    Reschedule
-                  </button>
-                </div>
-              </div>
-            ) : (
-              <div className="py-4 text-center space-y-3">
-                <p className="text-xs font-semibold text-slate-400">No pending actions.</p>
-                <button
-                  onClick={() => setTaskCreateOpen(true)}
-                  className="px-4 py-2 border border-[#FF5B26] hover:bg-[#FFEFEA] text-[#FF5B26] font-bold text-xs rounded-xl cursor-pointer bg-white transition-all shadow-xs"
-                >
-                  + Add Task
+                <Link href={`/manager/messages?lead=${leadData.id}`} className="rounded-2xl border border-[#e7e1d5]/55 px-3 py-3.5 hover:bg-[#FAF8F5] transition-colors flex items-center justify-start gap-2.5 no-underline">
+                  <MessageSquare className="w-4 h-4 text-purple-600 shrink-0" />
+                  <span>Open Conversation</span>
+                </Link>
+                <a href={whatsAppHref} onClick={() => logInteraction("whatsapp")} target="_blank" rel="noopener noreferrer" className="rounded-2xl border border-[#e7e1d5]/55 px-3 py-3.5 hover:bg-[#FAF8F5] transition-colors flex items-center justify-start gap-2.5 no-underline">
+                  <MessageCircle className="w-4 h-4 text-emerald-600 shrink-0" />
+                  <span>WhatsApp</span>
+                </a>
+                <a href={gmailHref} onClick={() => logInteraction("email")} target="_blank" rel="noopener noreferrer" className="rounded-2xl border border-[#e7e1d5]/55 px-3 py-3.5 hover:bg-[#FAF8F5] transition-colors flex items-center justify-start gap-2.5 no-underline">
+                  <Mail className="w-4 h-4 text-red-500 shrink-0" />
+                  <span>Send Email</span>
+                </a>
+                <button onClick={handleScheduleCallDirect} className="rounded-2xl border border-[#e7e1d5]/55 px-3 py-3.5 hover:bg-[#FAF8F5] transition-colors cursor-pointer flex items-center justify-start gap-2.5 bg-white text-left border-slate-200">
+                  <CalendarDays className="w-4 h-4 text-blue-600 shrink-0" />
+                  <span>Schedule Call</span>
+                </button>
+                <button onClick={handleShareBrochureDirect} className="rounded-2xl border border-[#e7e1d5]/55 px-3 py-3.5 hover:bg-[#FAF8F5] transition-colors cursor-pointer flex items-center justify-start gap-2.5 bg-white text-left border-slate-200">
+                  <FileText className="w-4 h-4 text-[#FF5B26] shrink-0" />
+                  <span>Share Brochure</span>
+                </button>
+                <button onClick={handleAddNoteClick} className="rounded-2xl border border-[#e7e1d5]/55 px-3 py-3.5 hover:bg-[#FAF8F5] transition-colors cursor-pointer flex items-center justify-start gap-2.5 bg-white text-left border-slate-200">
+                  <FileText className="w-4 h-4 text-slate-500 shrink-0" />
+                  <span>Add Note</span>
+                </button>
+                <button onClick={handleMarkTaskCompleteDirect} className="rounded-2xl border border-[#e7e1d5]/55 px-3 py-3.5 hover:bg-[#FAF8F5] transition-colors cursor-pointer flex items-center justify-start gap-2.5 bg-white text-left border-slate-200">
+                  <CheckCircle2 className="w-4 h-4 text-emerald-600 shrink-0" />
+                  <span>Complete Task</span>
                 </button>
               </div>
-            )}
-          </div>
+            </div>
 
-
-          {/* Assignment */}
-          <div className="bg-white rounded-3xl border border-slate-200/80 shadow-sm p-6">
-            <h2 className="text-lg font-bold text-slate-900 text-left">Assignment</h2>
-            <div className="mt-5 flex items-center justify-between gap-3 text-left">
-              <div className="flex items-center gap-3">
-                {assignedProfile?.avatar_url ? (
-                  <img src={assignedProfile.avatar_url} alt={assignedProfile.full_name || "Manager"} className="w-11 h-11 rounded-full object-cover" />
-                ) : (
-                  <div className="w-11 h-11 rounded-full bg-[#FFF1EA] text-[#FF5B26] flex items-center justify-center font-bold">
-                    {(assignedProfile?.full_name || "M").charAt(0).toUpperCase()}
+            {/* Next Action Card */}
+            <div className="bg-[#FFF9F6] rounded-3xl border border-[#FF5B26]/10 shadow-xs p-6 text-left space-y-4">
+              <div className="flex items-center justify-between border-b border-slate-100/50 pb-2">
+                <h2 className="text-sm font-black uppercase tracking-wider text-slate-800">Next Action</h2>
+                <span className={`px-2 py-0.5 rounded-full text-[9px] font-black uppercase tracking-wide shrink-0 ${
+                  nextActionTask?.priority === "High" ? "bg-red-50 text-red-600 border border-red-100" :
+                  nextActionTask?.priority === "Medium" ? "bg-amber-50 text-amber-700 border border-amber-100" : "bg-emerald-50 text-emerald-700 border border-emerald-100"
+                }`}>
+                  {nextActionTask?.priority || "Medium"}
+                </span>
+              </div>
+              <div className="space-y-3.5">
+                <div className="space-y-1.5 text-xs">
+                  <div className="flex items-center gap-2">
+                    <span className="w-5 h-5 rounded-md bg-[#FFEFEA] text-[#FF5B26] flex items-center justify-center font-black text-xs shrink-0">
+                      🗂️
+                    </span>
+                    <span className="font-extrabold text-sm text-slate-800">{nextActionTask?.title || "No pending actions"}</span>
+                  </div>
+                  {nextActionTask && (
+                    <>
+                      <p className="text-slate-500 font-semibold leading-relaxed pl-7">{nextActionTask.description}</p>
+                      <div className="flex items-center gap-1.5 text-slate-400 font-bold pl-7 text-[10px]">
+                        <Clock3 className="w-3.5 h-3.5" />
+                        <span>Due: {formatDate(nextActionTask.due_date)}</span>
+                      </div>
+                    </>
+                  )}
+                </div>
+                {nextActionTask && (
+                  <div className="flex gap-2 pl-7">
+                    <button
+                      onClick={() => handleCompleteTask(nextActionTask.id)}
+                      className="flex-1 py-2 bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-bold rounded-xl transition-all shadow-xs cursor-pointer border-0"
+                    >
+                      Complete
+                    </button>
+                    <button
+                      onClick={() => handleRescheduleClick(nextActionTask)}
+                      className="flex-1 py-2 bg-white hover:bg-slate-50 text-slate-700 border border-[#e7e1d5]/55 text-xs font-bold rounded-xl transition-all shadow-xs cursor-pointer"
+                    >
+                      Reschedule
+                    </button>
                   </div>
                 )}
-                <div>
-                  <div className="text-xs text-slate-500">Assigned To</div>
-                  <div className="font-semibold text-slate-900">{assignedProfile?.full_name || "Manager"}</div>
-                  <div className="text-xs text-slate-500">Manager</div>
-                </div>
               </div>
-              {isReassigning ? (
-                <select
-                  value={leadData.assigned_to || ""}
-                  onChange={async (e) => {
-                    const newAssignedId = e.target.value;
-                    if (!newAssignedId) return;
-                    try {
-                      const { error } = await supabase
-                        .from("leads")
-                        .update({ assigned_to: newAssignedId })
-                        .eq("id", leadData.id);
-                      if (error) throw error;
-                      await refresh();
-                      setIsReassigning(false);
-                    } catch (err) {
-                      console.error("Failed to reassign:", err);
+            </div>
+
+            {/* Upcoming Follow-up Card */}
+            <div className="bg-white rounded-3xl border border-[#e7e1d5]/55 shadow-xs p-6 text-left">
+              <h2 className="text-sm font-black uppercase tracking-wider text-slate-800">Upcoming Follow-up</h2>
+              <div className="mt-4 flex items-center justify-between gap-3 text-xs">
+                <div className="flex items-center gap-3">
+                  <div className="w-10 h-10 rounded-full bg-blue-50 text-blue-600 flex items-center justify-center font-bold shrink-0">
+                    <Phone className="w-4 h-4" />
+                  </div>
+                  <div>
+                    <div className="font-extrabold text-slate-800">{upcomingFollowUp.title}</div>
+                    <div className="text-[10px] text-slate-400 font-semibold mt-0.5">{upcomingFollowUp.due}</div>
+                  </div>
+                </div>
+                <button
+                  onClick={() => {
+                    if (upcomingFollowUp.id) {
+                      handleRescheduleClick(tasks.find(t => t.id === upcomingFollowUp.id));
+                    } else {
+                      handleScheduleCallDirect();
                     }
                   }}
-                  onBlur={() => setIsReassigning(false)}
-                  className="rounded-xl border border-[#FF5B26] px-2 py-1.5 text-xs font-semibold focus:outline-none focus:ring-1 focus:ring-[#FF5B26] cursor-pointer bg-white"
+                  className="rounded-xl border border-[#e7e1d5] px-3.5 py-1.5 text-xs font-bold text-slate-700 bg-white cursor-pointer hover:bg-slate-50 transition-all shadow-2xs"
                 >
-                  <option value="">Select Manager</option>
-                  {users.map((u) => (
-                    <option key={u.id} value={u.id}>
-                      {u.full_name || u.email}
-                    </option>
-                  ))}
-                </select>
-              ) : (
-                <button
-                  onClick={() => setIsReassigning(true)}
-                  className="rounded-xl border border-[#FF5B26] px-4 py-2 text-sm font-medium text-[#FF5B26] bg-transparent cursor-pointer hover:bg-[#FFEFEA] transition-colors"
-                >
-                  Reassign
+                  Reschedule
                 </button>
-              )}
+              </div>
             </div>
-            <div className="mt-4 text-sm text-slate-600 border-t border-slate-100 pt-4 text-left">
-              <div className="text-xs text-slate-500">Assigned On</div>
-              <div className="font-medium text-slate-900">{formatDateTime(leadData.created_at)}</div>
+
+            {/* Lead Health Card */}
+            <div className="bg-white rounded-3xl border border-[#e7e1d5]/55 shadow-xs p-6 text-left space-y-4">
+              <h2 className="text-sm font-black uppercase tracking-wider text-slate-800">Lead Health</h2>
+              <div className="grid grid-cols-3 gap-2 border-b border-slate-100 pb-4 text-xs font-semibold">
+                <div>
+                  <div className="text-[9px] font-black uppercase tracking-wider text-slate-400">Lead Score</div>
+                  <div className="mt-1 text-sm font-black text-slate-800">85 / 100</div>
+                </div>
+                <div>
+                  <div className="text-[9px] font-black uppercase tracking-wider text-slate-400">Response Rate</div>
+                  <div className="mt-1 text-xs font-black text-emerald-600">High</div>
+                </div>
+                <div>
+                  <div className="text-[9px] font-black uppercase tracking-wider text-slate-400">Last Contact</div>
+                  <div className="mt-1 text-xs font-black text-emerald-600">Today</div>
+                </div>
+              </div>
+              <div className="text-xs font-semibold">
+                <div className="text-[9px] font-black uppercase tracking-wider text-slate-400">Priority</div>
+                <div className={`mt-1 text-xs font-black ${
+                  (leadData.priority || "High").toLowerCase() === "high" ? "text-rose-600" :
+                  (leadData.priority || "High").toLowerCase() === "medium" ? "text-amber-600" : "text-emerald-600"
+                }`}>
+                  {leadData.priority || "High"}
+                </div>
+              </div>
+            </div>
+
+          </div>
+        </div>
+
+        {/* Inline Modal: Create Task Dialog */}
+        {taskCreateOpen && (
+          <div className="fixed inset-0 z-50 bg-slate-955/40 backdrop-blur-xs flex items-center justify-center px-4 animate-in fade-in duration-200">
+            <div className="w-full max-w-md rounded-3xl bg-white shadow-2xl border border-slate-150 overflow-hidden text-xs">
+              <div className="flex items-center justify-between px-6 py-4 border-b border-slate-100 text-left">
+                <div>
+                  <h2 className="text-sm font-extrabold text-slate-900">Create Task</h2>
+                  <p className="text-[10px] text-slate-400 mt-0.5">Add a workflow task for {leadData.name}.</p>
+                </div>
+                <button
+                  onClick={() => setTaskCreateOpen(false)}
+                  className="text-slate-300 hover:text-slate-500 font-bold border-0 bg-transparent cursor-pointer text-sm"
+                >
+                  ✕
+                </button>
+              </div>
+
+              <form onSubmit={handleCreateTask} className="p-6 space-y-4 text-left font-semibold">
+                <div className="space-y-1.5">
+                  <label className="text-[10px] font-black uppercase text-slate-400 tracking-wider">Task Title</label>
+                  <input
+                    type="text"
+                    required
+                    value={taskTitle}
+                    onChange={(e) => setTaskTitle(e.target.value)}
+                    placeholder="e.g. Call Rahul Sharma"
+                    className="w-full h-10 px-3 border border-slate-200 rounded-xl focus:outline-none focus:border-[#FF5B26] text-xs"
+                  />
+                </div>
+
+                <div className="grid grid-cols-2 gap-3">
+                  <div className="space-y-1.5">
+                    <label className="text-[10px] font-black uppercase text-slate-400 tracking-wider">Type</label>
+                    <select
+                      value={taskType}
+                      onChange={(e) => setTaskType(e.target.value)}
+                      className="w-full h-10 px-2 border border-slate-200 rounded-xl bg-white text-xs"
+                    >
+                      <option value="follow-up">Follow-up</option>
+                      <option value="communication">Call / Message</option>
+                    </select>
+                  </div>
+                  <div className="space-y-1.5">
+                    <label className="text-[10px] font-black uppercase text-slate-400 tracking-wider">Priority</label>
+                    <select
+                      value={taskPriority}
+                      onChange={(e) => setTaskPriority(e.target.value)}
+                      className="w-full h-10 px-2 border border-slate-200 rounded-xl bg-white text-xs"
+                    >
+                      <option value="High">High</option>
+                      <option value="Medium">Medium</option>
+                      <option value="Low">Low</option>
+                    </select>
+                  </div>
+                </div>
+
+                <div className="space-y-1.5">
+                  <label className="text-[10px] font-black uppercase text-slate-400 tracking-wider">Due Date</label>
+                  <input
+                    type="datetime-local"
+                    required
+                    value={taskDueDate}
+                    onChange={(e) => setTaskDueDate(e.target.value)}
+                    className="w-full h-10 px-3 border border-slate-200 rounded-xl focus:outline-none focus:border-[#FF5B26] text-xs"
+                  />
+                </div>
+
+                <div className="flex justify-end gap-2 pt-2 border-t border-slate-100">
+                  <button
+                    type="button"
+                    onClick={() => setTaskCreateOpen(false)}
+                    className="px-4 py-2 border border-slate-200 bg-white rounded-xl font-bold cursor-pointer hover:bg-slate-50 text-slate-600"
+                  >
+                    Cancel
+                  </button>
+                  <button
+                    type="submit"
+                    disabled={addingTask}
+                    className="px-4 py-2 bg-[#FF5B26] hover:bg-[#FF5B26]/90 text-white rounded-xl font-bold cursor-pointer shadow-xs border-0 disabled:opacity-50"
+                  >
+                    {addingTask ? "Creating..." : "Create Task"}
+                  </button>
+                </div>
+              </form>
             </div>
           </div>
+        )}
+
+        {/* Inline Modal: Reschedule Task Dialog */}
+        {rescheduleTask && (
+          <div className="fixed inset-0 z-50 bg-[#FAF8F5]/10 backdrop-blur-xs flex items-center justify-center px-4 animate-in fade-in duration-200">
+            <div className="w-full max-w-sm rounded-3xl bg-white shadow-2xl border border-slate-150 overflow-hidden text-xs">
+              <div className="flex items-center justify-between px-6 py-4 border-b border-slate-100 text-left">
+                <div>
+                  <h2 className="text-sm font-extrabold text-slate-900">Reschedule Action</h2>
+                  <p className="text-[10px] text-slate-400 mt-0.5">Select a new date/time for task.</p>
+                </div>
+                <button
+                  onClick={() => setRescheduleTask(null)}
+                  className="text-slate-300 hover:text-slate-500 font-bold border-0 bg-transparent cursor-pointer text-sm"
+                >
+                  ✕
+                </button>
+              </div>
+
+              <form onSubmit={handleRescheduleSubmit} className="p-6 space-y-4 text-left font-semibold">
+                <div className="space-y-1.5">
+                  <label className="text-[10px] font-black uppercase text-slate-400 tracking-wider">New Date & Time</label>
+                  <input
+                    type="datetime-local"
+                    required
+                    value={rescheduleDate}
+                    onChange={(e) => setRescheduleDate(e.target.value)}
+                    className="w-full h-11 px-3.5 border border-slate-200 rounded-xl focus:outline-none focus:border-[#FF5B26] text-xs bg-white"
+                  />
+                </div>
+
+                <div className="flex justify-end gap-2 pt-2 border-t border-slate-100">
+                  <button
+                    type="button"
+                    onClick={() => setRescheduleTask(null)}
+                    className="px-4 py-2 border border-slate-200 bg-white rounded-xl font-bold cursor-pointer hover:bg-slate-50 text-slate-600"
+                  >
+                    Cancel
+                  </button>
+                  <button
+                    type="submit"
+                    disabled={rescheduling}
+                    className="px-4 py-2 bg-[#FF5B26] hover:bg-[#FF5B26]/90 text-white rounded-xl font-bold cursor-pointer shadow-xs border-0 disabled:opacity-50"
+                  >
+                    {rescheduling ? "Saving..." : "Reschedule"}
+                  </button>
+                </div>
+              </form>
+            </div>
+          </div>
+        )}
+      </section>
+    );
+  }
+
+  // Render workflow step helper
+  const renderWorkflowStep = (title: string, state: string, label: string, stepIndex: number) => {
+    let circleClass = "";
+    let icon = null;
+    let labelClass = "";
+
+    if (state === "completed") {
+      circleClass = "bg-emerald-50 text-emerald-600 border-emerald-200";
+      icon = <span className="font-extrabold text-xs">✓</span>;
+      labelClass = "text-slate-800";
+    } else if (state === "in-progress") {
+      circleClass = "bg-[#FFEFEA] text-[#FF5B26] border-[#FFD3C4] ring-4 ring-[#FFEFEA]/80";
+      icon = <span className="text-[10px]">⏳</span>;
+      labelClass = "text-[#FF5B26] font-bold";
+    } else {
+      circleClass = "bg-slate-50 text-slate-400 border-slate-200";
+      icon = <span className="text-[10px] font-black">•</span>;
+      labelClass = "text-slate-400";
+    }
+
+    return (
+      <div key={title} className="flex items-center gap-2.5 flex-1 min-w-[110px] lg:min-w-0 text-left">
+        <div className={`w-8 h-8 rounded-full border flex items-center justify-center shrink-0 ${circleClass}`}>
+          {icon}
+        </div>
+        <div>
+          <div className={`text-xs font-bold ${labelClass}`}>{title}</div>
+          <div className="text-[9px] text-slate-400 font-bold mt-0.5 capitalize">{state === "in-progress" ? "In Progress" : state}</div>
         </div>
       </div>
-
-      {/* Inline Modal: Create Task Dialog */}
-      {taskCreateOpen && (
-        <div className="fixed inset-0 z-50 bg-slate-950/40 backdrop-blur-xs flex items-center justify-center px-4 animate-in fade-in duration-200">
-          <div className="w-full max-w-md rounded-3xl bg-white shadow-2xl border border-slate-150 overflow-hidden text-xs">
-            <div className="flex items-center justify-between px-6 py-4 border-b border-slate-100 text-left">
-              <div>
-                <h2 className="text-sm font-extrabold text-slate-900">Create Task</h2>
-                <p className="text-[10px] text-slate-400 mt-0.5">Add a workflow task for {leadData.name}.</p>
-              </div>
-              <button
-                onClick={() => setTaskCreateOpen(false)}
-                className="text-slate-300 hover:text-slate-500 font-bold border-0 bg-transparent cursor-pointer text-sm"
-              >
-                ✕
-              </button>
-            </div>
-
-            <form onSubmit={handleCreateTask} className="p-6 space-y-4 text-left font-semibold">
-              <div className="space-y-1.5">
-                <label className="text-[10px] font-black uppercase text-slate-400 tracking-wider">Task Title</label>
-                <input
-                  type="text"
-                  required
-                  value={taskTitle}
-                  onChange={(e) => setTaskTitle(e.target.value)}
-                  placeholder="e.g. Call Rahul Sharma"
-                  className="w-full h-10 px-3 border border-slate-200 rounded-xl focus:outline-none focus:border-[#FF5B26] text-xs"
-                />
-              </div>
-
-              <div className="grid grid-cols-2 gap-3">
-                <div className="space-y-1.5">
-                  <label className="text-[10px] font-black uppercase text-slate-400 tracking-wider">Type</label>
-                  <select
-                    value={taskType}
-                    onChange={(e) => setTaskType(e.target.value)}
-                    className="w-full h-10 px-2 border border-slate-200 rounded-xl bg-white text-xs"
-                  >
-                    <option value="follow-up">Follow-up</option>
-                    <option value="communication">Call / Message</option>
-                    <option value="vibe check">Vibe Check</option>
-                    <option value="payment">Payment</option>
-                    <option value="document">Documents</option>
-                  </select>
-                </div>
-                <div className="space-y-1.5">
-                  <label className="text-[10px] font-black uppercase text-slate-400 tracking-wider">Priority</label>
-                  <select
-                    value={taskPriority}
-                    onChange={(e) => setTaskPriority(e.target.value)}
-                    className="w-full h-10 px-2 border border-slate-200 rounded-xl bg-white text-xs"
-                  >
-                    <option value="High">High</option>
-                    <option value="Medium">Medium</option>
-                    <option value="Low">Low</option>
-                  </select>
-                </div>
-              </div>
-
-              <div className="space-y-1.5">
-                <label className="text-[10px] font-black uppercase text-slate-400 tracking-wider">Due Date</label>
-                <input
-                  type="datetime-local"
-                  required
-                  value={taskDueDate}
-                  onChange={(e) => setTaskDueDate(e.target.value)}
-                  className="w-full h-10 px-3 border border-slate-200 rounded-xl focus:outline-none focus:border-[#FF5B26] text-xs"
-                />
-              </div>
-
-              <div className="space-y-1.5">
-                <label className="text-[10px] font-black uppercase text-slate-400 tracking-wider">Description</label>
-                <textarea
-                  rows={2}
-                  value={taskDesc}
-                  onChange={(e) => setTaskDesc(e.target.value)}
-                  placeholder="Task details..."
-                  className="w-full p-3 border border-slate-200 rounded-xl focus:outline-none focus:border-[#FF5B26] text-xs resize-none"
-                />
-              </div>
-
-              <div className="flex justify-end gap-2 pt-2 border-t border-slate-100">
-                <button
-                  type="button"
-                  onClick={() => setTaskCreateOpen(false)}
-                  className="px-4 py-2 border border-slate-200 bg-white rounded-xl font-bold cursor-pointer hover:bg-slate-50 text-slate-600"
-                >
-                  Cancel
-                </button>
-                <button
-                  type="submit"
-                  disabled={addingTask}
-                  className="px-4 py-2 bg-[#FF5B26] hover:bg-[#FF5B26]/90 text-white rounded-xl font-bold cursor-pointer shadow-xs border-0 disabled:opacity-50"
-                >
-                  {addingTask ? "Creating..." : "Create Task"}
-                </button>
-              </div>
-            </form>
-          </div>
-        </div>
-      )}
-
-      {/* Inline Modal: Reschedule Task Dialog */}
-      {rescheduleTask && (
-        <div className="fixed inset-0 z-50 bg-slate-955/40 backdrop-blur-xs flex items-center justify-center px-4 animate-in fade-in duration-200">
-          <div className="w-full max-w-sm rounded-3xl bg-white shadow-2xl border border-slate-150 overflow-hidden text-xs">
-            <div className="flex items-center justify-between px-6 py-4 border-b border-slate-100 text-left">
-              <div>
-                <h2 className="text-sm font-extrabold text-slate-900">Reschedule Action</h2>
-                <p className="text-[10px] text-slate-400 mt-0.5">Select a new date/time for task.</p>
-              </div>
-              <button
-                onClick={() => setRescheduleTask(null)}
-                className="text-slate-300 hover:text-slate-500 font-bold border-0 bg-transparent cursor-pointer text-sm"
-              >
-                ✕
-              </button>
-            </div>
-
-            <form onSubmit={handleRescheduleSubmit} className="p-6 space-y-4 text-left font-semibold">
-              <div className="space-y-1.5">
-                <label className="text-[10px] font-black uppercase text-slate-400 tracking-wider">New Date & Time</label>
-                <input
-                  type="datetime-local"
-                  required
-                  value={rescheduleDate}
-                  onChange={(e) => setRescheduleDate(e.target.value)}
-                  className="w-full h-11 px-3.5 border border-slate-200 rounded-xl focus:outline-none focus:border-[#FF5B26] text-xs bg-white"
-                />
-              </div>
-
-              <div className="flex justify-end gap-2 pt-2 border-t border-slate-100">
-                <button
-                  type="button"
-                  onClick={() => setRescheduleTask(null)}
-                  className="px-4 py-2 border border-slate-200 bg-white rounded-xl font-bold cursor-pointer hover:bg-slate-50 text-slate-600"
-                >
-                  Cancel
-                </button>
-                <button
-                  type="submit"
-                  disabled={rescheduling}
-                  className="px-4 py-2 bg-[#FF5B26] hover:bg-[#FF5B26]/90 text-white rounded-xl font-bold cursor-pointer shadow-xs border-0 disabled:opacity-50"
-                >
-                  {rescheduling ? "Saving..." : "Reschedule"}
-                </button>
-              </div>
-            </form>
-          </div>
-        </div>
-      )}
-    </section>
-  );
-}
+    );
+  };

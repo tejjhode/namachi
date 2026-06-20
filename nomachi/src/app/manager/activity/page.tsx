@@ -179,11 +179,29 @@ export default async function ManagerActivityPage() {
   const team = (teamResult.data || []) as Array<ProfileRow & { created_at?: string | null }>;
   const leadNotes = (notesResult.data || []) as any[];
 
+  const managerLeadIds = new Set(leads.map((l) => l.id));
+  const managerTripIds = new Set(leads.map((l) => l.trips?.id).filter(Boolean) as string[]);
+  
+  // Include trips created by the manager
+  trips.forEach((t) => {
+    if (t.created_by === user.id) {
+      managerTripIds.add(t.id);
+    }
+  });
+
   const profileMap = new Map(team.map((item) => [item.id, item]));
   const leadMap = new Map(leads.map((item) => [item.id, item]));
   const tripMap = new Map(trips.map((item) => [item.id, item]));
 
-  const actualItems: ActivityItem[] = activities.map((row) => {
+  // Filter raw activities to only show items performed by or relevant to the manager's leads/trips
+  const managerActivities = activities.filter((row) => {
+    if (row.performed_by === user.id) return true;
+    if (row.entity_type === "lead" && managerLeadIds.has(row.entity_id)) return true;
+    if (row.entity_type === "trip" && managerTripIds.has(row.entity_id)) return true;
+    return false;
+  });
+
+  const actualItems: ActivityItem[] = managerActivities.map((row) => {
     const entityType = (row.entity_type || "system").toLowerCase();
     const entity = entityType === "lead"
       ? leadMap.get(row.entity_id)?.name || "Lead"
@@ -206,11 +224,18 @@ export default async function ManagerActivityPage() {
       sortTime: new Date(row.created_at || Date.now()).getTime(),
       action: row.action,
       status: row.action,
+      entityId: row.entity_id,
     };
   });
 
+  // Filter fallback inputs to only show items belonging to the manager
+  const fallbackLeads = leads;
+  const fallbackTrips = trips.filter((t) => managerTripIds.has(t.id));
+  const fallbackDepartures = departures.filter((d) => d.trip_id && managerTripIds.has(d.trip_id));
+  const fallbackMessages = messages.filter((m) => m.lead_id && managerLeadIds.has(m.lead_id));
+
   const fallbackItems: ActivityItem[] = [
-    ...leads.map((lead) => ({
+    ...fallbackLeads.map((lead) => ({
       id: `lead-${lead.id}`,
       label: "Lead Assigned",
       details: `${lead.name} assigned to ${profile?.full_name || user.email?.split("@")[0] || "Manager"}`,
@@ -224,8 +249,9 @@ export default async function ManagerActivityPage() {
       sortTime: new Date(lead.updated_at || lead.created_at || Date.now()).getTime(),
       action: "assigned",
       status: lead.status || "new",
+      entityId: lead.id,
     })),
-    ...trips.map((trip) => ({
+    ...fallbackTrips.map((trip) => ({
       id: `trip-${trip.id}`,
       label: trip.status === "active" ? "Trip Activated" : "Trip Created",
       details: `${trip.title} ${trip.destination ? `in ${trip.destination}` : ""}`.trim(),
@@ -239,8 +265,9 @@ export default async function ManagerActivityPage() {
       sortTime: new Date(trip.created_at || Date.now()).getTime(),
       action: "created",
       status: trip.status || "draft",
+      entityId: trip.id,
     })),
-    ...departures.map((departure) => {
+    ...fallbackDepartures.map((departure) => {
       const trip = departure.trip_id ? tripMap.get(departure.trip_id) : undefined;
       return {
         id: `departure-${departure.id}`,
@@ -256,9 +283,10 @@ export default async function ManagerActivityPage() {
         sortTime: new Date(departure.created_at || Date.now()).getTime(),
         action: "created",
         status: departure.status || "active",
+        entityId: departure.trip_id || null,
       };
     }),
-    ...messages.filter((message) => message.sender_type === "team").map((message) => {
+    ...fallbackMessages.filter((message) => message.sender_type === "team").map((message) => {
       const lead = message.lead_id ? leadMap.get(message.lead_id) : undefined;
       return {
         id: `message-${message.id}`,
@@ -274,6 +302,7 @@ export default async function ManagerActivityPage() {
         sortTime: new Date(message.created_at || Date.now()).getTime(),
         action: "created",
         status: "sent",
+        entityId: message.lead_id || null,
       };
     }),
     ...team
@@ -293,10 +322,12 @@ export default async function ManagerActivityPage() {
         sortTime: new Date(member.created_at || Date.now()).getTime(),
         action: "created",
         status: member.role || "user",
+        entityId: member.id,
       })),
   ];
 
   const activitiesToShow = actualItems.length > 0 ? actualItems : fallbackItems;
+  const tripsToShow = fallbackTrips.length > 0 ? fallbackTrips : trips;
 
   return (
     <ManagerActivityClient
@@ -307,7 +338,7 @@ export default async function ManagerActivityPage() {
       }}
       activities={activitiesToShow.sort((left, right) => right.sortTime - left.sortTime)}
       leads={leads as any[]}
-      trips={trips as any[]}
+      trips={tripsToShow as any[]}
       departures={departures as any[]}
       team={team as any[]}
     />

@@ -2,7 +2,6 @@ import { createSupabaseServerClient } from "@/lib/supabase/server";
 import { redirect } from "next/navigation";
 import { CalendarCheck, CheckCircle2, Clock3, Mail, MapPin, Users } from "lucide-react";
 
-
 const formatDateTime = (value?: string | null) => {
   if (!value) return "—";
   return new Date(value).toLocaleString("en-IN", {
@@ -14,7 +13,7 @@ const formatDateTime = (value?: string | null) => {
   });
 };
 
-export default async function AdminBookingsPage() {
+export default async function ManagerBookingsPage() {
   const supabase = await createSupabaseServerClient();
   const { data: { user } } = await supabase.auth.getUser();
 
@@ -22,6 +21,7 @@ export default async function AdminBookingsPage() {
     redirect("/login");
   }
 
+  // Fetch bookings assigned to this manager by inner joining and filtering on leads.assigned_to
   const { data: bookings, error } = await supabase
     .from("bookings")
     .select(`
@@ -32,8 +32,9 @@ export default async function AdminBookingsPage() {
       trips(id, title, destination),
       profiles(id, full_name, email, phone),
       travelers(id, full_name, email, phone),
-      leads(id, group_size)
+      leads!inner(id, group_size, assigned_to)
     `)
+    .eq("leads.assigned_to", user.id)
     .order("created_at", { ascending: false });
 
   if (error) {
@@ -46,14 +47,14 @@ export default async function AdminBookingsPage() {
     <div className="space-y-6 animate-in fade-in duration-300 text-left">
       <div className="flex items-end justify-between gap-4">
         <div>
-          <h1 className="text-2xl font-display font-extrabold text-nomichi-ink">Bookings</h1>
+          <h1 className="text-2xl font-display font-extrabold text-nomichi-ink">My Bookings</h1>
           <p className="text-xs text-nomichi-ink/40 font-semibold mt-0.5">
-            Confirmed booking records and payment status from the database.
+            Confirmed bookings and payment status assigned to you.
           </p>
         </div>
         <div className="inline-flex items-center gap-2 rounded-full border border-[#e7e1d5]/60 bg-white px-4 py-2 text-xs font-bold text-nomichi-ink/70">
           <CalendarCheck className="h-4 w-4 text-[#FF5B26]" />
-          {rows.length} records
+          {rows.length} bookings
         </div>
       </div>
 
@@ -65,7 +66,7 @@ export default async function AdminBookingsPage() {
                 <th className="px-6 py-3.5 font-bold text-nomichi-ink/40 text-[10px] uppercase tracking-wider">Client</th>
                 <th className="px-6 py-3.5 font-bold text-nomichi-ink/40 text-[10px] uppercase tracking-wider">Trip</th>
                 <th className="px-6 py-3.5 font-bold text-nomichi-ink/40 text-[10px] uppercase tracking-wider">Amount</th>
-                <th className="px-6 py-3.5 font-bold text-nomichi-ink/40 text-[10px] uppercase tracking-wider">Group</th>
+                <th className="px-6 py-3.5 font-bold text-nomichi-ink/40 text-[10px] uppercase tracking-wider">Group Size</th>
                 <th className="px-6 py-3.5 font-bold text-nomichi-ink/40 text-[10px] uppercase tracking-wider">Booked On</th>
                 <th className="px-6 py-3.5 font-bold text-nomichi-ink/40 text-[10px] uppercase tracking-wider">Payment Status</th>
               </tr>
@@ -74,7 +75,7 @@ export default async function AdminBookingsPage() {
               {rows.length === 0 ? (
                 <tr>
                   <td colSpan={6} className="px-6 py-12 text-center text-nomichi-ink/40 font-semibold">
-                    No bookings found.
+                    No assigned bookings found.
                   </td>
                 </tr>
               ) : (

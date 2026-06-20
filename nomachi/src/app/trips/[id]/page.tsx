@@ -18,10 +18,6 @@ export default async function TripDetailsPage({ params }: PageProps) {
   // Get authenticated user securely
   const { data: { user } } = await supabaseServer.auth.getUser();
   
-  if (!user) {
-    redirect("/login");
-  }
-
   // Fetch trip details from database
   const { data: trip, error } = await supabaseServer
     .from("trips")
@@ -36,18 +32,20 @@ export default async function TripDetailsPage({ params }: PageProps) {
 
   // Fetch user's leads (enquiries & journeys) for sidebar count and message feed
   let userLeads: any[] = [];
-  const { data: leads } = await supabaseServer
-    .from("leads")
-    .select("*, trips(*), lead_notes(*)")
-    .eq("email", user.email);
-  if (leads) {
-    userLeads = leads;
+  if (user) {
+    const { data: leads } = await supabaseServer
+      .from("leads")
+      .select("*, trips(*), lead_notes(*)")
+      .eq("email", user.email);
+    if (leads) {
+      userLeads = leads;
+    }
   }
 
   const userData = {
-    fullName: user.user_metadata?.full_name || user.email?.split("@")[0] || "User",
-    avatarUrl: user.user_metadata?.avatar_url,
-    email: user.email || ""
+    fullName: user?.user_metadata?.full_name || user?.email?.split("@")[0] || "Guest",
+    avatarUrl: user?.user_metadata?.avatar_url,
+    email: user?.email || ""
   };
 
   return (

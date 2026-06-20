@@ -63,6 +63,7 @@ import {
   Check
 } from "lucide-react";
 import { createClient } from "@/lib/supabase/client";
+import { notificationService, Notification } from "@/services/notification.service";
 import { encryptMessage, decryptMessage } from "@/lib/utils/chat-crypto";
 import SettingsView from "@/components/SettingsView";
 import AdminView from "@/components/AdminView";
@@ -226,6 +227,109 @@ export function DashboardView({ user, leads = [], trips = [], initialChatMessage
     }
   }, []);
   const [exploreSearch, setExploreSearch] = useState("");
+
+  // Notifications State & Logic for Traveler
+  const [currentUserId, setCurrentUserId] = useState<string | null>(null);
+  const [notifications, setNotifications] = useState<Notification[]>([]);
+  const [notificationsOpen, setNotificationsOpen] = useState(false);
+  const notificationDropdownRef = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    const fetchUserId = async () => {
+      const supabase = createClient();
+      const { data } = await supabase.auth.getUser();
+      if (data?.user?.id) {
+        setCurrentUserId(data.user.id);
+      }
+    };
+    fetchUserId();
+  }, []);
+
+  useEffect(() => {
+    if (!currentUserId) return;
+
+    const loadNotifications = async () => {
+      try {
+        const data = await notificationService.getNotifications(currentUserId);
+        setNotifications(data);
+      } catch (err) {
+        console.error("Failed to load notifications:", err);
+      }
+    };
+    loadNotifications();
+
+    const supabase = createClient();
+    const channel = supabase
+      .channel(`realtime-notifications-${currentUserId}`)
+      .on(
+        "postgres_changes",
+        {
+          event: "INSERT",
+          schema: "public",
+          table: "notifications",
+          filter: `user_id=eq.${currentUserId}`,
+        },
+        (payload) => {
+          setNotifications((prev) => [payload.new as Notification, ...prev]);
+        }
+      )
+      .on(
+        "postgres_changes",
+        {
+          event: "UPDATE",
+          schema: "public",
+          table: "notifications",
+          filter: `user_id=eq.${currentUserId}`,
+        },
+        (payload) => {
+          setNotifications((prev) =>
+            prev.map((n) =>
+              n.id === payload.new.id ? (payload.new as Notification) : n
+            )
+          );
+        }
+      )
+      .subscribe();
+
+    return () => {
+      supabase.removeChannel(channel);
+    };
+  }, [currentUserId]);
+
+  useEffect(() => {
+    const handleClickOutside = (event: MouseEvent) => {
+      if (notificationDropdownRef.current && !notificationDropdownRef.current.contains(event.target as Node)) {
+        setNotificationsOpen(false);
+      }
+    };
+    document.addEventListener("mousedown", handleClickOutside);
+    return () => {
+      document.removeEventListener("mousedown", handleClickOutside);
+    };
+  }, []);
+
+  const notificationUnreadCount = notifications.filter((n) => !n.is_read).length;
+
+  const handleMarkAsRead = async (id: string) => {
+    try {
+      await notificationService.markAsRead(id);
+      setNotifications((prev) =>
+        prev.map((n) => (n.id === id ? { ...n, is_read: true } : n))
+      );
+    } catch (err) {
+      console.error(err);
+    }
+  };
+
+  const handleMarkAllAsRead = async () => {
+    if (!currentUserId) return;
+    try {
+      await notificationService.markAllAsRead(currentUserId);
+      setNotifications((prev) => prev.map((n) => ({ ...n, is_read: true })));
+    } catch (err) {
+      console.error(err);
+    }
+  };
   
   // My Enquiries Redesign States
   const [enquirySearch, setEnquirySearch] = useState("");
@@ -600,6 +704,28 @@ export function DashboardView({ user, leads = [], trips = [], initialChatMessage
         content_encrypted: ciphertext,
         iv
       });
+
+      // Notify manager of new message
+      try {
+        const { data: leadData } = await supabaseClient
+          .from("leads")
+          .select("name, assigned_to")
+          .eq("id", canonicalLeadId)
+          .single();
+
+        if (leadData?.assigned_to) {
+          await notificationService.notifyManager(
+            leadData.assigned_to,
+            "New Message",
+            `New message from ${leadData.name || "Traveler"}.`,
+            "New Message",
+            canonicalLeadId,
+            "Medium"
+          );
+        }
+      } catch (notifErr) {
+        console.error("Failed to notify manager of message:", notifErr);
+      }
       // Realtime will broadcast back — the optimistic message stays until deduped
     } catch (err) {
       console.error("Failed to send message:", err);
@@ -1159,6 +1285,52 @@ export function DashboardView({ user, leads = [], trips = [], initialChatMessage
         .eq("id", selectedLead.id);
 
       if (error) throw error;
+
+      // Dispatch status change notifications
+      try {
+        const lowerStatus = newStatus?.toLowerCase();
+        if (lowerStatus === "converted" || lowerStatus === "confirmed") {
+          await notificationService.notifyTraveler(
+            selectedLead.email,
+            "Booking Confirmed",
+            "Your booking has been confirmed.",
+            "Booking Confirmed",
+            selectedLead.id,
+            "High"
+          );
+          if (selectedLead.assigned_to) {
+            await notificationService.notifyManager(
+              selectedLead.assigned_to,
+              "Booking Confirmed",
+              `Booking confirmed for "${selectedLead.name}".`,
+              "Booking Confirmed",
+              selectedLead.id,
+              "High"
+            );
+          }
+        } else if (lowerStatus === "negotiating" || lowerStatus === "vibe check" || lowerStatus === "vibe check sent") {
+          await notificationService.notifyTraveler(
+            selectedLead.email,
+            "Vibe Check Scheduled",
+            "Your vibe check has been scheduled.",
+            "Vibe Check Scheduled",
+            selectedLead.id,
+            "Medium"
+          );
+          if (selectedLead.assigned_to) {
+            await notificationService.notifyManager(
+              selectedLead.assigned_to,
+              "Vibe Check Reminder",
+              `Vibe check scheduled for "${selectedLead.name}".`,
+              "Vibe Check Reminder",
+              selectedLead.id,
+              "Medium"
+            );
+          }
+        }
+      } catch (notifErr) {
+        console.error("Failed to send status change notifications:", notifErr);
+      }
       
       // Update local state
       selectedLead.status = newStatus;
@@ -1373,28 +1545,59 @@ export function DashboardView({ user, leads = [], trips = [], initialChatMessage
   // Wishlist local state
   const [wishlist, setWishlist] = useState<string[]>([]);
 
-  // Load wishlist from localStorage client-side
+  // Load wishlist from database if logged in, else localStorage
   useEffect(() => {
-    if (typeof window !== "undefined") {
-      const saved = localStorage.getItem("nomichi_wishlist");
-      if (saved) {
-        setWishlist(JSON.parse(saved));
-      } else {
-        // Pre-populate with some seeded trip IDs to match design on first load
-        const defaultWishlist = trips.slice(0, 3).map(t => t.id);
-        setWishlist(defaultWishlist);
-        localStorage.setItem("nomichi_wishlist", JSON.stringify(defaultWishlist));
-      }
-    }
-  }, [trips]);
+    const loadWishlist = async () => {
+      if (currentUserId) {
+        const supabaseClient = createClient();
+        const { data: profile, error } = await supabaseClient
+          .from("profiles")
+          .select("wishlist")
+          .eq("id", currentUserId)
+          .maybeSingle();
 
-  const toggleWishlist = (tripId: string) => {
+        if (!error && profile?.wishlist) {
+          setWishlist(profile.wishlist);
+          return;
+        }
+      }
+
+      // Fallback to localStorage
+      if (typeof window !== "undefined") {
+        const saved = localStorage.getItem("nomichi_wishlist");
+        if (saved) {
+          try {
+            setWishlist(JSON.parse(saved));
+          } catch (e) {
+            console.error("Failed to parse saved wishlist:", e);
+          }
+        } else {
+          // Pre-populate with some seeded trip IDs to match design on first load
+          const defaultWishlist = trips.slice(0, 3).map(t => t.id);
+          setWishlist(defaultWishlist);
+          localStorage.setItem("nomichi_wishlist", JSON.stringify(defaultWishlist));
+        }
+      }
+    };
+
+    loadWishlist();
+  }, [currentUserId, trips]);
+
+  const toggleWishlist = async (tripId: string) => {
     const updated = wishlist.includes(tripId)
       ? wishlist.filter(id => id !== tripId)
       : [...wishlist, tripId];
     
     setWishlist(updated);
     localStorage.setItem("nomichi_wishlist", JSON.stringify(updated));
+
+    if (currentUserId) {
+      const supabaseClient = createClient();
+      await supabaseClient
+        .from("profiles")
+        .update({ wishlist: updated })
+        .eq("id", currentUserId);
+    }
   };
 
   // 1. Upcoming Adventures (leads with status = 'converted' or 'negotiating')
@@ -1852,14 +2055,75 @@ export function DashboardView({ user, leads = [], trips = [], initialChatMessage
           {/* Header Action Controls */}
           <div className="flex items-center gap-6 ml-auto xl:ml-0">
             {/* Notifications */}
-            <button aria-label="Notifications" className="relative p-2 text-nomichi-ink/70 hover:text-nomichi-rust hover:bg-[#FAF8F4] rounded-full transition-all border border-[#e7e1d5]/60 bg-[#FFFFFF] shrink-0">
-              <Bell className="w-5 h-5 stroke-[1.8px]" />
-              {displayMessages.length > 0 && (
-                <span className="absolute -top-1 -right-1 w-4 h-4 bg-nomichi-rust rounded-full text-[9px] font-extrabold flex items-center justify-center text-nomichi-white shadow-sm">
-                  {displayMessages.length}
-                </span>
+            <div className="relative" ref={notificationDropdownRef}>
+              <button
+                aria-label="Notifications"
+                onClick={() => setNotificationsOpen(!notificationsOpen)}
+                className="relative p-2 text-nomichi-ink/70 hover:text-nomichi-rust hover:bg-[#FAF8F4] rounded-full transition-all border border-[#e7e1d5]/60 bg-[#FFFFFF] shrink-0 cursor-pointer"
+              >
+                <Bell className="w-5 h-5 stroke-[1.8px]" />
+                {notificationUnreadCount > 0 && (
+                  <span className="absolute -top-1 -right-1 w-4 h-4 bg-nomichi-rust rounded-full text-[9px] font-black flex items-center justify-center text-nomichi-white shadow-sm animate-pulse">
+                    {notificationUnreadCount}
+                  </span>
+                )}
+              </button>
+
+              {notificationsOpen && (
+                <div className="absolute right-0 mt-2.5 w-80 bg-white rounded-3xl border border-[#e7e1d5]/60 shadow-xl overflow-hidden z-50 animate-in fade-in slide-in-from-top-3 duration-200">
+                  <div className="p-4.5 border-b border-[#e7e1d5]/30 flex items-center justify-between bg-[#FAF8F4]/30">
+                    <span className="text-xs font-black uppercase tracking-wide text-nomichi-ink/50">
+                      Notifications
+                    </span>
+                    {notificationUnreadCount > 0 && (
+                      <button
+                        onClick={handleMarkAllAsRead}
+                        className="text-[10px] font-bold text-[#FF5B26] hover:underline cursor-pointer border-0 bg-transparent"
+                      >
+                        Mark all as read
+                      </button>
+                    )}
+                  </div>
+                  <div className="max-h-72 overflow-y-auto divide-y divide-[#e7e1d5]/20">
+                    {notifications.length === 0 ? (
+                      <div className="p-8 text-center text-xs text-nomichi-ink/40 font-semibold">
+                        No notifications yet.
+                      </div>
+                    ) : (
+                      notifications.map((n) => (
+                        <div
+                          key={n.id}
+                          onClick={() => handleMarkAsRead(n.id)}
+                          className={`p-4 text-left transition-colors cursor-pointer hover:bg-[#FAF8F4]/40 flex items-start gap-3 ${
+                            !n.is_read ? "bg-[#FAF8F4]/70" : ""
+                          }`}
+                        >
+                          <div className={`w-2 h-2 rounded-full mt-1.5 shrink-0 ${
+                            n.priority === "Critical" ? "bg-red-500" :
+                            n.priority === "High" ? "bg-amber-500" :
+                            n.priority === "Medium" ? "bg-blue-500" : "bg-slate-400"
+                          }`} />
+                          <div className="space-y-0.5 min-w-0 flex-1">
+                            <div className="text-xs font-bold text-nomichi-ink flex items-center justify-between gap-2">
+                              <span className="truncate">{n.title}</span>
+                              <span className="text-[9px] text-nomichi-ink/40 font-bold shrink-0">
+                                {new Date(n.created_at).toLocaleTimeString("en-IN", {
+                                  hour: "2-digit",
+                                  minute: "2-digit"
+                                })}
+                              </span>
+                            </div>
+                            <p className="text-[11px] text-nomichi-ink/70 leading-relaxed font-medium">
+                              {n.body}
+                            </p>
+                          </div>
+                        </div>
+                      ))
+                    )}
+                  </div>
+                </div>
               )}
-            </button>
+            </div>
 
             {/* Profile Avatar / Dropdown */}
             <button 
@@ -2905,25 +3169,50 @@ export function DashboardView({ user, leads = [], trips = [], initialChatMessage
                                   <div className="flex items-center gap-2 font-bold text-nomichi-ink text-sm">
                                     <Phone className="w-4 h-4 text-nomichi-sand shrink-0" />
                                     <span>{lead.phone || "Not provided"}</span>
-                                    {lead.phone && (
-                                      <a 
-                                        href={`https://wa.me/${lead.phone.replace(/[^0-9]/g, '')}`}
-                                        target="_blank"
-                                        rel="noopener noreferrer"
-                                        className="inline-flex items-center justify-center w-5 h-5 rounded-full bg-[#E8F8F0] hover:bg-[#D0F2E0] transition-colors shrink-0"
-                                      >
-                                        <svg className="w-3.5 h-3.5 text-[#25D366] fill-current" viewBox="0 0 24 24">
-                                          <path d="M.057 24l1.687-6.163c-1.041-1.804-1.588-3.849-1.587-5.946C.06 5.348 5.397.01 12.008.01c3.202.001 6.212 1.246 8.477 3.514 2.266 2.268 3.507 5.28 3.505 8.484-.004 6.657-5.34 11.997-11.953 11.997-2.005-.001-3.973-.504-5.729-1.464L0 24zm6.59-4.846c1.6.95 3.197 1.451 4.782 1.452 5.386 0 9.778-4.387 9.781-9.76.002-2.602-1.01-5.05-2.854-6.897-1.844-1.847-4.29-2.858-6.894-2.859-5.39 0-9.783 4.387-9.786 9.762-.001 1.7.461 3.35 1.339 4.816L1.99 21.053l4.657-1.226zM17.5 14.5c-.28-.14-1.65-.82-1.9-.91-.25-.09-.44-.14-.62.14-.18.28-.7 1-.86 1.18-.16.18-.32.2-.6.06-.28-.14-1.18-.44-2.25-1.4-1.22-1.09-1.62-1.62-1.82-1.9-.2-.28 0-.44.14-.58.13-.13.28-.32.42-.48.14-.16.2-.28.3-.46.1-.18.05-.34-.02-.48-.07-.14-.62-1.5-.85-2.05-.23-.55-.47-.48-.65-.48-.17 0-.37-.02-.57-.02-.2 0-.52.07-.79.37-.27.3-1.04 1.02-1.04 2.48s1.07 2.87 1.22 3.07c.15.2 2.1 3.2 5.08 4.5.7.3 1.26.49 1.69.63.71.22 1.35.19 1.86.11.57-.08 1.65-.68 1.88-1.33.23-.65.23-1.21.16-1.33-.07-.12-.25-.26-.53-.4z" />
-                                        </svg>
-                                      </a>
-                                    )}
+                                    {lead.phone && (() => {
+                                      const adminName = user.fullName || "Admin";
+                                      const travelerName = lead.name || "there";
+                                      const tripTitle = lead.trips?.title || lead.trip_interest || "your trip";
+                                      const waText = encodeURIComponent(`Hello ${travelerName}, this is ${adminName} from Nomichi. Thank you for your enquiry for the trip ${tripTitle}.`);
+                                      return (
+                                        <a 
+                                          href={`https://wa.me/${lead.phone.replace(/[^0-9]/g, '')}?text=${waText}`}
+                                          target="_blank"
+                                          rel="noopener noreferrer"
+                                          className="inline-flex items-center justify-center w-5 h-5 rounded-full bg-[#E8F8F0] hover:bg-[#D0F2E0] transition-colors shrink-0"
+                                        >
+                                          <svg className="w-3.5 h-3.5 text-[#25D366] fill-current" viewBox="0 0 24 24">
+                                            <path d="M.057 24l1.687-6.163c-1.041-1.804-1.588-3.849-1.587-5.946C.06 5.348 5.397.01 12.008.01c3.202.001 6.212 1.246 8.477 3.514 2.266 2.268 3.507 5.28 3.505 8.484-.004 6.657-5.34 11.997-11.953 11.997-2.005-.001-3.973-.504-5.729-1.464L0 24zm6.59-4.846c1.6.95 3.197 1.451 4.782 1.452 5.386 0 9.778-4.387 9.781-9.76.002-2.602-1.01-5.05-2.854-6.897-1.844-1.847-4.29-2.858-6.894-2.859-5.39 0-9.783 4.387-9.786 9.762-.001 1.7.461 3.35 1.339 4.816L1.99 21.053l4.657-1.226zM17.5 14.5c-.28-.14-1.65-.82-1.9-.91-.25-.09-.44-.14-.62.14-.18.28-.7 1-.86 1.18-.16.18-.32.2-.6.06-.28-.14-1.18-.44-2.25-1.4-1.22-1.09-1.62-1.62-1.82-1.9-.2-.28 0-.44.14-.58.13-.13.28-.32.42-.48.14-.16.2-.28.3-.46.1-.18.05-.34-.02-.48-.07-.14-.62-1.5-.85-2.05-.23-.55-.47-.48-.65-.48-.17 0-.37-.02-.57-.02-.2 0-.52.07-.79.37-.27.3-1.04 1.02-1.04 2.48s1.07 2.87 1.22 3.07c.15.2 2.1 3.2 5.08 4.5.7.3 1.26.49 1.69.63.71.22 1.35.19 1.86.11.57-.08 1.65-.68 1.88-1.33.23-.65.23-1.21.16-1.33-.07-.12-.25-.26-.53-.4z" />
+                                          </svg>
+                                        </a>
+                                      );
+                                    })()}
                                   </div>
                                 </div>
                                 <div className="space-y-1">
                                   <span className="font-bold text-nomichi-ink/50 block uppercase tracking-wider text-[9px]">Email Address</span>
                                   <div className="flex items-center gap-2 font-bold text-nomichi-rust text-sm">
                                     <Mail className="w-4 h-4 text-nomichi-sand shrink-0" />
-                                    <a href={`mailto:${lead.email}`} className="hover:underline">{lead.email}</a>
+                                    {lead.email && (() => {
+                                      const adminName = user.fullName || "Admin";
+                                      const travelerName = lead.name || "there";
+                                      const tripTitle = lead.trips?.title || lead.trip_interest || "your trip";
+                                      const emailSubject = encodeURIComponent(`Nomichi Enquiry - ${tripTitle}`);
+                                      const emailBody = encodeURIComponent(`Hello ${travelerName},\n\nThis is ${adminName} from Nomichi. Thank you for your enquiry for the trip ${tripTitle}.`);
+                                      return (
+                                        <div className="flex items-center gap-2">
+                                          <a href={`mailto:${lead.email}?subject=${emailSubject}&body=${emailBody}`} className="hover:underline">{lead.email}</a>
+                                          <a 
+                                            href={`https://mail.google.com/mail/?view=cm&fs=1&to=${lead.email}&su=${emailSubject}&body=${emailBody}`}
+                                            target="_blank"
+                                            rel="noopener noreferrer"
+                                            className="text-[10px] text-red-500 hover:underline font-extrabold uppercase ml-2 border border-red-200 bg-red-50 px-1.5 py-0.5 rounded"
+                                          >
+                                            Gmail
+                                          </a>
+                                        </div>
+                                      );
+                                    })()}
                                   </div>
                                 </div>
                               </div>
@@ -3154,39 +3443,63 @@ export function DashboardView({ user, leads = [], trips = [], initialChatMessage
                               </div>
 
                               {/* Quick icon actions */}
-                              <div className="flex items-center gap-3 pt-3 border-t border-[#e7e1d5]/30 justify-center">
-                                {assignedExpert.phone && (
-                                  <>
-                                    <a 
-                                      href={`tel:${assignedExpert.phone}`}
-                                      className="w-8 h-8 rounded-full bg-[#FAF8F4] hover:bg-[#FF5B26]/5 border border-[#e7e1d5]/60 flex items-center justify-center text-nomichi-ink/50 hover:text-[#FF5B26] transition-all"
-                                      title="Call Expert"
-                                    >
-                                      <Phone className="w-4 h-4" />
-                                    </a>
-                                    <a 
-                                      href={`https://wa.me/${assignedExpert.phone.replace(/[^0-9]/g, '')}`}
-                                      target="_blank"
-                                      rel="noopener noreferrer"
-                                      className="w-8 h-8 rounded-full bg-[#FAF8F4] hover:bg-[#FF5B26]/5 border border-[#e7e1d5]/60 flex items-center justify-center text-nomichi-ink/50 hover:text-[#25D366] transition-all"
-                                      title="WhatsApp Expert"
-                                    >
-                                      <svg className="w-4 h-4 fill-current text-nomichi-ink/50 hover:text-[#25D366]" viewBox="0 0 24 24">
-                                        <path d="M.057 24l1.687-6.163c-1.041-1.804-1.588-3.849-1.587-5.946C.06 5.348 5.397.01 12.008.01c3.202.001 6.212 1.246 8.477 3.514 2.266 2.268 3.507 5.28 3.505 8.484-.004 6.657-5.34 11.997-11.953 11.997-2.005-.001-3.973-.504-5.729-1.464L0 24zm6.59-4.846c1.6.95 3.197 1.451 4.782 1.452 5.386 0 9.778-4.387 9.781-9.76.002-2.602-1.01-5.05-2.854-6.897-1.844-1.847-4.29-2.858-6.894-2.859-5.39 0-9.783 4.387-9.786 9.762-.001 1.7.461 3.35 1.339 4.816L1.99 21.053l4.657-1.226zM17.5 14.5c-.28-.14-1.65-.82-1.9-.91-.25-.09-.44-.14-.62.14-.18.28-.7 1-.86 1.18-.16.18-.32.2-.6.06-.28-.14-1.18-.44-2.25-1.4-1.22-1.09-1.62-1.62-1.82-1.9-.2-.28 0-.44.14-.58.13-.13.28-.32.42-.48.14-.16.2-.28.3-.46.1-.18.05-.34-.02-.48-.07-.14-.62-1.5-.85-2.05-.23-.55-.47-.48-.65-.48-.17 0-.37-.02-.57-.02-.2 0-.52.07-.79.37-.27.3-1.04 1.02-1.04 2.48s1.07 2.87 1.22 3.07c.15.2 2.1 3.2 5.08 4.5.7.3 1.26.49 1.69.63.71.22 1.35.19 1.86.11.57-.08 1.65-.68 1.88-1.33.23-.65.23-1.21.16-1.33-.07-.12-.25-.26-.53-.4z" />
-                                      </svg>
-                                    </a>
-                                  </>
-                                )}
-                                {assignedExpert.email && (
-                                  <a 
-                                    href={`mailto:${assignedExpert.email}`}
-                                    className="w-8 h-8 rounded-full bg-[#FAF8F4] hover:bg-[#FF5B26]/5 border border-[#e7e1d5]/60 flex items-center justify-center text-nomichi-ink/50 hover:text-[#FF5B26] transition-all"
-                                    title="Email Expert"
-                                  >
-                                    <Mail className="w-4 h-4" />
-                                  </a>
-                                )}
-                              </div>
+                              {(() => {
+                                const travelerName = profileData?.full_name || profileForm.fullName || "User";
+                                const tripTitle = trip.title || "your trip";
+                                const userWaText = encodeURIComponent(`Hi, I am ${travelerName}. I have submitted my enquiry for the trip ${tripTitle}.`);
+                                const waHref = assignedExpert.phone
+                                  ? `https://wa.me/${assignedExpert.phone.replace(/[^0-9]/g, '')}?text=${userWaText}`
+                                  : "#";
+                                const mailHref = assignedExpert.email
+                                  ? `mailto:${assignedExpert.email}?subject=${encodeURIComponent(`Enquiry for ${tripTitle}`)}&body=${userWaText}`
+                                  : "#";
+                                return (
+                                  <div className="flex items-center gap-3 pt-3 border-t border-[#e7e1d5]/30 justify-center">
+                                    {assignedExpert.phone && (
+                                      <>
+                                        <a 
+                                          href={`tel:${assignedExpert.phone}`}
+                                          className="w-8 h-8 rounded-full bg-[#FAF8F4] hover:bg-[#FF5B26]/5 border border-[#e7e1d5]/60 flex items-center justify-center text-nomichi-ink/50 hover:text-[#FF5B26] transition-all"
+                                          title="Call Expert"
+                                        >
+                                          <Phone className="w-4 h-4" />
+                                        </a>
+                                        <a 
+                                          href={waHref}
+                                          target="_blank"
+                                          rel="noopener noreferrer"
+                                          className="w-8 h-8 rounded-full bg-[#FAF8F4] hover:bg-[#FF5B26]/5 border border-[#e7e1d5]/60 flex items-center justify-center text-nomichi-ink/50 hover:text-[#25D366] transition-all"
+                                          title="WhatsApp Expert"
+                                        >
+                                          <svg className="w-4 h-4 fill-current text-nomichi-ink/50 hover:text-[#25D366]" viewBox="0 0 24 24">
+                                            <path d="M.057 24l1.687-6.163c-1.041-1.804-1.588-3.849-1.587-5.946C.06 5.348 5.397.01 12.008.01c3.202.001 6.212 1.246 8.477 3.514 2.266 2.268 3.507 5.28 3.505 8.484-.004 6.657-5.34 11.997-11.953 11.997-2.005-.001-3.973-.504-5.729-1.464L0 24zm6.59-4.846c1.6.95 3.197 1.451 4.782 1.452 5.386 0 9.778-4.387 9.781-9.76.002-2.602-1.01-5.05-2.854-6.897-1.844-1.847-4.29-2.858-6.894-2.859-5.39 0-9.783 4.387-9.786 9.762-.001 1.7.461 3.35 1.339 4.816L1.99 21.053l4.657-1.226zM17.5 14.5c-.28-.14-1.65-.82-1.9-.91-.25-.09-.44-.14-.62.14-.18.28-.7 1-.86 1.18-.16.18-.32.2-.6.06-.28-.14-1.18-.44-2.25-1.4-1.22-1.09-1.62-1.62-1.82-1.9-.2-.28 0-.44.14-.58.13-.13.28-.32.42-.48.14-.16.2-.28.3-.46.1-.18.05-.34-.02-.48-.07-.14-.62-1.5-.85-2.05-.23-.55-.47-.48-.65-.48-.17 0-.37-.02-.57-.02-.2 0-.52.07-.79.37-.27.3-1.04 1.02-1.04 2.48s1.07 2.87 1.22 3.07c.15.2 2.1 3.2 5.08 4.5.7.3 1.26.49 1.69.63.71.22 1.35.19 1.86.11.57-.08 1.65-.68 1.88-1.33.23-.65.23-1.21.16-1.33-.07-.12-.25-.26-.53-.4z" />
+                                          </svg>
+                                        </a>
+                                      </>
+                                    )}
+                                    {assignedExpert.email && (
+                                      <>
+                                        <a 
+                                          href={mailHref}
+                                          className="w-8 h-8 rounded-full bg-[#FAF8F4] hover:bg-[#FF5B26]/5 border border-[#e7e1d5]/60 flex items-center justify-center text-nomichi-ink/50 hover:text-[#FF5B26] transition-all"
+                                          title="Email Expert"
+                                        >
+                                          <Mail className="w-4 h-4" />
+                                        </a>
+                                        <a 
+                                          href={`https://mail.google.com/mail/?view=cm&fs=1&to=${assignedExpert.email}&su=${encodeURIComponent(`Enquiry for ${tripTitle}`)}&body=${userWaText}`}
+                                          target="_blank"
+                                          rel="noopener noreferrer"
+                                          className="w-8 h-8 rounded-full bg-[#FAF8F4] hover:bg-red-50 border border-[#e7e1d5]/60 flex items-center justify-center text-nomichi-ink/50 hover:text-red-600 transition-all font-black text-xs"
+                                          title="Gmail Expert"
+                                        >
+                                          M
+                                        </a>
+                                      </>
+                                    )}
+                                  </div>
+                                );
+                              })()}
                             </>
                           ) : (
                             <div className="flex flex-col items-center py-2 text-center">
@@ -3212,29 +3525,58 @@ export function DashboardView({ user, leads = [], trips = [], initialChatMessage
                               <span>Message Trip Expert</span>
                             </button>
                             
-                            {assignedExpert?.email && (
-                              <a 
-                                href={`mailto:${assignedExpert.email}`}
-                                className="flex items-center gap-2 hover:text-[#FF5B26] transition-all p-1 hover:bg-[#FAF8F4] rounded-lg"
-                              >
-                                <Mail className="w-4.5 h-4.5 text-[#FF5B26]/85 shrink-0" />
-                                <span>Email Trip Expert</span>
-                              </a>
-                            )}
-                            
-                            {assignedExpert?.phone && (
-                              <a 
-                                href={`https://wa.me/${assignedExpert.phone.replace(/[^0-9]/g, '')}`}
-                                target="_blank"
-                                rel="noopener noreferrer"
-                                className="flex items-center gap-2 hover:text-[#FF5B26] transition-all p-1 hover:bg-[#FAF8F4] rounded-lg"
-                              >
-                                <svg className="w-4.5 h-4.5 text-[#25D366] fill-current shrink-0" viewBox="0 0 24 24">
-                                  <path d="M.057 24l1.687-6.163c-1.041-1.804-1.588-3.849-1.587-5.946C.06 5.348 5.397.01 12.008.01c3.202.001 6.212 1.246 8.477 3.514 2.266 2.268 3.507 5.28 3.505 8.484-.004 6.657-5.34 11.997-11.953 11.997-2.005-.001-3.973-.504-5.729-1.464L0 24zm6.59-4.846c1.6.95 3.197 1.451 4.782 1.452 5.386 0 9.778-4.387 9.781-9.76.002-2.602-1.01-5.05-2.854-6.897-1.844-1.847-4.29-2.858-6.894-2.859-5.39 0-9.783 4.387-9.786 9.762-.001 1.7.461 3.35 1.339 4.816L1.99 21.053l4.657-1.226zM17.5 14.5c-.28-.14-1.65-.82-1.9-.91-.25-.09-.44-.14-.62.14-.18.28-.7 1-.86 1.18-.16.18-.32.2-.6.06-.28-.14-1.18-.44-2.25-1.4-1.22-1.09-1.62-1.62-1.82-1.9-.2-.28 0-.44.14-.58.13-.13.28-.32.42-.48.14-.16.2-.28.3-.46.1-.18.05-.34-.02-.48-.07-.14-.62-1.5-.85-2.05-.23-.55-.47-.48-.65-.48-.17 0-.37-.02-.57-.02-.2 0-.52.07-.79.37-.27.3-1.04 1.02-1.04 2.48s1.07 2.87 1.22 3.07c.15.2 2.1 3.2 5.08 4.5.7.3 1.26.49 1.69.63.71.22 1.35.19 1.86.11.57-.08 1.65-.68 1.88-1.33.23-.65.23-1.21.16-1.33-.07-.12-.25-.26-.53-.4z" />
-                                </svg>
-                                <span>WhatsApp Trip Expert</span>
-                              </a>
-                            )}
+                            {(() => {
+                              const travelerName = profileData?.full_name || profileForm.fullName || "User";
+                              const tripTitle = trip.title || "your trip";
+                              const userWaText = encodeURIComponent(`Hi, I am ${travelerName}. I have submitted my enquiry for the trip ${tripTitle}.`);
+                              const waHref = assignedExpert?.phone
+                                ? `https://wa.me/${assignedExpert.phone.replace(/[^0-9]/g, '')}?text=${userWaText}`
+                                : "#";
+                              const mailHref = assignedExpert?.email
+                                ? `mailto:${assignedExpert.email}?subject=${encodeURIComponent(`Enquiry for ${tripTitle}`)}&body=${userWaText}`
+                                : "#";
+                              const gmailHref = assignedExpert?.email
+                                ? `https://mail.google.com/mail/?view=cm&fs=1&to=${assignedExpert.email}&su=${encodeURIComponent(`Enquiry for ${tripTitle}`)}&body=${userWaText}`
+                                : "#";
+                              return (
+                                <>
+                                  {assignedExpert?.email && (
+                                    <>
+                                      <a 
+                                        href={mailHref}
+                                        className="flex items-center gap-2 hover:text-[#FF5B26] transition-all p-1 hover:bg-[#FAF8F4] rounded-lg"
+                                      >
+                                        <Mail className="w-4.5 h-4.5 text-[#FF5B26]/85 shrink-0" />
+                                        <span>Email Trip Expert</span>
+                                      </a>
+                                      <a 
+                                        href={gmailHref}
+                                        target="_blank"
+                                        rel="noopener noreferrer"
+                                        className="flex items-center gap-2 hover:text-[#FF5B26] transition-all p-1 hover:bg-[#FAF8F4] rounded-lg"
+                                      >
+                                        <Mail className="w-4.5 h-4.5 text-red-500 shrink-0" />
+                                        <span>Gmail Trip Expert</span>
+                                      </a>
+                                    </>
+                                  )}
+                                  
+                                  {assignedExpert?.phone && (
+                                    <a 
+                                      href={waHref}
+                                      target="_blank"
+                                      rel="noopener noreferrer"
+                                      className="flex items-center gap-2 hover:text-[#FF5B26] transition-all p-1 hover:bg-[#FAF8F4] rounded-lg"
+                                    >
+                                      <svg className="w-4.5 h-4.5 text-[#25D366] fill-current shrink-0" viewBox="0 0 24 24">
+                                        <path d="M.057 24l1.687-6.163c-1.041-1.804-1.588-3.849-1.587-5.946C.06 5.348 5.397.01 12.008.01c3.202.001 6.212 1.246 8.477 3.514 2.266 2.268 3.507 5.28 3.505 8.484-.004 6.657-5.34 11.997-11.953 11.997-2.005-.001-3.973-.504-5.729-1.464L0 24zm6.59-4.846c1.6.95 3.197 1.451 4.782 1.452 5.386 0 9.778-4.387 9.781-9.76.002-2.602-1.01-5.05-2.854-6.897-1.844-1.847-4.29-2.858-6.894-2.859-5.39 0-9.783 4.387-9.786 9.762-.001 1.7.461 3.35 1.339 4.816L1.99 21.053l4.657-1.226zM17.5 14.5c-.28-.14-1.65-.82-1.9-.91-.25-.09-.44-.14-.62.14-.18.28-.7 1-.86 1.18-.16.18-.32.2-.6.06-.28-.14-1.18-.44-2.25-1.4-1.22-1.09-1.62-1.62-1.82-1.9-.2-.28 0-.44.14-.58.13-.13.28-.32.42-.48.14-.16.2-.28.3-.46.1-.18.05-.34-.02-.48-.07-.14-.62-1.5-.85-2.05-.23-.55-.47-.48-.65-.48-.17 0-.37-.02-.57-.02-.2 0-.52.07-.79.37-.27.3-1.04 1.02-1.04 2.48s1.07 2.87 1.22 3.07c.15.2 2.1 3.2 5.08 4.5.7.3 1.26.49 1.69.63.71.22 1.35.19 1.86.11.57-.08 1.65-.68 1.88-1.33.23-.65.23-1.21.16-1.33-.07-.12-.25-.26-.53-.4z" />
+                                      </svg>
+                                      <span>WhatsApp Trip Expert</span>
+                                    </a>
+                                  )}
+                                </>
+                              );
+                            })()}
                             
                             <button 
                               onClick={() => router.push(`/trips/${trip.id}`)}

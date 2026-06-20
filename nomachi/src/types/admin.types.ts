@@ -123,3 +123,53 @@ export interface DashboardStats {
     confirmedTravelersUp: boolean;
   };
 }
+
+export interface Booking {
+  id: string;
+  lead_id?: string | null;
+  user_id?: string | null;
+  trip_id?: string | null;
+  departure_id?: string | null;
+  price: number;
+  payment_status: 'pending' | 'partial' | 'paid' | 'refunded';
+  created_at?: string;
+  updated_at?: string;
+  leads?: Lead;
+  profiles?: Profile;
+  trips?: Trip;
+  trip_departures?: Departure;
+  payments?: Payment[];
+  travelers?: Traveler[];
+}
+
+export interface Payment {
+  id: string;
+  booking_id: string;
+  amount: number;
+  payment_method: 'upi' | 'card' | 'bank_transfer' | 'cash' | 'other';
+  transaction_reference?: string | null;
+  status: 'pending' | 'completed' | 'failed' | 'refunded';
+  created_at?: string;
+}
+
+export interface Traveler {
+  id: string;
+  booking_id: string;
+  user_id?: string | null;
+  full_name: string;
+  email?: string | null;
+  phone?: string | null;
+  gender?: string | null;
+  date_of_birth?: string | null;
+  nationality?: string | null;
+  passport_number?: string | null;
+  passport_expiry?: string | null;
+  emergency_contact_name?: string | null;
+  emergency_contact_phone?: string | null;
+  emergency_contact_relation?: string | null;
+  visa_status: 'not_required' | 'pending' | 'approved' | 'rejected';
+  created_at?: string;
+  updated_at?: string;
+  bookings?: Booking;
+  profiles?: Profile;
+}

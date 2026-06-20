@@ -63,6 +63,7 @@ import {
 } from "lucide-react";
 import { createClient } from "@/lib/supabase/client";
 import { leadService } from "@/services/lead.service";
+import { notificationService } from "@/services/notification.service";
 import { useUsers } from "@/hooks/useUsers";
 import { getLeadNoteAuthorLabel, getLeadNoteDisplay, getLeadNoteVisual } from "@/lib/lead-notes";
 import { useRouter } from "next/navigation";
@@ -335,6 +336,34 @@ export default function AdminView({ user, onBack, initialTab }: AdminViewProps) 
       
       await leadService.addLeadNote(selectedEnquiry.id, `Lead assigned to ${assigneeName}.`, currentUser.id);
       
+      // Dispatch Notifications
+      try {
+        if (profileId) {
+          await notificationService.notifyManager(
+            profileId,
+            "Lead Assigned",
+            `New lead "${selectedEnquiry.name}" has been assigned to you.`,
+            "Lead Assigned",
+            selectedEnquiry.id
+          );
+          await notificationService.notifyTraveler(
+            selectedEnquiry.email,
+            "Manager Assigned",
+            `${assigneeName} has been assigned to assist you.`,
+            "Manager Assigned",
+            selectedEnquiry.id
+          );
+        }
+        await notificationService.notifyAdmins(
+          "Lead Reassigned",
+          `Lead "${selectedEnquiry.name}" has been reassigned to ${assigneeName}.`,
+          "Lead Reassigned",
+          selectedEnquiry.id
+        );
+      } catch (notifErr) {
+        console.error("Failed to send assignment notifications:", notifErr);
+      }
+
       fetchEnquiryDetail(selectedEnquiry.id);
       loadData();
     } catch (err) {
@@ -551,6 +580,52 @@ export default function AdminView({ user, onBack, initialTab }: AdminViewProps) 
       const defaultNoteText = `Status updated to ${getCRMLeadStatusLabel(status)}.`;
       await leadService.addLeadNote(selectedCRMLead.id, customNoteText || defaultNoteText, currentUser.id);
       
+      // Dispatch Notifications
+      try {
+        const lowerStatus = status?.toLowerCase();
+        if (lowerStatus === "converted" || lowerStatus === "confirmed") {
+          await notificationService.notifyTraveler(
+            selectedCRMLead.email,
+            "Booking Confirmed",
+            "Your booking has been confirmed.",
+            "Booking Confirmed",
+            selectedCRMLead.id,
+            "High"
+          );
+          if (selectedCRMLead.assigned_to) {
+            await notificationService.notifyManager(
+              selectedCRMLead.assigned_to,
+              "Booking Confirmed",
+              `Booking confirmed for "${selectedCRMLead.name}".`,
+              "Booking Confirmed",
+              selectedCRMLead.id,
+              "High"
+            );
+          }
+        } else if (lowerStatus === "negotiating" || lowerStatus === "vibe check" || lowerStatus === "vibe check sent") {
+          await notificationService.notifyTraveler(
+            selectedCRMLead.email,
+            "Vibe Check Scheduled",
+            "Your vibe check has been scheduled.",
+            "Vibe Check Scheduled",
+            selectedCRMLead.id,
+            "Medium"
+          );
+          if (selectedCRMLead.assigned_to) {
+            await notificationService.notifyManager(
+              selectedCRMLead.assigned_to,
+              "Vibe Check Reminder",
+              `Vibe check scheduled for "${selectedCRMLead.name}".`,
+              "Vibe Check Reminder",
+              selectedCRMLead.id,
+              "Medium"
+            );
+          }
+        }
+      } catch (notifErr) {
+        console.error("Failed to send status change notifications:", notifErr);
+      }
+
       fetchCRMLeadDetail(selectedCRMLead.id);
       loadData();
     } catch (err) {
@@ -567,6 +642,34 @@ export default function AdminView({ user, onBack, initialTab }: AdminViewProps) 
       
       await leadService.addLeadNote(selectedCRMLead.id, `Lead assigned to ${assigneeName}.`, currentUser.id);
       
+      // Dispatch Notifications
+      try {
+        if (profileId) {
+          await notificationService.notifyManager(
+            profileId,
+            "Lead Assigned",
+            `New lead "${selectedCRMLead.name}" has been assigned to you.`,
+            "Lead Assigned",
+            selectedCRMLead.id
+          );
+          await notificationService.notifyTraveler(
+            selectedCRMLead.email,
+            "Manager Assigned",
+            `${assigneeName} has been assigned to assist you.`,
+            "Manager Assigned",
+            selectedCRMLead.id
+          );
+        }
+        await notificationService.notifyAdmins(
+          "Lead Reassigned",
+          `Lead "${selectedCRMLead.name}" has been reassigned to ${assigneeName}.`,
+          "Lead Reassigned",
+          selectedCRMLead.id
+        );
+      } catch (notifErr) {
+        console.error("Failed to send assignment notifications:", notifErr);
+      }
+
       fetchCRMLeadDetail(selectedCRMLead.id);
       loadData();
     } catch (err) {
@@ -4321,31 +4424,59 @@ export default function AdminView({ user, onBack, initialTab }: AdminViewProps) 
                         </div>
 
                         {/* Contact Methods */}
-                        <div className="grid grid-cols-3 gap-2">
-                          <a
-                            href={`https://wa.me/${selectedCRMLead.phone?.replace(/[^0-9]/g, "")}`}
-                            target="_blank"
-                            rel="noopener noreferrer"
-                            className="flex items-center justify-center gap-1.5 py-2 border border-emerald-200 hover:bg-emerald-50/50 text-emerald-600 rounded-xl text-[10px] font-bold transition-all no-underline bg-white cursor-pointer"
-                          >
-                            <MessageCircle className="w-3.5 h-3.5 stroke-[2.5]" />
-                            WhatsApp
-                          </a>
-                          <a
-                            href={`tel:${selectedCRMLead.phone}`}
-                            className="flex items-center justify-center gap-1.5 py-2 border border-blue-200 hover:bg-blue-50/50 text-blue-600 rounded-xl text-[10px] font-bold transition-all no-underline bg-white cursor-pointer"
-                          >
-                            <Phone className="w-3.5 h-3.5" />
-                            Call
-                          </a>
-                          <a
-                            href={`mailto:${selectedCRMLead.email}`}
-                            className="flex items-center justify-center gap-1.5 py-2 border border-[#e7e1d5] hover:bg-[#FAF8F4] text-nomichi-ink/70 rounded-xl text-[10px] font-bold transition-all no-underline bg-white cursor-pointer"
-                          >
-                            <Mail className="w-3.5 h-3.5" />
-                            Email
-                          </a>
-                        </div>
+                        {(() => {
+                          const adminName = user.fullName || "Admin";
+                          const travelerName = selectedCRMLead.name || "there";
+                          const tripTitle = selectedCRMLead.trips?.title || selectedCRMLead.trip_interest || "your trip";
+                          const waText = encodeURIComponent(`Hello ${travelerName}, this is ${adminName} from Nomichi. Thank you for your enquiry for the trip ${tripTitle}.`);
+                          const waHref = selectedCRMLead.phone
+                            ? `https://wa.me/${selectedCRMLead.phone.replace(/[^0-9]/g, "")}?text=${waText}`
+                            : "#";
+                          const emailSubject = encodeURIComponent(`Nomichi Enquiry - ${tripTitle}`);
+                          const emailBody = encodeURIComponent(`Hello ${travelerName},\n\nThis is ${adminName} from Nomichi. Thank you for your enquiry for the trip ${tripTitle}.`);
+                          const mailHref = selectedCRMLead.email
+                            ? `mailto:${selectedCRMLead.email}?subject=${emailSubject}&body=${emailBody}`
+                            : "#";
+                          const gmailHref = selectedCRMLead.email
+                            ? `https://mail.google.com/mail/?view=cm&fs=1&to=${selectedCRMLead.email}&su=${emailSubject}&body=${emailBody}`
+                            : "#";
+                          return (
+                            <div className="grid grid-cols-4 gap-2">
+                              <a
+                                href={waHref}
+                                target="_blank"
+                                rel="noopener noreferrer"
+                                className="flex items-center justify-center gap-1.5 py-2 border border-emerald-200 hover:bg-emerald-50/50 text-emerald-600 rounded-xl text-[10px] font-bold transition-all no-underline bg-white cursor-pointer"
+                              >
+                                <MessageCircle className="w-3.5 h-3.5 stroke-[2.5]" />
+                                WhatsApp
+                              </a>
+                              <a
+                                href={`tel:${selectedCRMLead.phone || ""}`}
+                                className="flex items-center justify-center gap-1.5 py-2 border border-blue-200 hover:bg-blue-50/50 text-blue-600 rounded-xl text-[10px] font-bold transition-all no-underline bg-white cursor-pointer"
+                              >
+                                <Phone className="w-3.5 h-3.5" />
+                                Call
+                              </a>
+                              <a
+                                href={mailHref}
+                                className="flex items-center justify-center gap-1.5 py-2 border border-[#e7e1d5] hover:bg-[#FAF8F4] text-nomichi-ink/70 rounded-xl text-[10px] font-bold transition-all no-underline bg-white cursor-pointer"
+                              >
+                                <Mail className="w-3.5 h-3.5" />
+                                Email
+                              </a>
+                              <a
+                                href={gmailHref}
+                                target="_blank"
+                                rel="noopener noreferrer"
+                                className="flex items-center justify-center gap-1.5 py-2 border border-red-200 hover:bg-red-50/50 text-red-600 rounded-xl text-[10px] font-bold transition-all no-underline bg-white cursor-pointer"
+                              >
+                                <Mail className="w-3.5 h-3.5 text-red-500" />
+                                Gmail
+                              </a>
+                            </div>
+                          );
+                        })()}
 
                         {/* Section: Trip Information */}
                         <div className="border-t border-[#e7e1d5]/30 pt-5 space-y-4">

@@ -1,4 +1,7 @@
+
 nomachi/.env.local
+nomachi/.env.development.local
 nomachi/node_modules
 nomachi/.next
-nomachi/.vscode
+.vscode
+.DS_Store

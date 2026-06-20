@@ -65,7 +65,7 @@ export const leadService = {
   async getLeadById(id: string): Promise<Lead> {
     let queryWithAuthor = await supabase
       .from("leads")
-      .select("*, trips(id, title, destination), lead_notes(id, lead_id, content, created_at, created_by)")
+      .select("*, trips(id, title, destination, image_url, price, seats_left, total_seats, brochure_url), lead_notes(id, lead_id, content, created_at, created_by)")
       .eq("id", id)
       .single();
 
@@ -75,7 +75,7 @@ export const leadService = {
     if (error && isSchemaCacheColumnError(error, "created_by")) {
       queryWithAuthor = await supabase
         .from("leads")
-        .select("*, trips(id, title, destination), lead_notes(id, lead_id, content, created_at)")
+        .select("*, trips(id, title, destination, image_url, price, seats_left, total_seats, brochure_url), lead_notes(id, lead_id, content, created_at)")
         .eq("id", id)
         .single();
 
@@ -107,6 +107,13 @@ export const leadService = {
       .single();
 
     if (error) throw error;
+
+    try {
+      await taskService.evaluateLeadWorkflow(data.id);
+    } catch (e) {
+      console.warn("Failed to evaluate lead workflow on create:", e);
+    }
+
     return data as Lead;
   },
 

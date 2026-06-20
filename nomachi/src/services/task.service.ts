@@ -1,4 +1,7 @@
 import { createClient } from "@/lib/supabase/client";
+import { notificationService } from "./notification.service";
+import { bookingService } from "./booking.service";
+import { travelerService } from "./traveler.service";
 
 const supabase = createClient();
 
@@ -331,27 +334,68 @@ export const taskService = {
       };
 
       await supabase.from("tasks").insert([payload]);
+
+      // Trigger notifications on task creation
+      try {
+        if (step === 7) {
+          await notificationService.notifyTraveler(
+            lead.email,
+            "Document Required",
+            "Please upload your passport copy.",
+            "Document Required",
+            lead.id,
+            "High"
+          );
+        } else if (step === 8) {
+          await notificationService.notifyTraveler(
+            lead.email,
+            "Document Required",
+            "Please provide your emergency contact details.",
+            "Document Required",
+            lead.id,
+            "High"
+          );
+        } else if (step === 11) {
+          await notificationService.notifyTraveler(
+            lead.email,
+            "Trip Reminder",
+            "Your trip starts in 7 days.",
+            "Trip Reminder",
+            lead.id,
+            "High"
+          );
+        } else if (step === 12) {
+          await notificationService.notifyTraveler(
+            lead.email,
+            "Review Request",
+            "How was your experience? Leave a review.",
+            "Review Request",
+            lead.id,
+            "Medium"
+          );
+        }
+      } catch (notifErr) {
+        console.error("Failed to send workflow task notification:", notifErr);
+      }
     };
 
     const leadStatus = (lead.status || "new").toLowerCase();
 
-    // 1. Lead Assigned -> Contact Traveller
-    if (lead.assigned_to) {
-      await createWorkflowTask(
-        1,
-        "Contact Traveller",
-        `Reach out to ${lead.name} to introduce Nomichi and understand travel requirements.`,
-        "follow-up",
-        "High",
-        0, // Today
-        [
-          "Call traveler",
-          "Introduce yourself and Nomichi",
-          "Understand travel requirements",
-          "Update lead status/notes"
-        ]
-      );
-    }
+    // 1. Lead Created -> Contact Traveller
+    await createWorkflowTask(
+      1,
+      "Contact Traveller",
+      `Reach out to ${lead.name} to introduce Nomichi and understand travel requirements.`,
+      "follow-up",
+      "High",
+      0, // Today
+      [
+        "Call traveler",
+        "Introduce yourself and Nomichi",
+        "Understand travel requirements",
+        "Update lead status/notes"
+      ]
+    );
 
     // 2. Contact Complete -> Share Brochure
     if (isStepComplete(1)) {
@@ -597,6 +641,23 @@ export const taskService = {
       .single();
 
     if (error) throw error;
+
+    // Notify manager of new task
+    try {
+      if (data && data.assigned_to) {
+        await notificationService.notifyManager(
+          data.assigned_to,
+          "Follow-up Due",
+          `Follow-up due: ${data.title}`,
+          "Follow-up Due",
+          data.id,
+          data.priority === "High" ? "High" : "Medium"
+        );
+      }
+    } catch (notifErr) {
+      console.error("Failed to notify manager of task:", notifErr);
+    }
+
     return data as DBTask;
   },
 
@@ -616,16 +677,146 @@ export const taskService = {
     try {
       if (task.source_kind === "lead" && task.source_id) {
         if (status === "completed") {
-          if (task.step === 1) {
+          if (task.step === 1 || task.step === 2 || task.step === 3) {
             await supabase
               .from("leads")
               .update({ status: "contacted" })
+              .eq("id", task.source_id);
+          } else if (task.step === 5) {
+            await supabase
+              .from("leads")
+              .update({ status: "qualified" })
               .eq("id", task.source_id);
           } else if (task.step === 6) {
             await supabase
               .from("leads")
               .update({ status: "converted" })
               .eq("id", task.source_id);
+
+            // Trigger Booking and Traveler creation & notifications
+            try {
+              const { data: leadData } = await supabase
+                .from("leads")
+                .select("name, email, assigned_to, user_id, trip_id, phone")
+                .eq("id", task.source_id)
+                .single();
+
+              if (leadData) {
+                let price = 0;
+                let departureId: string | null = null;
+
+                if (leadData.trip_id) {
+                  const { data: trip } = await supabase
+                    .from("trips")
+                    .select("price")
+                    .eq("id", leadData.trip_id)
+                    .single();
+                  if (trip?.price) {
+                    price = Number(trip.price);
+                  }
+
+                  const { data: departures } = await supabase
+                    .from("trip_departures")
+                    .select("id, price, status")
+                    .eq("trip_id", leadData.trip_id);
+
+                  if (departures && departures.length > 0) {
+                    const activeDep = departures.find((d: any) => {
+                      try {
+                        if (typeof d.status === "string" && d.status.startsWith("{")) {
+                          const parsed = JSON.parse(d.status);
+                          return parsed.status === "active";
+                        }
+                        return d.status === "active";
+                      } catch {
+                        return false;
+                      }
+                    });
+                    const targetDep = activeDep || departures[0];
+                    if (targetDep) {
+                      departureId = targetDep.id;
+                      if (targetDep.price) {
+                        price = Number(targetDep.price);
+                      }
+                    }
+                  }
+                }
+
+                // Create booking in physical table
+                const booking = await bookingService.createBooking({
+                  lead_id: task.source_id,
+                  user_id: leadData.user_id,
+                  trip_id: leadData.trip_id,
+                  departure_id: departureId,
+                  price: price,
+                  payment_status: "pending",
+                });
+
+                // Create corresponding traveler
+                await travelerService.createTraveler({
+                  booking_id: booking.id,
+                  user_id: leadData.user_id,
+                  full_name: leadData.name,
+                  email: leadData.email,
+                  phone: leadData.phone,
+                  visa_status: "not_required",
+                });
+
+                await notificationService.notifyTraveler(
+                  leadData.email,
+                  "Booking Confirmed",
+                  "Your booking has been confirmed.",
+                  "Booking Confirmed",
+                  task.source_id,
+                  "High"
+                );
+                if (leadData.assigned_to) {
+                  await notificationService.notifyManager(
+                    leadData.assigned_to,
+                    "Booking Confirmed",
+                    `Booking confirmed for "${leadData.name}".`,
+                    "Booking Confirmed",
+                    task.source_id,
+                    "High"
+                  );
+                }
+              }
+            } catch (err) {
+              console.error("Failed to notify/create booking on converted task status change:", err);
+            }
+          } else if (task.step === 9) {
+            // Trigger Departure Assigned notification
+            try {
+              const { data: leadData } = await supabase
+                .from("leads")
+                .select("email, trip_id")
+                .eq("id", task.source_id)
+                .single();
+
+              if (leadData) {
+                let departureInfo = "your trip departure";
+                if (leadData.trip_id) {
+                  const { data: tripData } = await supabase
+                    .from("trips")
+                    .select("title")
+                    .eq("id", leadData.trip_id)
+                    .single();
+                  if (tripData?.title) {
+                    departureInfo = `"${tripData.title}" departure`;
+                  }
+                }
+                await notificationService.notifyTraveler(
+                  leadData.email,
+                  "Departure Assigned",
+                  `You have been assigned to ${departureInfo}.`,
+                  "Departure Assigned",
+                  task.source_id,
+                  "High"
+                );
+              }
+            } catch (notifErr) {
+              console.error("Failed to send departure assignment notification:", notifErr);
+            }
           }
         }
 

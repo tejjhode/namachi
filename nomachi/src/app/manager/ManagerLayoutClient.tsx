@@ -1,8 +1,10 @@
 "use client";
 
-import React, { useState } from "react";
+import React, { useState, useEffect, useRef } from "react";
 import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
+import { createClient } from "@/lib/supabase/client";
+import { notificationService, Notification } from "@/services/notification.service";
 import {
   LayoutDashboard,
   Users,
@@ -15,7 +17,9 @@ import {
   Menu,
   Bell,
   Search,
-  ArrowRightLeft
+  ArrowRightLeft,
+  CalendarCheck,
+  BarChart3
 } from "lucide-react";
 
 interface ManagerLayoutClientProps {
@@ -33,14 +37,118 @@ export function ManagerLayoutClient({ children, user }: ManagerLayoutClientProps
   const router = useRouter();
   const [searchQuery, setSearchQuery] = useState("");
 
+  // Notifications State & Logic
+  const [currentUserId, setCurrentUserId] = useState<string | null>(null);
+  const [notifications, setNotifications] = useState<Notification[]>([]);
+  const [notificationsOpen, setNotificationsOpen] = useState(false);
+  const dropdownRef = useRef<HTMLDivElement>(null);
+  const supabase = createClient();
+
+  useEffect(() => {
+    const fetchUserId = async () => {
+      const { data } = await supabase.auth.getUser();
+      if (data?.user?.id) {
+        setCurrentUserId(data.user.id);
+      }
+    };
+    fetchUserId();
+  }, []);
+
+  useEffect(() => {
+    if (!currentUserId) return;
+
+    const loadNotifications = async () => {
+      try {
+        const data = await notificationService.getNotifications(currentUserId);
+        setNotifications(data);
+      } catch (err) {
+        console.error("Failed to load notifications:", err);
+      }
+    };
+    loadNotifications();
+
+    const channel = supabase
+      .channel(`realtime-notifications-${currentUserId}`)
+      .on(
+        "postgres_changes",
+        {
+          event: "INSERT",
+          schema: "public",
+          table: "notifications",
+          filter: `user_id=eq.${currentUserId}`,
+        },
+        (payload) => {
+          setNotifications((prev) => [payload.new as Notification, ...prev]);
+        }
+      )
+      .on(
+        "postgres_changes",
+        {
+          event: "UPDATE",
+          schema: "public",
+          table: "notifications",
+          filter: `user_id=eq.${currentUserId}`,
+        },
+        (payload) => {
+          setNotifications((prev) =>
+            prev.map((n) =>
+              n.id === payload.new.id ? (payload.new as Notification) : n
+            )
+          );
+        }
+      )
+      .subscribe();
+
+    return () => {
+      supabase.removeChannel(channel);
+    };
+  }, [currentUserId]);
+
+  useEffect(() => {
+    const handleClickOutside = (event: MouseEvent) => {
+      if (dropdownRef.current && !dropdownRef.current.contains(event.target as Node)) {
+        setNotificationsOpen(false);
+      }
+    };
+    document.addEventListener("mousedown", handleClickOutside);
+    return () => {
+      document.removeEventListener("mousedown", handleClickOutside);
+    };
+  }, []);
+
+  const unreadCount = notifications.filter((n) => !n.is_read).length;
+
+  const handleMarkAsRead = async (id: string) => {
+    try {
+      await notificationService.markAsRead(id);
+      setNotifications((prev) =>
+        prev.map((n) => (n.id === id ? { ...n, is_read: true } : n))
+      );
+    } catch (err) {
+      console.error(err);
+    }
+  };
+
+  const handleMarkAllAsRead = async () => {
+    if (!currentUserId) return;
+    try {
+      await notificationService.markAllAsRead(currentUserId);
+      setNotifications((prev) => prev.map((n) => ({ ...n, is_read: true })));
+    } catch (err) {
+      console.error(err);
+    }
+  };
+
   const firstName = user.fullName.split(" ")[0] || "Manager";
 
   const menuItems = [
     { label: "Dashboard", href: "/manager", icon: LayoutDashboard },
     { label: "Leads", href: "/manager/leads", icon: Users },
     { label: "Trips", href: "/manager/trips", icon: Compass },
+    { label: "Bookings", href: "/manager/bookings", icon: CalendarCheck },
     { label: "Messages", href: "/manager/messages", icon: MessageSquare },
     { label: "Tasks", href: "/manager/tasks", icon: ClipboardCheck },
+    { label: "Reports", href: "/manager/reports", icon: BarChart3 },
     { label: "Activity", href: "/manager/activity", icon: Activity },
     { label: "Settings", href: "/manager/settings", icon: Settings },
   ];
@@ -130,12 +238,74 @@ export function ManagerLayoutClient({ children, user }: ManagerLayoutClientProps
 
           <div className="flex items-center gap-6 shrink-0">
             {/* Notification Bell */}
-            <button className="w-10 h-10 rounded-full border border-[#e7e1d5]/50 hover:bg-[#FAF8F4] flex items-center justify-center text-nomichi-ink/60 transition-all relative cursor-pointer bg-white">
-              <Bell className="w-4.5 h-4.5" />
-              <span className="absolute top-1 right-1 w-4 h-4 rounded-full bg-[#FF5B26] text-white text-[9px] font-black flex items-center justify-center">
-                2
-              </span>
-            </button>
+            <div className="relative" ref={dropdownRef}>
+              <button
+                onClick={() => setNotificationsOpen(!notificationsOpen)}
+                className="w-10 h-10 rounded-full border border-[#e7e1d5]/50 hover:bg-[#FAF8F4] flex items-center justify-center text-nomichi-ink/60 transition-all relative cursor-pointer bg-white"
+              >
+                <Bell className="w-4.5 h-4.5" />
+                {unreadCount > 0 && (
+                  <span className="absolute top-1 right-1 w-4 h-4 rounded-full bg-[#FF5B26] text-white text-[9px] font-black flex items-center justify-center animate-pulse">
+                    {unreadCount}
+                  </span>
+                )}
+              </button>
+
+              {notificationsOpen && (
+                <div className="absolute right-0 mt-2.5 w-80 bg-white rounded-3xl border border-[#e7e1d5]/60 shadow-xl overflow-hidden z-50 animate-in fade-in slide-in-from-top-3 duration-200">
+                  <div className="p-4.5 border-b border-[#e7e1d5]/30 flex items-center justify-between bg-[#FAF8F4]/30">
+                    <span className="text-xs font-black uppercase tracking-wide text-nomichi-ink/50">
+                      Notifications
+                    </span>
+                    {unreadCount > 0 && (
+                      <button
+                        onClick={handleMarkAllAsRead}
+                        className="text-[10px] font-bold text-[#FF5B26] hover:underline cursor-pointer border-0 bg-transparent"
+                      >
+                        Mark all as read
+                      </button>
+                    )}
+                  </div>
+                  <div className="max-h-72 overflow-y-auto divide-y divide-[#e7e1d5]/20">
+                    {notifications.length === 0 ? (
+                      <div className="p-8 text-center text-xs text-nomichi-ink/40 font-semibold">
+                        No notifications yet.
+                      </div>
+                    ) : (
+                      notifications.map((n) => (
+                        <div
+                          key={n.id}
+                          onClick={() => handleMarkAsRead(n.id)}
+                          className={`p-4 text-left transition-colors cursor-pointer hover:bg-[#FAF8F4]/40 flex items-start gap-3 ${
+                            !n.is_read ? "bg-[#FAF8F4]/70" : ""
+                          }`}
+                        >
+                          <div className={`w-2 h-2 rounded-full mt-1.5 shrink-0 ${
+                            n.priority === "Critical" ? "bg-red-500" :
+                            n.priority === "High" ? "bg-amber-500" :
+                            n.priority === "Medium" ? "bg-blue-500" : "bg-slate-400"
+                          }`} />
+                          <div className="space-y-0.5 min-w-0 flex-1">
+                            <div className="text-xs font-bold text-nomichi-ink flex items-center justify-between gap-2">
+                              <span className="truncate">{n.title}</span>
+                              <span className="text-[9px] text-nomichi-ink/40 font-bold shrink-0">
+                                {new Date(n.created_at).toLocaleTimeString("en-IN", {
+                                  hour: "2-digit",
+                                  minute: "2-digit"
+                                })}
+                              </span>
+                            </div>
+                            <p className="text-[11px] text-nomichi-ink/70 leading-relaxed font-medium">
+                              {n.body}
+                            </p>
+                          </div>
+                        </div>
+                      ))
+                    )}
+                  </div>
+                </div>
+              )}
+            </div>
 
             {/* Profile Info */}
             <div className="flex items-center gap-3">

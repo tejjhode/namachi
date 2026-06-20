@@ -1,6 +1,7 @@
 import { createSupabaseServerClient } from "@/lib/supabase/server";
 import { redirect } from "next/navigation";
 import { CalendarDays, MapPin, Plane, Users } from "lucide-react";
+import Link from "next/link";
 
 
 const parseDepartureStatus = (value?: string | null) => {
@@ -58,9 +59,17 @@ export default async function AdminDeparturesPage() {
             Departure schedules and seat availability from the database.
           </p>
         </div>
-        <div className="inline-flex items-center gap-2 rounded-full border border-[#e7e1d5]/60 bg-white px-4 py-2 text-xs font-bold text-nomichi-ink/70">
-          <Plane className="h-4 w-4 text-[#FF5B26]" />
-          {rows.length} departures
+        <div className="flex items-center gap-3">
+          <Link
+            href="/admin/departures/new"
+            className="px-4 py-2 bg-[#FF5B26] hover:bg-[#b04b1e] text-white font-extrabold text-xs rounded-xl shadow-md transition-all cursor-pointer border-0 flex items-center gap-1.5 no-underline"
+          >
+            Create Departure
+          </Link>
+          <div className="inline-flex items-center gap-2 rounded-full border border-[#e7e1d5]/60 bg-white px-4 py-2 text-xs font-bold text-nomichi-ink/70">
+            <Plane className="h-4 w-4 text-[#FF5B26]" />
+            {rows.length} departures
+          </div>
         </div>
       </div>
 

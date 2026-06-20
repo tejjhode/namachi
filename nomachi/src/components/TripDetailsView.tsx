@@ -96,39 +96,100 @@ export function TripDetailsView({ user, leads = [], trip }: TripDetailsViewProps
   
   // Wishlist state
   const [wishlisted, setWishlisted] = useState(false);
-  
+  const [currentUserId, setCurrentUserId] = useState<string | null>(null);
+
   // Enquiry state
   const [enquiring, setEnquiring] = useState(false);
   const [enquirySuccess, setEnquirySuccess] = useState(false);
   const [enquiryError, setEnquiryError] = useState("");
-  
+
   const firstName = formatFriendlyName(user.fullName);
   const avatarLetter = firstName.charAt(0).toUpperCase() || "T";
-  
-  // Load wishlist state from localStorage
-  useEffect(() => {
-    if (typeof window !== "undefined") {
-      const saved = localStorage.getItem("nomichi_wishlist");
-      if (saved) {
-        const list = JSON.parse(saved);
-        setWishlisted(list.includes(trip.id));
-      }
-    }
-  }, [trip.id]);
 
-  const toggleWishlist = () => {
+  // Fetch current user id
+  useEffect(() => {
+    const fetchUserId = async () => {
+      const { data } = await supabase.auth.getUser();
+      if (data?.user?.id) {
+        setCurrentUserId(data.user.id);
+      }
+    };
+    fetchUserId();
+  }, []);
+
+  // Load wishlist state from database if logged in, else localStorage
+  useEffect(() => {
+    const loadWishlistStatus = async () => {
+      if (currentUserId) {
+        const { data: profile, error } = await supabase
+          .from("profiles")
+          .select("wishlist")
+          .eq("id", currentUserId)
+          .maybeSingle();
+        if (!error && profile?.wishlist) {
+          setWishlisted(profile.wishlist.includes(trip.id));
+          return;
+        }
+      }
+
+      // Fallback
+      if (typeof window !== "undefined") {
+        const saved = localStorage.getItem("nomichi_wishlist");
+        if (saved) {
+          const list = JSON.parse(saved);
+          setWishlisted(list.includes(trip.id));
+        }
+      }
+    };
+
+    loadWishlistStatus();
+  }, [currentUserId, trip.id]);
+
+  const toggleWishlist = async () => {
+    let list: string[] = [];
+
+    // Fallback localStorage path
     if (typeof window !== "undefined") {
       const saved = localStorage.getItem("nomichi_wishlist");
-      let list = saved ? JSON.parse(saved) : [];
+      list = saved ? JSON.parse(saved) : [];
+    }
+
+    const isCurrentlyWishlisted = list.includes(trip.id);
+    let updatedList: string[] = [];
+
+    if (currentUserId) {
+      // Fetch fresh database list
+      const { data: profile } = await supabase
+        .from("profiles")
+        .select("wishlist")
+        .eq("id", currentUserId)
+        .maybeSingle();
       
-      if (list.includes(trip.id)) {
-        list = list.filter((id: string) => id !== trip.id);
-        setWishlisted(false);
-      } else {
-        list.push(trip.id);
-        setWishlisted(true);
-      }
-      localStorage.setItem("nomichi_wishlist", JSON.stringify(list));
+      const dbList = profile?.wishlist || [];
+      const dbWishlisted = dbList.includes(trip.id);
+      
+      updatedList = dbWishlisted
+        ? dbList.filter((id: string) => id !== trip.id)
+        : [...dbList, trip.id];
+      
+      setWishlisted(!dbWishlisted);
+      
+      // Update DB
+      await supabase
+        .from("profiles")
+        .update({ wishlist: updatedList })
+        .eq("id", currentUserId);
+    } else {
+      // LocalStorage toggle
+      updatedList = isCurrentlyWishlisted
+        ? list.filter((id: string) => id !== trip.id)
+        : [...list, trip.id];
+      
+      setWishlisted(!isCurrentlyWishlisted);
+    }
+
+    if (typeof window !== "undefined") {
+      localStorage.setItem("nomichi_wishlist", JSON.stringify(updatedList));
     }
   };
 
@@ -261,55 +322,59 @@ export function TripDetailsView({ user, leads = [], trip }: TripDetailsViewProps
               <Compass className="w-5 h-5 stroke-[2px]" />
               Explore Trips
             </button>
-            <button 
-              onClick={() => router.push("/?view=enquiries")}
-              className="flex items-center gap-3.5 px-4 py-3 text-sm font-semibold rounded-2xl w-full text-left text-nomichi-ink/75 hover:bg-nomichi-sand/10 hover:text-nomichi-rust transition-all"
-            >
-              <ClipboardList className="w-5 h-5 stroke-[2px]" />
-              My Enquiries
-            </button>
-            <button 
-              onClick={() => router.push("/?view=journeys")}
-              className="flex items-center gap-3.5 px-4 py-3 text-sm font-semibold rounded-2xl w-full text-left text-nomichi-ink/75 hover:bg-nomichi-sand/10 hover:text-nomichi-rust transition-all"
-            >
-              <Map className="w-5 h-5 stroke-[2px]" />
-              My Journeys
-            </button>
-            <button 
-              onClick={() => router.push("/?view=wishlist")}
-              className="flex items-center gap-3.5 px-4 py-3 text-sm font-semibold rounded-2xl w-full text-left text-nomichi-ink/75 hover:bg-nomichi-sand/10 hover:text-nomichi-rust transition-all"
-            >
-              <Heart className="w-5 h-5 stroke-[2px]" />
-              Wishlist
-            </button>
-            <button 
-              onClick={() => router.push("/?view=enquiries")}
-              className="flex items-center justify-between px-4 py-3 text-sm font-semibold text-left rounded-2xl w-full text-nomichi-ink/75 hover:bg-nomichi-sand/10 hover:text-nomichi-rust transition-all"
-            >
-              <span className="flex items-center gap-3.5">
-                <MessageSquare className="w-5 h-5 stroke-[2px]" />
-                Messages
-              </span>
-              {dbMessages.length > 0 && (
-                <span className="w-5 h-5 rounded-full bg-nomichi-rust text-nomichi-white text-[10px] font-bold flex items-center justify-center">
-                  {dbMessages.length}
-                </span>
-              )}
-            </button>
-            <button 
-              onClick={() => router.push("/?view=home")}
-              className="flex items-center gap-3.5 px-4 py-3 text-sm font-semibold text-nomichi-ink/75 hover:bg-nomichi-sand/10 hover:text-nomichi-rust rounded-2xl w-full text-left transition-all"
-            >
-              <UserIcon className="w-5 h-5 stroke-[2px]" />
-              Profile
-            </button>
-            <button 
-              onClick={() => router.push("/?view=home")}
-              className="flex items-center gap-3.5 px-4 py-3 text-sm font-semibold text-nomichi-ink/75 hover:bg-nomichi-sand/10 hover:text-nomichi-rust rounded-2xl w-full text-left transition-all"
-            >
-              <Settings className="w-5 h-5 stroke-[2px]" />
-              Settings
-            </button>
+            {user.email && (
+              <>
+                <button 
+                  onClick={() => router.push("/?view=enquiries")}
+                  className="flex items-center gap-3.5 px-4 py-3 text-sm font-semibold rounded-2xl w-full text-left text-nomichi-ink/75 hover:bg-nomichi-sand/10 hover:text-nomichi-rust transition-all"
+                >
+                  <ClipboardList className="w-5 h-5 stroke-[2px]" />
+                  My Enquiries
+                </button>
+                <button 
+                  onClick={() => router.push("/?view=journeys")}
+                  className="flex items-center gap-3.5 px-4 py-3 text-sm font-semibold rounded-2xl w-full text-left text-nomichi-ink/75 hover:bg-nomichi-sand/10 hover:text-nomichi-rust transition-all"
+                >
+                  <Map className="w-5 h-5 stroke-[2px]" />
+                  My Journeys
+                </button>
+                <button 
+                  onClick={() => router.push("/?view=wishlist")}
+                  className="flex items-center gap-3.5 px-4 py-3 text-sm font-semibold rounded-2xl w-full text-left text-nomichi-ink/75 hover:bg-nomichi-sand/10 hover:text-nomichi-rust transition-all"
+                >
+                  <Heart className="w-5 h-5 stroke-[2px]" />
+                  Wishlist
+                </button>
+                <button 
+                  onClick={() => router.push("/?view=enquiries")}
+                  className="flex items-center justify-between px-4 py-3 text-sm font-semibold text-left rounded-2xl w-full text-nomichi-ink/75 hover:bg-nomichi-sand/10 hover:text-nomichi-rust transition-all"
+                >
+                  <span className="flex items-center gap-3.5">
+                    <MessageSquare className="w-5 h-5 stroke-[2px]" />
+                    Messages
+                  </span>
+                  {dbMessages.length > 0 && (
+                    <span className="w-5 h-5 rounded-full bg-nomichi-rust text-nomichi-white text-[10px] font-bold flex items-center justify-center">
+                      {dbMessages.length}
+                    </span>
+                  )}
+                </button>
+                <button 
+                  onClick={() => router.push("/?view=home")}
+                  className="flex items-center gap-3.5 px-4 py-3 text-sm font-semibold text-nomichi-ink/75 hover:bg-nomichi-sand/10 hover:text-nomichi-rust rounded-2xl w-full text-left transition-all"
+                >
+                  <UserIcon className="w-5 h-5 stroke-[2px]" />
+                  Profile
+                </button>
+                <button 
+                  onClick={() => router.push("/?view=home")}
+                  className="flex items-center gap-3.5 px-4 py-3 text-sm font-semibold text-nomichi-ink/75 hover:bg-nomichi-sand/10 hover:text-nomichi-rust rounded-2xl w-full text-left transition-all"
+                >
+                  <Settings className="w-5 h-5 stroke-[2px]" />
+                  Settings
+                </button>
+              </>
+            )}
           </nav>
         </div>
 
@@ -323,10 +388,20 @@ export function TripDetailsView({ user, leads = [], trip }: TripDetailsViewProps
               <HelpCircle className="w-5 h-5 stroke-[2px]" />
               Help & Support
             </button>
-            <a href="/auth/signout" className="flex items-center gap-3.5 px-4 py-3 text-sm font-semibold text-nomichi-rust hover:bg-nomichi-rust/5 rounded-2xl transition-all">
-              <LogOut className="w-5 h-5 stroke-[2.2px]" />
-              Logout
-            </a>
+            {user.email ? (
+              <a href="/auth/signout" className="flex items-center gap-3.5 px-4 py-3 text-sm font-semibold text-nomichi-rust hover:bg-nomichi-rust/5 rounded-2xl transition-all">
+                <LogOut className="w-5 h-5 stroke-[2.2px]" />
+                Logout
+              </a>
+            ) : (
+              <button 
+                onClick={() => router.push("/login")}
+                className="flex items-center gap-3.5 px-4 py-3 text-sm font-semibold text-nomichi-rust hover:bg-nomichi-rust/5 rounded-2xl w-full text-left transition-all"
+              >
+                <LogOut className="w-5 h-5 stroke-[2.2px] rotate-180" />
+                Log In
+              </button>
+            )}
           </nav>
 
           {/* Refer Promo Card */}
@@ -384,31 +459,42 @@ export function TripDetailsView({ user, leads = [], trip }: TripDetailsViewProps
 
           {/* Header Action Controls */}
           <div className="flex items-center gap-5.5 ml-auto xl:ml-0">
-            {/* Notifications */}
-            <button aria-label="Notifications" className="relative p-2 text-nomichi-ink/70 hover:text-nomichi-rust hover:bg-[#FAF8F4] rounded-full transition-all border border-[#e7e1d5]/60 bg-[#FFFFFF] shrink-0">
-              <Bell className="w-5 h-5 stroke-[1.8px]" />
-              {dbMessages.length > 0 && (
-                <span className="absolute -top-1 -right-1 w-4 h-4 bg-nomichi-rust rounded-full text-[9px] font-extrabold flex items-center justify-center text-nomichi-white shadow-sm">
-                  {dbMessages.length}
-                </span>
-              )}
-            </button>
+            {user.email ? (
+              <>
+                {/* Notifications */}
+                <button aria-label="Notifications" className="relative p-2 text-nomichi-ink/70 hover:text-nomichi-rust hover:bg-[#FAF8F4] rounded-full transition-all border border-[#e7e1d5]/60 bg-[#FFFFFF] shrink-0">
+                  <Bell className="w-5 h-5 stroke-[1.8px]" />
+                  {dbMessages.length > 0 && (
+                    <span className="absolute -top-1 -right-1 w-4 h-4 bg-nomichi-rust rounded-full text-[9px] font-extrabold flex items-center justify-center text-nomichi-white shadow-sm">
+                      {dbMessages.length}
+                    </span>
+                  )}
+                </button>
 
-            {/* Profile Avatar / Dropdown */}
-            <div className="flex items-center gap-3">
-              <div className="w-9 h-9 rounded-full bg-[#FFEFEA] text-[#FF5B26] border border-[#FF5B26]/10 flex items-center justify-center font-bold text-sm shrink-0">
-                {avatarLetter}
-              </div>
-              <div className="hidden sm:flex flex-col text-right">
-                <span className="text-xs font-bold text-nomichi-ink leading-none mb-0.5">
-                  {formatFullName(user.fullName)}
-                </span>
-                <span className="text-[10px] font-semibold text-nomichi-ink/50 leading-none">
-                  Explorer Member
-                </span>
-              </div>
-              <ChevronDown className="w-4 h-4 text-nomichi-ink/50" />
-            </div>
+                {/* Profile Avatar / Dropdown */}
+                <div className="flex items-center gap-3">
+                  <div className="w-9 h-9 rounded-full bg-[#FFEFEA] text-[#FF5B26] border border-[#FF5B26]/10 flex items-center justify-center font-bold text-sm shrink-0">
+                    {avatarLetter}
+                  </div>
+                  <div className="hidden sm:flex flex-col text-right">
+                    <span className="text-xs font-bold text-nomichi-ink leading-none mb-0.5">
+                      {formatFullName(user.fullName)}
+                    </span>
+                    <span className="text-[10px] font-semibold text-nomichi-ink/50 leading-none">
+                      Explorer Member
+                    </span>
+                  </div>
+                  <ChevronDown className="w-4 h-4 text-nomichi-ink/50" />
+                </div>
+              </>
+            ) : (
+              <button 
+                onClick={() => router.push("/login")}
+                className="bg-[#FF5B26] hover:bg-[#b04b1e] text-white text-xs font-bold uppercase tracking-wider px-5 py-2.5 rounded-full transition-all shrink-0"
+              >
+                Log In
+              </button>
+            )}
           </div>
         </header>
 

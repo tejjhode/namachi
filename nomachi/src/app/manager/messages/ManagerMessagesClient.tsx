@@ -289,6 +289,42 @@ export function ManagerMessagesClient({
 
   const activeThread = filteredThreads.find((thread) => thread.lead.id === activeLeadId) || filteredThreads[0] || null;
   const activeLead = activeThread?.lead || null;
+
+  const activeLeadWhatsAppHref = useMemo(() => {
+    if (!activeLead) return "#";
+    const managerName = user.full_name || "Manager";
+    const travelerName = activeLead.name || "there";
+    const tripTitle = activeLead.trips?.title || "your trip";
+    const msgWaText = encodeURIComponent(`Hello ${travelerName}, this is ${managerName} from Nomichi. Thank you for your enquiry for the trip ${tripTitle}.`);
+    return activeLead.phone
+      ? `https://wa.me/${(activeLead.phone || "").replace(/[^0-9]/g, "")}?text=${msgWaText}`
+      : "#";
+  }, [activeLead, user.full_name]);
+
+  const activeLeadMailtoHref = useMemo(() => {
+    if (!activeLead) return "#";
+    const managerName = user.full_name || "Manager";
+    const travelerName = activeLead.name || "there";
+    const tripTitle = activeLead.trips?.title || "your trip";
+    const emailSubject = encodeURIComponent(`Nomichi Enquiry - ${tripTitle}`);
+    const emailBody = encodeURIComponent(`Hello ${travelerName},\n\nThis is ${managerName} from Nomichi. Thank you for your enquiry for the trip ${tripTitle}.`);
+    return activeLead.email
+      ? `mailto:${activeLead.email}?subject=${emailSubject}&body=${emailBody}`
+      : "#";
+  }, [activeLead, user.full_name]);
+
+  const activeLeadGmailHref = useMemo(() => {
+    if (!activeLead) return "#";
+    const managerName = user.full_name || "Manager";
+    const travelerName = activeLead.name || "there";
+    const tripTitle = activeLead.trips?.title || "your trip";
+    const emailSubject = encodeURIComponent(`Nomichi Enquiry - ${tripTitle}`);
+    const emailBody = encodeURIComponent(`Hello ${travelerName},\n\nThis is ${managerName} from Nomichi. Thank you for your enquiry for the trip ${tripTitle}.`);
+    return activeLead.email
+      ? `https://mail.google.com/mail/?view=cm&fs=1&to=${activeLead.email}&su=${emailSubject}&body=${emailBody}`
+      : "#";
+  }, [activeLead, user.full_name]);
+
   const activeMessages = activeLead ? decryptedThreads[activeLead.id] || [] : [];
 
   const handleSend = async (event: React.FormEvent) => {
@@ -462,11 +498,15 @@ export function ManagerMessagesClient({
                         <Phone className="w-4 h-4" />
                         Call
                       </a>
-                      <a href={`mailto:${activeLead.email}`} className="inline-flex items-center gap-2 rounded-xl border border-slate-200 px-3 py-2 text-sm font-medium text-slate-700 hover:bg-slate-50">
+                      <a href={activeLeadMailtoHref} className="inline-flex items-center gap-2 rounded-xl border border-slate-200 px-3 py-2 text-sm font-medium text-slate-700 hover:bg-slate-50">
                         <Mail className="w-4 h-4" />
                         Email
                       </a>
-                      <a href={`https://wa.me/${(activeLead.phone || "").replace(/[^0-9]/g, "")}`} className="inline-flex items-center gap-2 rounded-xl border border-slate-200 px-3 py-2 text-sm font-medium text-slate-700 hover:bg-slate-50">
+                      <a href={activeLeadGmailHref} target="_blank" rel="noopener noreferrer" className="inline-flex items-center gap-2 rounded-xl border border-slate-200 px-3 py-2 text-sm font-medium text-slate-700 hover:bg-slate-50">
+                        <Mail className="w-4 h-4 text-red-500" />
+                        Gmail
+                      </a>
+                      <a href={activeLeadWhatsAppHref} className="inline-flex items-center gap-2 rounded-xl border border-slate-200 px-3 py-2 text-sm font-medium text-slate-700 hover:bg-slate-50">
                         <MessageCircle className="w-4 h-4 text-emerald-500" />
                         WhatsApp
                       </a>
@@ -572,14 +612,17 @@ export function ManagerMessagesClient({
                       <Phone className="w-4 h-4 text-slate-400" />
                       <span>{activeLead.phone || "No phone number"}</span>
                       <div className="ml-auto flex items-center gap-2">
-                        <a href={`https://wa.me/${(activeLead.phone || "").replace(/[^0-9]/g, "")}`} className="rounded-lg bg-[#ECFDF5] px-2.5 py-1 text-xs font-semibold text-[#16A34A]">WA</a>
+                        <a href={activeLeadWhatsAppHref} className="rounded-lg bg-[#ECFDF5] px-2.5 py-1 text-xs font-semibold text-[#16A34A]">WA</a>
                         <a href={`tel:${activeLead.phone || ""}`} className="rounded-lg bg-[#EEF2FF] px-2.5 py-1 text-xs font-semibold text-[#2563EB]">Call</a>
                       </div>
                     </div>
                     <div className="flex items-center gap-3">
                       <Mail className="w-4 h-4 text-slate-400" />
                       <span className="break-all">{activeLead.email}</span>
-                      <a href={`mailto:${activeLead.email}`} className="ml-auto rounded-lg bg-[#FFF7ED] px-2.5 py-1 text-xs font-semibold text-[#F97316]">Email</a>
+                      <div className="ml-auto flex items-center gap-2">
+                        <a href={activeLeadGmailHref} target="_blank" rel="noopener noreferrer" className="rounded-lg bg-red-50 px-2.5 py-1 text-xs font-semibold text-red-600">Gmail</a>
+                        <a href={activeLeadMailtoHref} className="rounded-lg bg-[#FFF7ED] px-2.5 py-1 text-xs font-semibold text-[#F97316]">Email</a>
+                      </div>
                     </div>
                     <div className="flex items-center gap-3">
                       <MapPin className="w-4 h-4 text-slate-400" />

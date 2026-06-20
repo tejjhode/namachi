@@ -3,6 +3,8 @@
 import { useState, useEffect } from "react";
 import { useRouter } from "next/navigation";
 import { createClient } from "@/lib/supabase/client";
+import { notificationService } from "@/services/notification.service";
+import { taskService } from "@/services/task.service";
 import { 
   Home, 
   Compass, 
@@ -156,6 +158,7 @@ export function TripEnquiryView({ user, leads = [], trip }: TripEnquiryViewProps
       setSuccess(false);
 
       let assignedToId: string | null = null;
+      let assignedLeaderName = "A Trip Manager";
       try {
         // Query the trip_departures table for this trip
         const { data: departureData } = await supabase
@@ -168,6 +171,7 @@ export function TripEnquiryView({ user, leads = [], trip }: TripEnquiryViewProps
           const parsedStatus = JSON.parse(departureData.status);
           const leaderName = parsedStatus.leader;
           if (leaderName && leaderName !== "Select Team Member") {
+            assignedLeaderName = leaderName;
             // Find the profile ID of this leader
             const { data: profileData } = await supabase
               .from("profiles")
@@ -185,7 +189,7 @@ export function TripEnquiryView({ user, leads = [], trip }: TripEnquiryViewProps
       }
 
       // Insert lead into Supabase
-      const { error } = await supabase
+      const { data, error } = await supabase
         .from("leads")
         .insert({
           name: fullName,
@@ -199,9 +203,61 @@ export function TripEnquiryView({ user, leads = [], trip }: TripEnquiryViewProps
           trip_id: trip.id,
           status: "new",
           assigned_to: assignedToId
-        });
+        })
+        .select("id")
+        .single();
 
       if (error) throw error;
+
+      if (data?.id) {
+        try {
+          await taskService.evaluateLeadWorkflow(data.id);
+        } catch (e) {
+          console.warn("Failed to generate workflow tasks for new lead:", e);
+        }
+      }
+
+      // Dispatch notifications
+      try {
+        await notificationService.notifyTraveler(
+          user.email,
+          "Enquiry Submitted",
+          "Your enquiry has been received.",
+          "Enquiry Submitted",
+          null,
+          "Medium"
+        );
+
+        await notificationService.notifyAdmins(
+          "New Enquiry Submitted",
+          `${fullName} submitted an enquiry for "${trip.title}".`,
+          "New Enquiry",
+          null,
+          "Medium"
+        );
+
+        if (assignedToId) {
+          await notificationService.notifyManager(
+            assignedToId,
+            "Lead Assigned",
+            `New lead "${fullName}" for "${trip.title}" has been assigned to you.`,
+            "Lead Assigned",
+            null,
+            "Medium"
+          );
+
+          await notificationService.notifyTraveler(
+            user.email,
+            "Manager Assigned",
+            `${assignedLeaderName} has been assigned to assist you.`,
+            "Manager Assigned",
+            null,
+            "Medium"
+          );
+        }
+      } catch (notifErr) {
+        console.error("Failed to send notifications:", notifErr);
+      }
 
       setSuccess(true);
       setTimeout(() => {

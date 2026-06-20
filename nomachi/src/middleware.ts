@@ -44,6 +44,7 @@ export async function middleware(request: NextRequest) {
   const isProtectedRoute =
     pathname.startsWith("/dashboard") ||
     pathname.startsWith("/manager") ||
+    pathname.startsWith("/admin") ||
     pathname.startsWith("/profile");
     
   const isAuthRoute = pathname.startsWith("/login") || pathname.startsWith("/signup");
@@ -60,6 +61,42 @@ export async function middleware(request: NextRequest) {
   if (isAuthRoute && user) {
     const redirectUrl = new URL("/dashboard", request.url);
     return NextResponse.redirect(redirectUrl);
+  }
+
+  // Mandatory Profile Setup check for logged-in travelers (USER role)
+  if (user) {
+    const isSetupIgnored =
+      pathname.startsWith("/api") ||
+      pathname.startsWith("/auth") ||
+      pathname.startsWith("/login") ||
+      pathname.startsWith("/signup") ||
+      pathname.startsWith("/profile-setup");
+
+    if (!isSetupIgnored) {
+      try {
+        const { data: profile } = await supabase
+          .from("profiles")
+          .select("phone, gender, date_of_birth, nationality, role")
+          .eq("id", user.id)
+          .single();
+
+        const role = (profile?.role || user.user_metadata?.role || "USER").trim().toUpperCase();
+        if (role === "USER") {
+          const isProfileIncomplete =
+            !profile?.phone ||
+            !profile?.gender ||
+            !profile?.date_of_birth ||
+            !profile?.nationality;
+
+          if (isProfileIncomplete) {
+            const redirectUrl = new URL("/profile-setup", request.url);
+            return NextResponse.redirect(redirectUrl);
+          }
+        }
+      } catch (err) {
+        console.warn("Middleware profile setup check error:", err);
+      }
+    }
   }
 
   // For all other routes (like "/"), the middleware allows the request to continue

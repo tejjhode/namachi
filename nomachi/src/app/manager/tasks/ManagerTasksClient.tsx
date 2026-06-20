@@ -498,6 +498,45 @@ export function ManagerTasksClient({ tasks: initialTasks, leads, trips, departur
 
       const created = await taskService.createTask(payload);
 
+      // Auto-trigger notifications if it's a communication/call task for a lead
+      if (formData.sourceKind === "lead" && (formData.type === "communication" || formData.title.toLowerCase().includes("call"))) {
+        const lead = leads.find((l) => l.id === formData.sourceId);
+        if (lead) {
+          const phoneDigits = (lead.phone || "").replace(/[^0-9]/g, "");
+          const travelerName = lead.name || "there";
+          const managerName = team.find((t) => t.id === currentUserId)?.full_name || "Manager";
+          const tripTitle = lead.trips?.title || "your trip";
+          const enquiryId = lead.enquiry_id || "";
+          const formattedCallTime = formData.dueDate ? new Date(formData.dueDate).toLocaleString("en-IN", {
+            day: "2-digit",
+            month: "short",
+            year: "numeric",
+            hour: "2-digit",
+            minute: "2-digit"
+          }) : new Date().toLocaleString("en-IN", {
+            day: "2-digit",
+            month: "short",
+            year: "numeric",
+            hour: "2-digit",
+            minute: "2-digit"
+          });
+
+          const callMsgText = `Hello ${travelerName}, this is ${managerName} from Nomichi. I have scheduled a call with you to discuss your enquiry ${enquiryId ? `(${enquiryId})` : ""} for the trip "${tripTitle}".\n\nScheduled Time: ${formattedCallTime}\n\nLooking forward to speaking with you!`;
+
+          const waLink = phoneDigits ? `https://wa.me/${phoneDigits}?text=${encodeURIComponent(callMsgText)}` : "";
+          const emailSubject = `Scheduled Call - Nomichi Enquiry`;
+          const emailBody = callMsgText;
+          const gmailLink = lead.email ? `https://mail.google.com/mail/?view=cm&fs=1&to=${lead.email}&su=${encodeURIComponent(emailSubject)}&body=${encodeURIComponent(emailBody)}` : "";
+
+          if (waLink) {
+            window.open(waLink, "_blank");
+          }
+          if (gmailLink) {
+            window.open(gmailLink, "_blank");
+          }
+        }
+      }
+
       // Map created DBTask back to TaskItem type
       const createdItem: TaskItem = {
         id: created.id,

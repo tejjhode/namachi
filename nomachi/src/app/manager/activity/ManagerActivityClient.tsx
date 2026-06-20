@@ -41,6 +41,7 @@ type ActivityItem = {
   sortTime: number;
   action: string;
   status: string;
+  entityId?: string | null;
 };
 
 type ManagerActivityClientProps = {
@@ -129,14 +130,20 @@ export function ManagerActivityClient({
   const searchParams = useSearchParams();
   const initialSearch = searchParams ? searchParams.get("search") || "" : "";
 
-  const [selectedTripId, setSelectedTripId] = useState<string>(trips[0]?.id || "all");
+  const [selectedTripId, setSelectedTripId] = useState<string>("all");
   const [tripSelectOpen, setTripSelectOpen] = useState(false);
+  const [selectedLeadId, setSelectedLeadId] = useState<string>("all");
+  const [leadSelectOpen, setLeadSelectOpen] = useState(false);
   const [dateRangeOpen, setDateRangeOpen] = useState(false);
   
   const [searchQuery, setSearchQuery] = useState(initialSearch);
   const [selectedTab, setSelectedTab] = useState<"all" | ActivityCategory>("all");
   const [selectedUser, setSelectedUser] = useState("all");
   const [dateWindow, setDateWindow] = useState("all");
+
+  const selectedLead = useMemo(() => {
+    return leads.find((l) => l.id === selectedLeadId) || null;
+  }, [leads, selectedLeadId]);
   
   const [viewMode, setViewMode] = useState<"timeline" | "list">("timeline");
   const [sortBy, setSortBy] = useState<"newest" | "oldest">("newest");
@@ -146,7 +153,7 @@ export function ManagerActivityClient({
   const [currentPage, setCurrentPage] = useState(1);
 
   const selectedTrip = useMemo(() => {
-    return trips.find((t) => t.id === selectedTripId) || trips[0];
+    return trips.find((t) => t.id === selectedTripId) || null;
   }, [trips, selectedTripId]);
 
   const applyTab = (tab: "all" | ActivityCategory) => {
@@ -171,12 +178,23 @@ export function ManagerActivityClient({
     // Filter by selected trip
     if (selectedTripId !== "all" && selectedTrip) {
       list = list.filter((item) => {
+        if (item.entityId === selectedTripId) return true;
         const isTripEvent = item.entityType === "Trip" && item.entity === selectedTrip.title;
-        const matchingLead = leads.find((l) => l.name === item.entity || l.id === item.entityType);
-        const isLeadEvent = matchingLead && matchingLead.trip_id === selectedTripId;
-        const matchingDep = departures.find((d) => d.id === item.id);
+        const matchingLead = leads.find((l) => l.name === item.entity || l.id === item.entityId);
+        const isLeadEvent = matchingLead && (matchingLead.trips?.id === selectedTripId || matchingLead.trip_id === selectedTripId);
+        const matchingDep = departures.find((d) => d.id === item.id || d.trip_id === selectedTripId);
         const isDepEvent = matchingDep && matchingDep.trip_id === selectedTripId;
         return isTripEvent || isLeadEvent || isDepEvent;
+      });
+    }
+
+    // Filter by selected lead
+    if (selectedLeadId !== "all" && selectedLead) {
+      list = list.filter((item) => {
+        if (item.entityId === selectedLeadId) return true;
+        const isLeadEvent = item.entityType === "Lead" && item.entity === selectedLead.name;
+        const isMessageEvent = item.category === "messages" && item.entity === selectedLead.name;
+        return isLeadEvent || isMessageEvent;
       });
     }
 
@@ -211,7 +229,7 @@ export function ManagerActivityClient({
     }
 
     return list;
-  }, [activities, selectedTripId, selectedTrip, leads, departures, selectedTab, selectedUser, dateWindow, searchQuery, sortBy]);
+  }, [activities, selectedTripId, selectedTrip, selectedLeadId, selectedLead, leads, departures, selectedTab, selectedUser, dateWindow, searchQuery, sortBy]);
 
   const paginatedActivities = useMemo(() => {
     if (viewMode === "timeline") {
@@ -277,7 +295,8 @@ export function ManagerActivityClient({
   }, [dateWindow]);
 
   const resetFilters = () => {
-    setSelectedTripId(trips[0]?.id || "all");
+    setSelectedTripId("all");
+    setSelectedLeadId("all");
     setSearchQuery("");
     setSelectedTab("all");
     setSelectedUser("all");
@@ -362,18 +381,24 @@ export function ManagerActivityClient({
             <label className="text-[10px] font-black uppercase text-slate-400 tracking-wider block mb-1.5 text-left">Select Trip</label>
             <button
               onClick={() => setTripSelectOpen(!tripSelectOpen)}
-              className="h-12 w-64 rounded-2xl border border-slate-200 bg-white px-3 flex items-center justify-between text-xs font-semibold text-slate-700 hover:border-[#FF5B26] transition-all cursor-pointer shadow-xs text-left"
+              className="h-12 w-60 rounded-2xl border border-slate-200 bg-white px-3 flex items-center justify-between text-xs font-semibold text-slate-700 hover:border-[#FF5B26] transition-all cursor-pointer shadow-xs text-left"
             >
               <div className="flex items-center gap-2.5 truncate">
-                <img
-                  src={selectedTrip?.image_url || "https://images.unsplash.com/photo-1540959733332-eab4deabeeaf?auto=format&fit=crop&w=80&q=80"}
-                  alt=""
-                  className="w-7 h-7 rounded-lg object-cover border border-[#e7e1d5]/40 shrink-0"
-                />
-                <div className="truncate">
-                  <div className="font-extrabold text-slate-900 truncate leading-tight">{selectedTrip?.title || "All Trips"}</div>
-                  <div className="text-[9px] text-slate-400 font-bold mt-0.5 uppercase tracking-wider">TRP-{selectedTrip?.id?.slice(0, 5).toUpperCase() || "ALL"}</div>
-                </div>
+                {selectedTrip ? (
+                  <>
+                    <img
+                      src={selectedTrip.image_url || "https://images.unsplash.com/photo-1540959733332-eab4deabeeaf?auto=format&fit=crop&w=80&q=80"}
+                      alt=""
+                      className="w-7 h-7 rounded-lg object-cover border border-[#e7e1d5]/40 shrink-0"
+                    />
+                    <div className="truncate">
+                      <div className="font-extrabold text-slate-900 truncate leading-tight">{selectedTrip.title}</div>
+                      <div className="text-[9px] text-slate-400 font-bold mt-0.5 uppercase tracking-wider">TRP-{selectedTrip.id?.slice(0, 5).toUpperCase()}</div>
+                    </div>
+                  </>
+                ) : (
+                  <span className="text-slate-500 font-bold">All Trips</span>
+                )}
               </div>
               <ChevronDown className="w-4 h-4 text-slate-400 shrink-0" />
             </button>
@@ -401,6 +426,52 @@ export function ManagerActivityClient({
                       <div className="truncate">
                         <div className="font-extrabold text-slate-900 truncate">{trip.title}</div>
                         <div className="text-[9px] text-slate-400 font-bold uppercase tracking-wider mt-0.5">TRP-{trip.id.slice(0, 5).toUpperCase()}</div>
+                      </div>
+                    </button>
+                  ))}
+                </div>
+              </>
+            )}
+          </div>
+
+          {/* Select Lead dropdown */}
+          <div className="relative">
+            <label className="text-[10px] font-black uppercase text-slate-400 tracking-wider block mb-1.5 text-left">Select Lead</label>
+            <button
+              onClick={() => setLeadSelectOpen(!leadSelectOpen)}
+              className="h-12 w-60 rounded-2xl border border-slate-200 bg-white px-4 flex items-center justify-between text-xs font-semibold text-slate-700 hover:border-[#FF5B26] transition-all cursor-pointer shadow-xs text-left"
+            >
+              <div className="truncate">
+                {selectedLead ? (
+                  <>
+                    <div className="font-extrabold text-slate-900 truncate leading-tight">{selectedLead.name}</div>
+                    <div className="text-[9px] text-slate-400 font-bold mt-0.5 uppercase tracking-wider">{selectedLead.trips?.title || "General Lead"}</div>
+                  </>
+                ) : (
+                  <span className="text-slate-500 font-bold">All Leads</span>
+                )}
+              </div>
+              <ChevronDown className="w-4 h-4 text-slate-400 shrink-0" />
+            </button>
+            {leadSelectOpen && (
+              <>
+                <div className="fixed inset-0 z-10" onClick={() => setLeadSelectOpen(false)} />
+                <div className="absolute left-0 mt-2 w-72 max-h-60 overflow-y-auto rounded-2xl bg-white border border-[#e7e1d5]/50 shadow-lg py-2 z-20 font-semibold text-xs text-left">
+                  <button
+                    onClick={() => { setSelectedLeadId("all"); setLeadSelectOpen(false); }}
+                    className={`w-full px-4 py-2 hover:bg-[#FAF8F4] text-left border-0 bg-transparent cursor-pointer font-bold ${selectedLeadId === "all" ? "text-[#FF5B26] bg-[#FFEFEA]/40" : "text-slate-700"}`}
+                  >
+                    All Leads
+                  </button>
+                  {leads.map((lead) => (
+                    <button
+                      key={lead.id}
+                      onClick={() => { setSelectedLeadId(lead.id); setLeadSelectOpen(false); }}
+                      className={`w-full px-4 py-2 hover:bg-[#FAF8F4] text-left border-0 bg-transparent cursor-pointer ${selectedLeadId === lead.id ? "bg-[#FFEFEA]/40 text-[#FF5B26]" : "text-slate-700"}`}
+                    >
+                      <div className="truncate">
+                        <div className="font-extrabold text-slate-900 truncate">{lead.name}</div>
+                        <div className="text-[9px] text-slate-400 font-bold uppercase tracking-wider mt-0.5">{lead.trips?.title || "General Enquiry"}</div>
                       </div>
                     </button>
                   ))}

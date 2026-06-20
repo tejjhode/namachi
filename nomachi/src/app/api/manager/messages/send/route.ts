@@ -34,7 +34,7 @@ export async function POST(request: Request) {
 
     const { data: lead, error: leadError } = await supabase
       .from("leads")
-      .select("id, assigned_to")
+      .select("id, assigned_to, email, name")
       .eq("id", leadId)
       .maybeSingle();
 
@@ -58,6 +58,30 @@ export async function POST(request: Request) {
 
     if (insertError) {
       return NextResponse.json({ error: insertError.message }, { status: 500 });
+    }
+
+    // Trigger traveler notification
+    try {
+      if (lead.email) {
+        const { data: travelerProfile } = await supabase
+          .from("profiles")
+          .select("id")
+          .eq("email", lead.email)
+          .maybeSingle();
+
+        if (travelerProfile?.id) {
+          await supabase.from("notifications").insert({
+            user_id: travelerProfile.id,
+            title: "Message Received",
+            body: "New message from your Trip Manager.",
+            type: "Message Received",
+            priority: "Medium",
+            source_id: leadId
+          });
+        }
+      }
+    } catch (notifErr) {
+      console.error("Failed to send message notification:", notifErr);
     }
 
     return NextResponse.json({ success: true });

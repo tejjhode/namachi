@@ -707,31 +707,62 @@ export default function LeadsPage() {
                 </div>
 
                 {/* Contact Methods */}
-                <div className="grid grid-cols-3 gap-2">
-                  <a
-                    href={`https://wa.me/${selectedLead.phone?.replace(/[^0-9]/g, "")}`}
-                    target="_blank"
-                    rel="noopener noreferrer"
-                    className="flex items-center justify-center gap-1.5 py-2 border border-emerald-200 hover:bg-emerald-50/50 text-emerald-600 rounded-xl text-[10px] font-bold transition-all no-underline bg-white cursor-pointer"
-                  >
-                    <MessageCircle className="w-3.5 h-3.5 stroke-[2.5]" />
-                    WhatsApp
-                  </a>
-                  <a
-                    href={`tel:${selectedLead.phone}`}
-                    className="flex items-center justify-center gap-1.5 py-2 border border-blue-200 hover:bg-blue-50/50 text-blue-600 rounded-xl text-[10px] font-bold transition-all no-underline bg-white cursor-pointer"
-                  >
-                    <Phone className="w-3.5 h-3.5" />
-                    Call
-                  </a>
-                  <a
-                    href={`mailto:${selectedLead.email}`}
-                    className="flex items-center justify-center gap-1.5 py-2 border border-[#e7e1d5] hover:bg-[#FAF8F4] text-nomichi-ink/70 rounded-xl text-[10px] font-bold transition-all no-underline bg-white cursor-pointer"
-                  >
-                    <Mail className="w-3.5 h-3.5" />
-                    Email
-                  </a>
-                </div>
+                {(() => {
+                  const adminProfile = currentUser ? usersById.get(currentUser.id) : null;
+                  const adminName = adminProfile?.full_name || currentUser?.user_metadata?.full_name || "Admin";
+                  const travelerName = selectedLead.name || "there";
+                  const tripTitle = selectedLead.trips?.title || selectedLead.trip_interest || "your trip";
+                  const waText = encodeURIComponent(`Hello ${travelerName}, this is ${adminName} from Nomichi. Thank you for your enquiry for the trip ${tripTitle}.`);
+                  const waHref = selectedLead.phone
+                    ? `https://wa.me/${selectedLead.phone.replace(/[^0-9]/g, "")}?text=${waText}`
+                    : "#";
+                  
+                  const emailSubject = encodeURIComponent(`Nomichi Enquiry - ${tripTitle}`);
+                  const emailBody = encodeURIComponent(`Hello ${travelerName},\n\nThis is ${adminName} from Nomichi. Thank you for your enquiry for the trip ${tripTitle}.`);
+                  const mailHref = selectedLead.email
+                    ? `mailto:${selectedLead.email}?subject=${emailSubject}&body=${emailBody}`
+                    : "#";
+                  const gmailHref = selectedLead.email
+                    ? `https://mail.google.com/mail/?view=cm&fs=1&to=${selectedLead.email}&su=${emailSubject}&body=${emailBody}`
+                    : "#";
+                  
+                  return (
+                    <div className="grid grid-cols-4 gap-2">
+                      <a
+                        href={waHref}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        className="flex items-center justify-center gap-1.5 py-2 border border-emerald-200 hover:bg-emerald-50/50 text-emerald-600 rounded-xl text-[10px] font-bold transition-all no-underline bg-white cursor-pointer"
+                      >
+                        <MessageCircle className="w-3.5 h-3.5 stroke-[2.5]" />
+                        WhatsApp
+                      </a>
+                      <a
+                        href={`tel:${selectedLead.phone || ""}`}
+                        className="flex items-center justify-center gap-1.5 py-2 border border-blue-200 hover:bg-blue-50/50 text-blue-600 rounded-xl text-[10px] font-bold transition-all no-underline bg-white cursor-pointer"
+                      >
+                        <Phone className="w-3.5 h-3.5" />
+                        Call
+                      </a>
+                      <a
+                        href={mailHref}
+                        className="flex items-center justify-center gap-1.5 py-2 border border-[#e7e1d5] hover:bg-[#FAF8F4] text-nomichi-ink/70 rounded-xl text-[10px] font-bold transition-all no-underline bg-white cursor-pointer"
+                      >
+                        <Mail className="w-3.5 h-3.5" />
+                        Email
+                      </a>
+                      <a
+                        href={gmailHref}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        className="flex items-center justify-center gap-1.5 py-2 border border-red-200 hover:bg-red-50/50 text-red-600 rounded-xl text-[10px] font-bold transition-all no-underline bg-white cursor-pointer"
+                      >
+                        <Mail className="w-3.5 h-3.5 text-red-500" />
+                        Gmail
+                      </a>
+                    </div>
+                  );
+                })()}
 
                 {/* Details Fields list */}
                 {/* Section: Trip Information */}
