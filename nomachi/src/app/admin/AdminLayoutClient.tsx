@@ -397,7 +397,7 @@ export function AdminLayoutClient({ children, user }: AdminLayoutClientProps) {
             <div className="relative max-w-md w-full">
               <input
                 type="text"
-                placeholder="Search anything..."
+                placeholder="Search enquiries, travellers, trips..."
                 value={searchQuery}
                 onChange={(e) => setSearchQuery(e.target.value)}
                 className="w-full pl-4 pr-11 py-2 border border-[#e7e1d5] bg-[#FAF8F4]/30 rounded-xl text-xs font-semibold focus:outline-none focus:border-[#FF5B26] text-nomichi-ink placeholder-nomichi-ink/35"

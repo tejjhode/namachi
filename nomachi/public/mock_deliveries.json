@@ -1,1 +1,223 @@
-[]
+[
+  {
+    "id": "email_pyi1rg1ag",
+    "timestamp": "2026-06-20T19:07:58.155Z",
+    "recipient": "smitajhode@gmail.com",
+    "channel": "Email",
+    "type": "Enquiry Submitted",
+    "title": "Thank you for showing interest in our KANHA TIGER SAFARI & WILDERNESS experience",
+    "body": "Your enquiry has been successfully received and is now being reviewed by our travel specialists.",
+    "priority": "Medium",
+    "status": "Success",
+    "details": {
+      "smtp_server": "smtp.resend.com",
+      "port": 587,
+      "messageId": "<d4809fec-9878-e165-a62e-c75f3a80ac5b@edinsured.in>",
+      "live": true
+    }
+  },
+  {
+    "id": "email_zpb8txcxs",
+    "timestamp": "2026-06-20T19:07:49.197Z",
+    "recipient": "tejaswajhode@gmail.com",
+    "channel": "Email",
+    "type": "Enquiry Submitted",
+    "title": "Thank you for showing interest in our KANHA TIGER SAFARI & WILDERNESS experience",
+    "body": "Your enquiry has been successfully received and is now being reviewed by our travel specialists.",
+    "priority": "Medium",
+    "status": "Success",
+    "details": {
+      "smtp_server": "smtp.resend.com",
+      "port": 587,
+      "messageId": "<d328e7eb-7d29-ff53-2e99-a66a494e883b@edinsured.in>",
+      "live": true
+    }
+  },
+  {
+    "id": "email_bdi8plyds",
+    "timestamp": "2026-06-20T18:56:32.429Z",
+    "recipient": "smitajhode@gmail.com",
+    "channel": "Email",
+    "type": "Enquiry Submitted",
+    "title": "Thank you for showing interest in our KANHA TIGER SAFARI & WILDERNESS experience",
+    "body": "Your enquiry has been successfully received and is now being reviewed by our travel specialists.",
+    "priority": "Medium",
+    "status": "Success",
+    "details": {
+      "smtp_server": "smtp.resend.com",
+      "port": 587,
+      "messageId": "<9d7a9425-1705-b2db-c7ed-745b31e5bc8e@edinsured.in>",
+      "live": true
+    }
+  },
+  {
+    "id": "email_xn2h23wfe",
+    "timestamp": "2026-06-20T18:56:28.106Z",
+    "recipient": "tejaswajhode@gmail.com",
+    "channel": "Email",
+    "type": "Enquiry Submitted",
+    "title": "Thank you for showing interest in our KANHA TIGER SAFARI & WILDERNESS experience",
+    "body": "Your enquiry has been successfully received and is now being reviewed by our travel specialists.",
+    "priority": "Medium",
+    "status": "Success",
+    "details": {
+      "smtp_server": "smtp.resend.com",
+      "port": 587,
+      "messageId": "<d46c8f02-5260-1845-e4b3-975849bed3cf@edinsured.in>",
+      "live": true
+    }
+  },
+  {
+    "id": "email_qn1rxjwwb",
+    "timestamp": "2026-06-20T18:52:12.693Z",
+    "recipient": "smitajhode@gmail.com",
+    "channel": "Email",
+    "type": "Enquiry Submitted",
+    "title": "Thank you for showing interest in our KANHA TIGER SAFARI & WILDERNESS experience",
+    "body": "Your enquiry has been successfully received and is now being reviewed by our travel specialists.",
+    "priority": "Medium",
+    "status": "Success",
+    "details": {
+      "smtp_server": "smtp.resend.com",
+      "port": 587,
+      "messageId": "<90f7db63-d4b7-392f-6622-0a7e7f4c1697@edinsured.in>",
+      "live": true
+    }
+  },
+  {
+    "id": "email_wr2cdprw2",
+    "timestamp": "2026-06-20T18:52:06.434Z",
+    "recipient": "tejaswajhode@gmail.com",
+    "channel": "Email",
+    "type": "Enquiry Submitted",
+    "title": "Thank you for showing interest in our KANHA TIGER SAFARI & WILDERNESS experience",
+    "body": "Your enquiry has been successfully received and is now being reviewed by our travel specialists.",
+    "priority": "Medium",
+    "status": "Success",
+    "details": {
+      "smtp_server": "smtp.resend.com",
+      "port": 587,
+      "messageId": "<ec73dcc7-90f6-e85e-dd44-cc21c94c0b0f@edinsured.in>",
+      "live": true
+    }
+  },
+  {
+    "id": "email_431tojhwd",
+    "timestamp": "2026-06-20T18:49:36.035Z",
+    "recipient": "smitajhode@gmail.com",
+    "channel": "Email",
+    "type": "Enquiry Submitted",
+    "title": "Thank you for showing interest in our KANHA TIGER SAFARI & WILDERNESS experience",
+    "body": "Your enquiry has been successfully received and is now being reviewed by our travel specialists.",
+    "priority": "Medium",
+    "status": "Success",
+    "details": {
+      "smtp_server": "smtp.resend.com",
+      "port": 587,
+      "messageId": "<4150bfbf-eef9-6788-19c1-5eacb6d41362@edinsured.in>",
+      "live": true
+    }
+  },
+  {
+    "id": "email_0ah8kblig",
+    "timestamp": "2026-06-20T18:49:31.690Z",
+    "recipient": "tejaswajhode@gmail.com",
+    "channel": "Email",
+    "type": "Enquiry Submitted",
+    "title": "Thank you for showing interest in our KANHA TIGER SAFARI & WILDERNESS experience",
+    "body": "Your enquiry has been successfully received and is now being reviewed by our travel specialists.",
+    "priority": "Medium",
+    "status": "Success",
+    "details": {
+      "smtp_server": "smtp.resend.com",
+      "port": 587,
+      "messageId": "<085bf6b5-9d4a-0051-54f6-2c01e35f461a@edinsured.in>",
+      "live": true
+    }
+  },
+  {
+    "id": "email_0f2ci68qt",
+    "timestamp": "2026-06-20T18:48:02.173Z",
+    "recipient": "ayushsonwane65@gmail.com",
+    "channel": "Email",
+    "type": "Enquiry Submitted",
+    "title": "Thank you for showing interest in our Kanha Tiger Safari & Wilderness experience",
+    "body": "Your enquiry has been successfully received and is now being reviewed by our travel specialists.",
+    "priority": "Medium",
+    "status": "Success",
+    "details": {
+      "smtp_server": "smtp.resend.com",
+      "port": 587,
+      "messageId": "<eda055cd-5cd6-ca6a-472e-c968a55448f1@edinsured.in>",
+      "live": true
+    }
+  },
+  {
+    "id": "email_e3qoo55cr",
+    "timestamp": "2026-06-20T18:46:36.368Z",
+    "recipient": "smita.jhode@gmail.com",
+    "channel": "Email",
+    "type": "Welcome to Nomichi",
+    "title": "Welcome to Nomichi",
+    "body": "Welcome to Nomichi! Your account has been successfully created.",
+    "priority": "High",
+    "status": "Success",
+    "details": {
+      "smtp_server": "smtp.resend.com",
+      "port": 587,
+      "messageId": "<760fc30c-dd53-5e7e-00b1-526bfa177e91@edinsured.in>",
+      "live": true
+    }
+  },
+  {
+    "id": "email_nszwzi20p",
+    "timestamp": "2026-06-20T18:46:32.632Z",
+    "recipient": "smita.jhode@gmail.com",
+    "channel": "Email",
+    "type": "Enquiry Submitted",
+    "title": "Your enquiry for KANHA TIGER SAFARI & WILDERNESS has been received",
+    "body": "Your enquiry has been received.",
+    "priority": "Medium",
+    "status": "Success",
+    "details": {
+      "smtp_server": "smtp.resend.com",
+      "port": 587,
+      "messageId": "<229adb2f-8062-4466-1aa7-4b720e902307@edinsured.in>",
+      "live": true
+    }
+  },
+  {
+    "id": "email_ijub8tg0h",
+    "timestamp": "2026-06-20T18:42:55.443Z",
+    "recipient": "smita.jhode@gmail.com",
+    "channel": "Email",
+    "type": "Welcome to Nomichi",
+    "title": "Welcome to Nomichi",
+    "body": "Welcome to Nomichi! Your account has been successfully created.",
+    "priority": "High",
+    "status": "Success",
+    "details": {
+      "smtp_server": "smtp.resend.com",
+      "port": 587,
+      "messageId": "<17d415ac-faec-d630-c450-0a59b320d818@edinsured.in>",
+      "live": true
+    }
+  },
+  {
+    "id": "email_cm21vp9nt",
+    "timestamp": "2026-06-20T18:42:51.690Z",
+    "recipient": "smita.jhode@gmail.com",
+    "channel": "Email",
+    "type": "Enquiry Submitted",
+    "title": "Your enquiry for KANHA TIGER SAFARI & WILDERNESS has been received",
+    "body": "Your enquiry has been received.",
+    "priority": "Medium",
+    "status": "Success",
+    "details": {
+      "smtp_server": "smtp.resend.com",
+      "port": 587,
+      "messageId": "<c6758864-a3ab-6da0-2c49-be02e707cfe3@edinsured.in>",
+      "live": true
+    }
+  }
+]

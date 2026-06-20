@@ -428,7 +428,7 @@ export function DashboardView({ user, leads = [], trips = [], initialChatMessage
     fullName: "",
     gender: "",
     email: "",
-    nationality: "",
+    nationality: "Indian",
     phone: "",
     dateOfBirth: ""
   });
@@ -856,7 +856,7 @@ export function DashboardView({ user, leads = [], trips = [], initialChatMessage
             fullName: data.full_name || "",
             gender: data.gender || "",
             email: data.email || "",
-            nationality: data.nationality || "",
+            nationality: data.nationality || "Indian",
             phone: data.phone || "",
             dateOfBirth: data.date_of_birth || ""
           });

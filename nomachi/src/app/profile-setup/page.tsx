@@ -3,18 +3,39 @@
 import { useState, useEffect } from "react";
 import { useRouter } from "next/navigation";
 import { createClient } from "@/lib/supabase/client";
-import { Phone, User, Calendar, Globe, Loader2, LogOut } from "lucide-react";
+import { Phone, User, Calendar, Globe, Loader2, LogOut, ChevronDown } from "lucide-react";
 
 const supabase = createClient();
 
+const countryCodes = [
+  { code: "+91", flag: "🇮🇳", label: "India" },
+  { code: "+1", flag: "🇺🇸", label: "US/Canada" },
+  { code: "+44", flag: "🇬🇧", label: "UK" },
+  { code: "+971", flag: "🇦🇪", label: "UAE" },
+  { code: "+65", flag: "🇸🇬", label: "Singapore" },
+  { code: "+61", flag: "🇦🇺", label: "Australia" },
+  { code: "+49", flag: "🇩🇪", label: "Germany" },
+  { code: "+33", flag: "🇫🇷", label: "France" },
+  { code: "+81", flag: "🇯🇵", label: "Japan" },
+  { code: "+60", flag: "🇲🇾", label: "Malaysia" },
+  { code: "+66", flag: "🇹🇭", label: "Thailand" }
+];
+
 export default function ProfileSetupPage() {
   const router = useRouter();
-  const [phone, setPhone] = useState("");
+  const [countryCode, setCountryCode] = useState("+91");
+  const [localNumber, setLocalNumber] = useState("");
   const [gender, setGender] = useState("");
   const [dob, setDob] = useState("");
-  const [nationality, setNationality] = useState("");
+  const [nationality, setNationality] = useState("Indian"); // Default nationality to Indian
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
+
+  // OTP Verification state
+  const [showOtpScreen, setShowOtpScreen] = useState(false);
+  const [otpCode, setOtpCode] = useState("");
+  const [isPhoneAlreadyVerified, setIsPhoneAlreadyVerified] = useState(false);
+  const [sendingOtp, setSendingOtp] = useState(false);
 
   useEffect(() => {
     async function loadProfile() {
@@ -31,10 +52,23 @@ export default function ProfileSetupPage() {
         .single();
 
       if (profile) {
-        setPhone(profile.phone || "");
         setGender(profile.gender || "");
         setDob(profile.date_of_birth || "");
-        setNationality(profile.nationality || "");
+        
+        // Use existing nationality if set, otherwise default to "Indian"
+        setNationality(profile.nationality || "Indian");
+
+        // Parse existing phone number if loaded from DB
+        if (profile.phone) {
+          const matched = countryCodes.find(c => profile.phone.startsWith(c.code));
+          if (matched) {
+            setCountryCode(matched.code);
+            setLocalNumber(profile.phone.replace(matched.code, "").trim());
+          } else {
+            setLocalNumber(profile.phone);
+          }
+          setIsPhoneAlreadyVerified(true);
+        }
 
         if (profile.phone && profile.gender && profile.date_of_birth && profile.nationality) {
           router.push("/");
@@ -44,13 +78,44 @@ export default function ProfileSetupPage() {
     loadProfile();
   }, [router]);
 
+  const sendVerificationCode = async (phoneNum: string) => {
+    try {
+      setSendingOtp(true);
+      setError("");
+      
+      // Update phone in Supabase Auth to trigger native SMS OTP sending
+      const { error: authError } = await supabase.auth.updateUser({
+        phone: phoneNum.trim()
+      });
+
+      if (authError) throw authError;
+
+      setShowOtpScreen(true);
+    } catch (err: any) {
+      setError(err.message || "Failed to send verification SMS. Please verify your phone number and try again.");
+    } finally {
+      setSendingOtp(false);
+    }
+  };
+
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!phone.trim() || !gender || !dob || !nationality.trim()) {
+    const fullPhone = countryCode + localNumber.replace(/[\s-]/g, "");
+    if (!localNumber.trim() || !gender || !dob || !nationality.trim()) {
       setError("Please fill in all mandatory fields.");
       return;
     }
 
+    // Trigger OTP verification if the phone number is entered for the first time
+    if (!isPhoneAlreadyVerified) {
+      await sendVerificationCode(fullPhone);
+      return;
+    }
+
+    await saveProfileData(fullPhone);
+  };
+
+  const saveProfileData = async (fullPhone: string) => {
     try {
       setLoading(true);
       setError("");
@@ -61,7 +126,7 @@ export default function ProfileSetupPage() {
       const { error: updateError } = await supabase
         .from("profiles")
         .update({
-          phone: phone.trim(),
+          phone: fullPhone.trim(),
           gender,
           date_of_birth: dob,
           nationality: nationality.trim(),
@@ -78,6 +143,167 @@ export default function ProfileSetupPage() {
       setLoading(false);
     }
   };
+
+  const handleVerifyOtp = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setError("");
+
+    if (!otpCode.trim()) {
+      setError("Please enter the verification code.");
+      return;
+    }
+
+    const fullPhone = countryCode + localNumber.replace(/[\s-]/g, "");
+
+    try {
+      setLoading(true);
+      
+      // Verify OTP via Supabase Auth (default type is 'phone_change' for existing authenticated users adding a phone number)
+      const { error: verifyError } = await supabase.auth.verifyOtp({
+        phone: fullPhone.trim(),
+        token: otpCode.trim(),
+        type: "phone_change"
+      });
+
+      if (verifyError) {
+        // Fallback verify type 'sms' if 'phone_change' was rejected
+        const { error: verifySmsError } = await supabase.auth.verifyOtp({
+          phone: fullPhone.trim(),
+          token: otpCode.trim(),
+          type: "sms"
+        });
+        if (verifySmsError) throw verifyError;
+      }
+
+      setIsPhoneAlreadyVerified(true);
+      setShowOtpScreen(false);
+      
+      // Complete registration in database
+      await saveProfileData(fullPhone);
+    } catch (err: any) {
+      setError(err.message || "Invalid verification code. Please try again.");
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const fullPhoneDisplay = countryCode + " " + localNumber;
+
+  if (showOtpScreen) {
+    return (
+      <div className="min-h-screen flex bg-nomichi-cream font-sans antialiased text-nomichi-ink overflow-x-hidden">
+        {/* Left Section - Hero */}
+        <div className="hidden lg:flex lg:w-1/2 relative text-nomichi-white p-16 flex-col justify-between overflow-hidden">
+          <div className="absolute inset-0 z-0 overflow-hidden">
+            <div
+              className="absolute inset-0 bg-cover bg-center scale-100"
+              style={{ backgroundImage: "url('/nomichi-hero.png')" }}
+            />
+            <div className="absolute inset-0 bg-gradient-to-tr from-nomichi-ink/80 via-nomichi-ink/50 to-nomichi-olive/30 mix-blend-multiply" />
+            <div className="absolute inset-0 bg-gradient-to-b from-transparent via-nomichi-ink/20 to-nomichi-ink/80" />
+          </div>
+
+          <div className="relative z-10">
+            <div className="mb-20">
+              <img
+                src="/logo.png"
+                alt="Nomichi"
+                className="h-10 w-auto object-contain"
+              />
+              <p className="text-nomichi-sand text-[10px] font-semibold tracking-[0.2em] uppercase mt-3">Explore. Discover. Travel.</p>
+            </div>
+
+            <div className="max-w-xl text-left">
+              <h2 className="text-5xl sm:text-6xl font-display font-extrabold leading-[1.08] tracking-tight mb-6 text-nomichi-cream">
+                Verify Your Number
+              </h2>
+              <p className="text-nomichi-sand/85 text-lg mb-16 font-light leading-relaxed max-w-sm">
+                We've sent a 6-digit OTP code to verify your phone number via Supabase Auth.
+              </p>
+            </div>
+          </div>
+
+          <div className="relative z-10 flex items-center justify-between text-xs text-nomichi-sand/65 border-t border-[#e7e1d5]/20 pt-6">
+            <p>© {new Date().getFullYear()} Nomichi. All rights reserved.</p>
+            <a href="/auth/signout" className="hover:text-nomichi-rust transition-colors flex items-center gap-1.5">
+              <LogOut className="h-3.5 w-3.5" /> Sign Out
+            </a>
+          </div>
+        </div>
+
+        {/* Right Section - OTP verification form */}
+        <div className="w-full lg:w-1/2 flex items-center justify-center p-8 sm:p-12 md:p-16 lg:p-24 relative">
+          <div className="w-full max-w-md space-y-8">
+            <div>
+              <h1 className="text-3xl font-display font-extrabold text-nomichi-ink text-left">Phone Verification</h1>
+              <p className="text-nomichi-ink/50 text-sm mt-2 text-left">
+                Please enter the 6-digit verification code sent to **{fullPhoneDisplay}** to complete registration.
+              </p>
+            </div>
+
+            <form onSubmit={handleVerifyOtp} className="space-y-6">
+              {error && (
+                <div className="bg-rose-50 border border-rose-200 text-rose-800 rounded-xl p-3.5 text-xs font-semibold text-left">
+                  {error}
+                </div>
+              )}
+
+              {/* OTP Code input */}
+              <div className="space-y-2 text-left">
+                <label className="text-[10px] font-bold text-nomichi-ink/50 uppercase tracking-wider block">Verification OTP Code</label>
+                <input
+                  type="text"
+                  maxLength={6}
+                  placeholder="Enter 6-digit code"
+                  value={otpCode}
+                  onChange={(e) => setOtpCode(e.target.value.replace(/\D/g, ""))}
+                  className="w-full text-center tracking-[0.5em] py-4 bg-[#FFFFFF] border border-[#e7e1d5]/60 hover:border-[#FF5B26]/30 focus:border-[#FF5B26] focus:ring-1 focus:ring-[#FF5B26] rounded-xl text-lg font-extrabold text-nomichi-ink outline-none transition-all placeholder:text-nomichi-ink/25 placeholder:tracking-normal placeholder:text-sm"
+                  required
+                />
+                <span className="text-[10px] text-nomichi-ink/40 font-bold block mt-2 text-center leading-relaxed">
+                  Enter the verification code sent to your mobile phone.
+                </span>
+              </div>
+
+              {/* Submit Button */}
+              <button
+                type="submit"
+                disabled={loading}
+                className="w-full bg-[#FF5B26] hover:bg-[#b04b1e] text-nomichi-white text-sm font-bold py-4 rounded-xl transition-all shadow-sm flex items-center justify-center gap-2 cursor-pointer disabled:opacity-50"
+              >
+                {loading ? (
+                  <>
+                    <Loader2 className="h-4 w-4 animate-spin" />
+                    Completing Registration...
+                  </>
+                ) : (
+                  "Verify & Complete"
+                )}
+              </button>
+
+              <div className="flex items-center justify-between text-xs pt-2">
+                <button
+                  type="button"
+                  onClick={() => sendVerificationCode(countryCode + localNumber.replace(/[\s-]/g, ""))}
+                  disabled={sendingOtp}
+                  className="text-[#FF5B26] hover:underline font-extrabold bg-transparent border-0 cursor-pointer"
+                >
+                  {sendingOtp ? "Resending..." : "Resend OTP"}
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setShowOtpScreen(false)}
+                  className="text-nomichi-ink/40 hover:text-nomichi-ink font-bold bg-transparent border-0 cursor-pointer"
+                >
+                  Back to Form
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div className="min-h-screen flex bg-nomichi-cream font-sans antialiased text-nomichi-ink overflow-x-hidden">
@@ -102,11 +328,11 @@ export default function ProfileSetupPage() {
             <p className="text-nomichi-sand text-[10px] font-semibold tracking-[0.2em] uppercase mt-3">Explore. Discover. Travel.</p>
           </div>
 
-          <div className="max-w-xl">
-            <h2 className="text-5xl sm:text-6xl font-display font-extrabold leading-[1.08] tracking-tight mb-6 text-nomichi-cream text-left">
+          <div className="max-w-xl text-left">
+            <h2 className="text-5xl sm:text-6xl font-display font-extrabold leading-[1.08] tracking-tight mb-6 text-nomichi-cream">
               Complete your Profile
             </h2>
-            <p className="text-nomichi-sand/85 text-lg mb-16 font-light leading-relaxed max-w-sm text-left">
+            <p className="text-nomichi-sand/85 text-lg mb-16 font-light leading-relaxed max-w-sm">
               To guarantee seamless trip bookings, visa applications, and personal safety, we require your phone, gender, DOB, and nationality.
             </p>
           </div>
@@ -137,21 +363,39 @@ export default function ProfileSetupPage() {
               </div>
             )}
 
-            {/* Phone */}
+            {/* Phone Number Input with Prefix Switcher Option */}
             <div className="space-y-2 text-left">
               <label className="text-[10px] font-bold text-nomichi-ink/50 uppercase tracking-wider block">Phone Number</label>
-              <div className="relative">
-                <span className="absolute left-3.5 top-1/2 -translate-y-1/2 text-nomichi-ink/30">
-                  <Phone className="h-4 w-4" />
-                </span>
-                <input
-                  type="tel"
-                  placeholder="e.g. +91 9876543210"
-                  value={phone}
-                  onChange={(e) => setPhone(e.target.value)}
-                  className="w-full pl-11 pr-4 py-3.5 bg-[#FFFFFF] border border-[#e7e1d5]/60 hover:border-[#FF5B26]/30 focus:border-[#FF5B26] focus:ring-1 focus:ring-[#FF5B26] rounded-xl text-sm font-semibold text-nomichi-ink outline-none transition-all placeholder:text-nomichi-ink/25"
-                  required
-                />
+              <div className="flex gap-2">
+                {/* Prefix Selector Dropdown */}
+                <div className="relative shrink-0 w-[110px]">
+                  <select
+                    value={countryCode}
+                    onChange={(e) => setCountryCode(e.target.value)}
+                    className="w-full pl-3 pr-8 py-3.5 bg-[#FFFFFF] border border-[#e7e1d5]/60 hover:border-[#FF5B26]/30 focus:border-[#FF5B26] focus:ring-1 focus:ring-[#FF5B26] rounded-xl text-sm font-semibold text-nomichi-ink outline-none transition-all appearance-none cursor-pointer"
+                  >
+                    {countryCodes.map((c) => (
+                      <option key={c.code} value={c.code}>
+                        {c.flag} {c.code}
+                      </option>
+                    ))}
+                  </select>
+                  <ChevronDown className="w-4 h-4 text-nomichi-ink/40 absolute right-3 top-1/2 -translate-y-1/2 pointer-events-none" />
+                </div>
+                {/* Local Number input */}
+                <div className="relative flex-1">
+                  <span className="absolute left-3.5 top-1/2 -translate-y-1/2 text-nomichi-ink/30">
+                    <Phone className="h-4 w-4" />
+                  </span>
+                  <input
+                    type="tel"
+                    placeholder="98765 43210"
+                    value={localNumber}
+                    onChange={(e) => setLocalNumber(e.target.value.replace(/[^\d\s-]/g, ""))}
+                    className="w-full pl-11 pr-4 py-3.5 bg-[#FFFFFF] border border-[#e7e1d5]/60 hover:border-[#FF5B26]/30 focus:border-[#FF5B26] focus:ring-1 focus:ring-[#FF5B26] rounded-xl text-sm font-semibold text-nomichi-ink outline-none transition-all placeholder:text-nomichi-ink/25"
+                    required
+                  />
+                </div>
               </div>
             </div>
 

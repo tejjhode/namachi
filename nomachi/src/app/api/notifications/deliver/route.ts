@@ -1,6 +1,8 @@
 import { NextResponse } from "next/server";
 import { sendEmailViaSMTP, sendWhatsAppViaAPI } from "@/lib/notifications/delivery";
 import { createClient } from "@supabase/supabase-js";
+import fs from "fs";
+import path from "path";
 
 // Initialize Supabase Admin Client using the service role key to bypass RLS checks
 const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL || "";
@@ -15,10 +17,36 @@ export async function POST(request: Request) {
     let emailSent = false;
     let waSent = false;
 
-    // Rich HTML Template Compiler
+    // Parse absolute origin from incoming request URL to dynamically resolve relative static assets (like brochures)
+    const requestUrl = new URL(request.url);
+    const origin = requestUrl.origin;
+
+    // 1. Compile the rich HTML template
     let htmlContent = "";
     if (email) {
-      htmlContent = await compileHtmlTemplate({ type, title, contentText, source_id });
+      htmlContent = await compileHtmlTemplate({ type, title, contentText, source_id, origin });
+    }
+
+    // Load the user's custom email banner as an inline attachment
+    let imageBuffer: Buffer | null = null;
+    try {
+      const bannerPath = path.join(process.cwd(), "public", "images", "email-banner.png");
+      if (fs.existsSync(bannerPath)) {
+        imageBuffer = fs.readFileSync(bannerPath);
+      }
+    } catch (err) {
+      console.warn("Failed to read email-banner.png for inline attachment:", err);
+    }
+
+    const attachments = [];
+    if (imageBuffer) {
+      attachments.push({
+        filename: "email-banner.png",
+        content: imageBuffer,
+        cid: "email_banner",
+        contentType: "image/png",
+        disposition: "inline"
+      });
     }
 
     if (email) {
@@ -28,7 +56,8 @@ export async function POST(request: Request) {
         body: contentText,
         html: htmlContent || undefined,
         priority: priority || "Medium",
-        type: type || "System Alert"
+        type: type || "System Alert",
+        attachments: attachments.length > 0 ? attachments : undefined
       });
     }
 
@@ -57,21 +86,21 @@ async function compileHtmlTemplate(params: {
   title: string;
   contentText: string;
   source_id?: string;
+  origin?: string;
 }): Promise<string> {
-  const { type, source_id, title } = params;
+  const { type, source_id, title, origin } = params;
   
   let travelerName = "Traveler";
   let tripTitle = "";
-  let tripImage = "";
   let enquiryId = "";
   let managerName = "";
   let brochureUrl = "";
+  let leadData: any = null;
 
-  // 1. Fetch data from Supabase based on the notification event category
+  // Fetch data from Supabase based on the notification event category
   try {
     if (source_id) {
       if (type === "Welcome to Nomichi") {
-        // Welcome registration flow (source_id = profile user_id)
         const { data: profile } = await supabaseAdmin
           .from("profiles")
           .select("full_name")
@@ -81,12 +110,13 @@ async function compileHtmlTemplate(params: {
           travelerName = profile.full_name;
         }
       } else {
-        // Enquiry, Manager Assignment, or Brochure Shared flow (source_id = lead UUID)
         const { data: lead } = await supabaseAdmin
           .from("leads")
           .select("*, trips(*)")
           .eq("id", source_id)
           .single();
+
+        leadData = lead;
 
         if (lead) {
           travelerName = lead.name;
@@ -94,11 +124,9 @@ async function compileHtmlTemplate(params: {
           
           if (lead.trips) {
             tripTitle = lead.trips.title;
-            tripImage = lead.trips.image_url || "";
             brochureUrl = lead.trips.brochure_url || "";
           }
 
-          // Fetch assigned manager if present
           if (lead.assigned_to) {
             const { data: manager } = await supabaseAdmin
               .from("profiles")
@@ -116,7 +144,14 @@ async function compileHtmlTemplate(params: {
     console.warn("Template compiler database query fallback:", err);
   }
 
-  // 2. Select HTML body content based on notification event type
+  // Resolve brochure relative URL to absolute URL
+  if (brochureUrl && brochureUrl.startsWith("/") && origin) {
+    brochureUrl = `${origin}${brochureUrl}`;
+  }
+
+  // We now use a static custom email banner for all emails, so tripImageUrl resolution is skipped.
+
+  // Select HTML body content based on notification event type
   let bodyContent = "";
   const firstName = travelerName.split(" ")[0] || travelerName;
 
@@ -213,14 +248,12 @@ async function compileHtmlTemplate(params: {
       <p>Adventure awaits.</p>
     `;
   } else {
-    // Default system alert template
     bodyContent = `
       <p>Hi ${firstName},</p>
       <p>${params.contentText}</p>
     `;
   }
 
-  // 3. Wrap body inside a responsive, premium HTML wrapper
   const emailHtml = `
 <!DOCTYPE html>
 <html>
@@ -255,9 +288,13 @@ async function compileHtmlTemplate(params: {
       padding: 30px 25px;
       text-align: center;
     }
-    .header-logo {
-      height: 38px;
-      width: auto;
+    .header-logo-text {
+      font-family: 'Playfair Display', Georgia, serif;
+      font-size: 26px;
+      font-weight: 900;
+      color: #b04b1e;
+      letter-spacing: 0.05em;
+      line-height: 1;
       display: inline-block;
     }
     .header-tagline {
@@ -304,12 +341,12 @@ async function compileHtmlTemplate(params: {
     <div class="container">
       <!-- Header Banner -->
       <div class="header">
-        <img src="https://agdyqujsdnxiuwcpuupw.supabase.co/storage/v1/object/public/trips/logo.png" alt="Nomichi Logo" class="header-logo" />
+        <span class="header-logo-text">Nomichi</span>
         <span class="header-tagline">Wander &bull; Connect &bull; Belong</span>
       </div>
 
-      <!-- Dynamic Trip Hero Image Banner -->
-      ${tripImage ? `<img src="${tripImage}" alt="${tripTitle}" class="trip-banner" />` : ""}
+      <!-- Custom Nomichi Email Banner (Embedded Inline CID) -->
+      <img src="cid:email_banner" alt="Nomichi" class="trip-banner" />
 
       <!-- Main Body content -->
       <div class="content">
@@ -335,4 +372,37 @@ async function compileHtmlTemplate(params: {
   `;
 
   return emailHtml;
+}
+
+// Maps trip title to a verified, working public Unsplash URL (status 200)
+function getPublicTripImageUrl(tripTitle: string, dbImageUrl: string | null): string {
+  // If the db image URL is a valid public HTTPS URL and does not contain localhost,
+  // and is not the known broken Unsplash photo ID, we can use it directly.
+  if (dbImageUrl && dbImageUrl.startsWith("http") && !dbImageUrl.includes("localhost") && !dbImageUrl.includes("photo-1540959733332-eab4deceeaf7")) {
+    return dbImageUrl;
+  }
+
+  // Otherwise, map the trip title to a verified public Unsplash URL
+  const t = (tripTitle || "").toLowerCase();
+  if (t.includes("tokyo") || t.includes("fuji") || t.includes("japan")) {
+    return "https://images.unsplash.com/photo-1493976040374-85c8e12f0c0e?auto=format&fit=crop&w=600&q=80";
+  }
+  if (t.includes("swiss") || t.includes("alps") || t.includes("zermatt")) {
+    return "https://images.unsplash.com/photo-1502602898657-3e91760cbb34?auto=format&fit=crop&w=600&q=80";
+  }
+  if (t.includes("kanha") || t.includes("tiger") || t.includes("safari") || t.includes("wilderness")) {
+    return "https://images.unsplash.com/photo-1549488344-1f9b8d2bd1f3?auto=format&fit=crop&w=600&q=80";
+  }
+  if (t.includes("spiti") || t.includes("valley") || t.includes("expedition")) {
+    return "https://images.unsplash.com/photo-1517411032315-54ef2cb783bb?auto=format&fit=crop&w=600&q=80";
+  }
+  if (t.includes("bali") || t.includes("paradise") || t.includes("tropical")) {
+    return "https://images.unsplash.com/photo-1537996194471-e657df975ab4?auto=format&fit=crop&w=600&q=80";
+  }
+  if (t.includes("kerala") || t.includes("backwaters") || t.includes("hills")) {
+    return "https://images.unsplash.com/photo-1548013146-72479768bada?auto=format&fit=crop&w=600&q=80";
+  }
+
+  // Default brand fallback
+  return "https://images.unsplash.com/photo-1469854523086-cc02fe5d8800?auto=format&fit=crop&w=600&q=80";
 }

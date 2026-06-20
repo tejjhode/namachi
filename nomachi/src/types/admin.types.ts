@@ -66,12 +66,25 @@ export interface Lead {
     full_name: string;
     avatar_url?: string;
   };
+  travelerProfile?: {
+    id: string;
+    full_name: string;
+    avatar_url?: string;
+    nationality?: string;
+    phone?: string;
+  };
+  nationality?: string;
   trips?: {
     id: string;
     title: string;
     destination?: string;
     start_date?: string;
     end_date?: string;
+    price?: number;
+    image_url?: string;
+    seats_left?: number;
+    total_seats?: number;
+    brochure_url?: string;
   };
   lead_notes?: LeadNote[];
 }

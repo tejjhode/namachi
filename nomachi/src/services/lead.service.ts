@@ -15,12 +15,14 @@ export const leadService = {
     search?: string;
     status?: string;
     tripId?: string | null;
-    isLead?: boolean;
+    isLead?: boolean | null;
   }): Promise<Lead[]> {
-    let query = supabase.from("leads").select("*, trips(id, title, destination)").order("created_at", { ascending: false });
+    let query = supabase.from("leads").select("*, trips(id, title, destination, price)").order("created_at", { ascending: false });
 
-    const isLeadFilter = params?.isLead !== undefined ? params.isLead : true;
-    query = query.eq("is_lead", isLeadFilter);
+    if (params?.isLead !== null) {
+      const isLeadFilter = params?.isLead !== undefined ? params.isLead : true;
+      query = query.eq("is_lead", isLeadFilter);
+    }
 
     if (params?.status && params.status !== "all") {
       query = query.eq("status", params.status);
@@ -41,7 +43,7 @@ export const leadService = {
     const profileIds = Array.from(
       new Set(
         leads
-          .map((lead) => lead.assigned_to)
+          .flatMap((lead) => [lead.assigned_to, lead.user_id])
           .filter((value): value is string => Boolean(value))
       )
     );
@@ -52,7 +54,7 @@ export const leadService = {
 
     const { data: profiles, error: profilesError } = await supabase
       .from("profiles")
-      .select("id, full_name, avatar_url")
+      .select("id, full_name, avatar_url, nationality, phone")
       .in("id", profileIds);
 
     if (profilesError) {
@@ -60,10 +62,16 @@ export const leadService = {
     }
 
     const profileMap = new Map((profiles || []).map((profile) => [profile.id, profile]));
-    return leads.map((lead) => ({
-      ...lead,
-      profiles: lead.assigned_to ? profileMap.get(lead.assigned_to) : undefined,
-    }));
+    return leads.map((lead) => {
+      const travelerProf = lead.user_id ? profileMap.get(lead.user_id) : undefined;
+      return {
+        ...lead,
+        profiles: lead.assigned_to ? profileMap.get(lead.assigned_to) : undefined,
+        travelerProfile: travelerProf,
+        phone: lead.phone || travelerProf?.phone || undefined,
+        nationality: travelerProf?.nationality || undefined,
+      };
+    });
   },
 
   async getLeadById(id: string): Promise<Lead> {

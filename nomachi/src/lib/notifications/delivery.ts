@@ -24,6 +24,13 @@ export async function sendEmailViaSMTP(payload: {
   html?: string;
   priority: string;
   type: string;
+  attachments?: Array<{
+    filename: string;
+    content: Buffer;
+    cid: string;
+    contentType?: string;
+    disposition?: string;
+  }>;
 }): Promise<boolean> {
   const host = process.env.SMTP_HOST;
   const user = process.env.SMTP_USER;
@@ -52,6 +59,7 @@ export async function sendEmailViaSMTP(payload: {
         subject: payload.subject,
         text: payload.body,
         html: payload.html,
+        attachments: payload.attachments,
       });
 
       console.log(`[SMTP Live] Email successfully delivered to ${payload.to}. MessageId: ${info.messageId}`);
