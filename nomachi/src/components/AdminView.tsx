@@ -159,6 +159,20 @@ export default function AdminView({ user, onBack, initialTab }: AdminViewProps) 
   const [departuresFilterTripId, setDeparturesFilterTripId] = useState<string | null>(null);
   const [travelersFilterTripId, setTravelersFilterTripId] = useState<string | null>(null);
   const [leaderDropdownOpen, setLeaderDropdownOpen] = useState(false);
+  const [isEditDepartureModalOpen, setIsEditDepartureModalOpen] = useState(false);
+  const [editingDeparture, setEditingDeparture] = useState<any | null>(null);
+  const [editDepartureForm, setEditDepartureForm] = useState({
+    startDate: "",
+    endDate: "",
+    totalSeats: "",
+    seatsLeft: "",
+    price: "",
+    status: "active",
+    code: "",
+    leader: "",
+    meeting: "",
+    notes: ""
+  });
   const itemsPerPage = 6;
   
   // Real dynamic stats from database
@@ -1240,6 +1254,93 @@ export default function AdminView({ user, onBack, initialTab }: AdminViewProps) 
       setActiveTab("departures");
     } catch (err: any) {
       setError(err.message || "Failed to activate trip.");
+    } finally {
+      setSubmitLoading(false);
+    }
+  };
+
+  const handleDeleteDeparture = async (id: string) => {
+    if (!window.confirm("Are you sure you want to delete this departure? This action cannot be undone.")) return;
+    try {
+      setSubmitLoading(true);
+      setError("");
+      setSuccess("");
+      
+      const { error: deleteErr } = await supabase
+        .from("trip_departures")
+        .delete()
+        .eq("id", id);
+        
+      if (deleteErr) throw deleteErr;
+      
+      setSuccess("Departure successfully deleted.");
+      loadData();
+    } catch (err: any) {
+      setError(err.message || "Failed to delete departure.");
+    } finally {
+      setSubmitLoading(false);
+    }
+  };
+
+  const handleStartEditDeparture = (dep: any) => {
+    const meta = parseDepartureStatus(dep.status);
+    setEditingDeparture(dep);
+    setEditDepartureForm({
+      startDate: dep.start_date ? dep.start_date.split("T")[0] : "",
+      endDate: dep.end_date ? dep.end_date.split("T")[0] : "",
+      totalSeats: String(dep.total_seats || 0),
+      seatsLeft: String(dep.seats_left || 0),
+      price: String(dep.price || 0),
+      status: meta.status || "active",
+      code: meta.code || "",
+      leader: meta.leader || "Unassigned",
+      meeting: meta.meeting || "",
+      notes: meta.notes || ""
+    });
+    setIsEditDepartureModalOpen(true);
+  };
+
+  const handleEditDepartureSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!editingDeparture) return;
+    try {
+      setSubmitLoading(true);
+      setError("");
+      setSuccess("");
+
+      const { startDate, endDate, totalSeats, seatsLeft, price, status, code, leader, meeting, notes } = editDepartureForm;
+      if (!startDate || !totalSeats || !seatsLeft || !price) {
+        throw new Error("Please fill in all required fields.");
+      }
+
+      const statusJson = JSON.stringify({
+        status,
+        code,
+        leader,
+        meeting,
+        notes
+      });
+
+      const { error: updateErr } = await supabase
+        .from("trip_departures")
+        .update({
+          start_date: new Date(startDate).toISOString(),
+          end_date: endDate ? new Date(endDate).toISOString() : null,
+          total_seats: parseInt(totalSeats),
+          seats_left: parseInt(seatsLeft),
+          price: parseFloat(price),
+          status: statusJson
+        })
+        .eq("id", editingDeparture.id);
+
+      if (updateErr) throw updateErr;
+
+      setSuccess("Departure updated successfully.");
+      setIsEditDepartureModalOpen(false);
+      setEditingDeparture(null);
+      loadData();
+    } catch (err: any) {
+      setError(err.message || "Failed to update departure.");
     } finally {
       setSubmitLoading(false);
     }
@@ -3923,6 +4024,7 @@ export default function AdminView({ user, onBack, initialTab }: AdminViewProps) 
                       <th className="px-6 py-3.5 font-bold text-nomichi-ink/50 text-[10px] uppercase tracking-wider">Meeting Point</th>
                       <th className="px-6 py-3.5 font-bold text-nomichi-ink/50 text-[10px] uppercase tracking-wider">Capacity</th>
                       <th className="px-6 py-3.5 font-bold text-nomichi-ink/50 text-[10px] uppercase tracking-wider">Status</th>
+                      <th className="px-6 py-3.5 font-bold text-nomichi-ink/50 text-[10px] uppercase tracking-wider text-right">Actions</th>
                     </tr>
                   </thead>
                   <tbody className="divide-y divide-[#e7e1d5]/20">
@@ -3934,7 +4036,7 @@ export default function AdminView({ user, onBack, initialTab }: AdminViewProps) 
                       if (filteredDeps.length === 0) {
                         return (
                           <tr>
-                            <td colSpan={7} className="px-6 py-10 text-center text-nomichi-ink/40 font-semibold">
+                            <td colSpan={8} className="px-6 py-10 text-center text-nomichi-ink/40 font-semibold">
                               {departuresFilterTripId ? "No departures found for this trip." : "No departures active."}
                             </td>
                           </tr>
@@ -3977,6 +4079,24 @@ export default function AdminView({ user, onBack, initialTab }: AdminViewProps) 
                               >
                                 {meta.status.toUpperCase().replace("_", " ")}
                               </span>
+                            </td>
+                            <td className="px-6 py-4 text-right space-x-2 shrink-0">
+                              <button
+                                type="button"
+                                onClick={() => handleStartEditDeparture(dep)}
+                                className="text-nomichi-ink/40 hover:text-[#FF5B26] border-0 bg-transparent cursor-pointer p-1 transition-colors"
+                                title="Edit Departure"
+                              >
+                                <Edit3 className="w-3.5 h-3.5" />
+                              </button>
+                              <button
+                                type="button"
+                                onClick={() => handleDeleteDeparture(dep.id)}
+                                className="text-nomichi-ink/40 hover:text-red-600 border-0 bg-transparent cursor-pointer p-1 transition-colors"
+                                title="Delete Departure"
+                              >
+                                <Trash2 className="w-3.5 h-3.5" />
+                              </button>
                             </td>
                           </tr>
                         );
@@ -4749,6 +4869,171 @@ export default function AdminView({ user, onBack, initialTab }: AdminViewProps) 
                       >
                         {addingCRMLeadNote ? <Loader2 className="w-4 h-4 animate-spin" /> : <Send className="w-4 h-4" />}
                       </button>
+                    </form>
+                  </div>
+                </div>
+              )}
+
+              {/* ===================== EDIT DEPARTURE MODAL ===================== */}
+              {isEditDepartureModalOpen && (
+                <div className="fixed inset-0 bg-black/50 z-50 flex items-center justify-center p-4 backdrop-blur-sm">
+                  <div className="bg-white rounded-3xl border border-[#e7e1d5]/40 shadow-xl max-w-lg w-full overflow-hidden text-left animate-in zoom-in-95 duration-200">
+                    <div className="px-6 py-5 border-b border-[#e7e1d5]/30 flex justify-between items-center bg-[#FAF8F4]/30">
+                      <div>
+                        <h3 className="text-base font-display font-extrabold text-nomichi-ink uppercase tracking-wider">Edit Departure</h3>
+                        <p className="text-xs text-nomichi-ink/40 font-semibold mt-0.5">Modify departure details for capacity and status</p>
+                      </div>
+                      <button
+                        onClick={() => {
+                          setIsEditDepartureModalOpen(false);
+                          setEditingDeparture(null);
+                        }}
+                        className="w-6 h-6 rounded-full border border-[#e7e1d5]/50 hover:bg-[#FAF8F4] flex items-center justify-center text-nomichi-ink/50 cursor-pointer bg-white"
+                      >
+                        <X className="w-3.5 h-3.5" />
+                      </button>
+                    </div>
+
+                    <form onSubmit={handleEditDepartureSubmit} className="p-6 space-y-4 max-h-[75vh] overflow-y-auto">
+                      <div className="space-y-1">
+                        <label className="text-[10px] font-black text-nomichi-ink uppercase tracking-wider">Departure Code *</label>
+                        <input
+                          type="text"
+                          required
+                          value={editDepartureForm.code}
+                          onChange={(e) => setEditDepartureForm({ ...editDepartureForm, code: e.target.value })}
+                          className="w-full px-3.5 py-2.5 border border-[#e7e1d5] rounded-xl text-xs font-semibold focus:outline-none focus:border-[#FF5B26] text-nomichi-ink placeholder-nomichi-ink/35 bg-[#FAF8F4]/30"
+                        />
+                      </div>
+
+                      <div className="grid grid-cols-2 gap-4">
+                        <div className="space-y-1">
+                          <label className="text-[10px] font-black text-nomichi-ink uppercase tracking-wider">Start Date *</label>
+                          <input
+                            type="date"
+                            required
+                            value={editDepartureForm.startDate}
+                            onChange={(e) => setEditDepartureForm({ ...editDepartureForm, startDate: e.target.value })}
+                            className="w-full px-3.5 py-2.5 border border-[#e7e1d5] rounded-xl text-xs font-semibold focus:outline-none focus:border-[#FF5B26] text-nomichi-ink bg-[#FAF8F4]/30"
+                          />
+                        </div>
+                        <div className="space-y-1">
+                          <label className="text-[10px] font-black text-nomichi-ink uppercase tracking-wider">End Date</label>
+                          <input
+                            type="date"
+                            value={editDepartureForm.endDate}
+                            onChange={(e) => setEditDepartureForm({ ...editDepartureForm, endDate: e.target.value })}
+                            className="w-full px-3.5 py-2.5 border border-[#e7e1d5] rounded-xl text-xs font-semibold focus:outline-none focus:border-[#FF5B26] text-nomichi-ink bg-[#FAF8F4]/30"
+                          />
+                        </div>
+                      </div>
+
+                      <div className="grid grid-cols-3 gap-4">
+                        <div className="space-y-1">
+                          <label className="text-[10px] font-black text-nomichi-ink uppercase tracking-wider">Total Seats *</label>
+                          <input
+                            type="number"
+                            required
+                            min="1"
+                            value={editDepartureForm.totalSeats}
+                            onChange={(e) => setEditDepartureForm({ ...editDepartureForm, totalSeats: e.target.value })}
+                            className="w-full px-3.5 py-2.5 border border-[#e7e1d5] rounded-xl text-xs font-semibold focus:outline-none focus:border-[#FF5B26] text-nomichi-ink bg-[#FAF8F4]/30"
+                          />
+                        </div>
+                        <div className="space-y-1">
+                          <label className="text-[10px] font-black text-nomichi-ink uppercase tracking-wider">Seats Left *</label>
+                          <input
+                            type="number"
+                            required
+                            min="0"
+                            value={editDepartureForm.seatsLeft}
+                            onChange={(e) => setEditDepartureForm({ ...editDepartureForm, seatsLeft: e.target.value })}
+                            className="w-full px-3.5 py-2.5 border border-[#e7e1d5] rounded-xl text-xs font-semibold focus:outline-none focus:border-[#FF5B26] text-nomichi-ink bg-[#FAF8F4]/30"
+                          />
+                        </div>
+                        <div className="space-y-1">
+                          <label className="text-[10px] font-black text-nomichi-ink uppercase tracking-wider">Price (INR) *</label>
+                          <input
+                            type="number"
+                            required
+                            min="0"
+                            value={editDepartureForm.price}
+                            onChange={(e) => setEditDepartureForm({ ...editDepartureForm, price: e.target.value })}
+                            className="w-full px-3.5 py-2.5 border border-[#e7e1d5] rounded-xl text-xs font-semibold focus:outline-none focus:border-[#FF5B26] text-nomichi-ink bg-[#FAF8F4]/30"
+                          />
+                        </div>
+                      </div>
+
+                      <div className="grid grid-cols-2 gap-4">
+                        <div className="space-y-1">
+                          <label className="text-[10px] font-black text-nomichi-ink uppercase tracking-wider">Trip Leader</label>
+                          <select
+                            value={editDepartureForm.leader}
+                            onChange={(e) => setEditDepartureForm({ ...editDepartureForm, leader: e.target.value })}
+                            className="w-full px-3.5 py-2.5 border border-[#e7e1d5] rounded-xl text-xs font-semibold focus:outline-none focus:border-[#FF5B26] text-nomichi-ink bg-white"
+                          >
+                            <option value="Unassigned">Unassigned</option>
+                            {users.map((u) => (
+                              <option key={u.id} value={u.full_name || u.email}>
+                                {u.full_name || u.email}
+                              </option>
+                            ))}
+                          </select>
+                        </div>
+                        <div className="space-y-1">
+                          <label className="text-[10px] font-black text-nomichi-ink uppercase tracking-wider">Meeting Point</label>
+                          <input
+                            type="text"
+                            value={editDepartureForm.meeting}
+                            onChange={(e) => setEditDepartureForm({ ...editDepartureForm, meeting: e.target.value })}
+                            className="w-full px-3.5 py-2.5 border border-[#e7e1d5] rounded-xl text-xs font-semibold focus:outline-none focus:border-[#FF5B26] text-nomichi-ink placeholder-nomichi-ink/35 bg-[#FAF8F4]/30"
+                          />
+                        </div>
+                      </div>
+
+                      <div className="space-y-1">
+                        <label className="text-[10px] font-black text-nomichi-ink uppercase tracking-wider">Status *</label>
+                        <select
+                          value={editDepartureForm.status}
+                          onChange={(e) => setEditDepartureForm({ ...editDepartureForm, status: e.target.value })}
+                          className="w-full px-3.5 py-2.5 border border-[#e7e1d5] rounded-xl text-xs font-semibold focus:outline-none focus:border-[#FF5B26] text-nomichi-ink bg-white"
+                        >
+                          <option value="active">Active</option>
+                          <option value="sold_out">Sold Out</option>
+                          <option value="completed">Completed</option>
+                          <option value="cancelled">Cancelled</option>
+                        </select>
+                      </div>
+
+                      <div className="space-y-1">
+                        <label className="text-[10px] font-black text-nomichi-ink uppercase tracking-wider">Logistics & Notes</label>
+                        <textarea
+                          rows={2}
+                          value={editDepartureForm.notes}
+                          onChange={(e) => setEditDepartureForm({ ...editDepartureForm, notes: e.target.value })}
+                          className="w-full px-3.5 py-2.5 border border-[#e7e1d5] rounded-xl text-xs font-semibold focus:outline-none focus:border-[#FF5B26] text-nomichi-ink resize-none bg-[#FAF8F4]/30"
+                        />
+                      </div>
+
+                      <div className="pt-4 border-t border-[#e7e1d5]/30 flex justify-end gap-3 bg-[#FAF8F4]/10 -mx-6 -mb-6 p-6">
+                        <button
+                          type="button"
+                          onClick={() => {
+                            setIsEditDepartureModalOpen(false);
+                            setEditingDeparture(null);
+                          }}
+                          className="px-5 py-2.5 border border-[#e7e1d5] text-nomichi-ink font-bold text-xs rounded-xl hover:bg-[#FAF8F4] transition-all cursor-pointer bg-white"
+                        >
+                          Cancel
+                        </button>
+                        <button
+                          type="submit"
+                          disabled={submitLoading}
+                          className="px-5 py-2.5 bg-[#FF5B26] text-white font-bold text-xs rounded-xl hover:bg-[#FF5B26]/90 transition-all shadow-sm border-0 cursor-pointer disabled:opacity-50"
+                        >
+                          {submitLoading ? "Saving..." : "Save Changes"}
+                        </button>
+                      </div>
                     </form>
                   </div>
                 </div>

@@ -24,6 +24,8 @@ import {
   ShieldCheck,
   Tag,
   Calendar,
+  CalendarDays,
+  Briefcase,
   MapPin,
   Headphones,
   Users,
@@ -60,16 +62,19 @@ import {
   ArrowDownToLine,
   Smile,
   FileText,
-  Check
+  Check,
+  Loader2
 } from "lucide-react";
 import { createClient } from "@/lib/supabase/client";
 import { notificationService, Notification } from "@/services/notification.service";
 import { encryptMessage, decryptMessage } from "@/lib/utils/chat-crypto";
 import SettingsView from "@/components/SettingsView";
 import AdminView from "@/components/AdminView";
+import { UserMenu } from "@/components/UserMenu";
 
 interface DashboardViewProps {
   user: {
+    id: string;
     fullName: string;
     email: string;
     avatarUrl?: string;
@@ -174,12 +179,40 @@ function getGroupAvatarText(name: string): string {
     .slice(0, 3);
 }
 
+const parseDepartureStatus = (value?: string | null) => {
+  if (!value) return { status: "active", code: "—", leader: "Unassigned", meeting: "—", notes: "" };
+  try {
+    if (value.trim().startsWith("{")) {
+      const parsed = JSON.parse(value);
+      return {
+        status: parsed.status || "active",
+        code: parsed.code || "—",
+        leader: parsed.leader || "Unassigned",
+        meeting: parsed.meeting || "—",
+        notes: parsed.notes || "",
+      };
+    }
+  } catch {
+    // fall through
+  }
+  return { status: value, code: "—", leader: "Unassigned", meeting: "—", notes: "" };
+};
+
+const formatDate = (value?: string | null) => {
+  if (!value) return "—";
+  return new Date(value).toLocaleDateString("en-IN", {
+    day: "2-digit",
+    month: "short",
+    year: "numeric",
+  });
+};
+
 export function DashboardView({ user, leads = [], trips = [], initialChatMessages = [] }: DashboardViewProps) {
   const router = useRouter();
   const fileInputRef = useRef<HTMLInputElement>(null);
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
   const firstName = formatFriendlyName(user.fullName);
-  const [currentView, setCurrentView] = useState<"home" | "explore" | "enquiries" | "journeys" | "wishlist" | "enquiry_detail" | "profile" | "messages" | "settings" | "admin">(
+  const [currentView, setCurrentView] = useState<"home" | "explore" | "enquiries" | "bookings" | "journeys" | "wishlist" | "enquiry_detail" | "profile" | "messages" | "settings" | "admin">(
     user.role?.toUpperCase() === "ADMIN" ? "admin" : "home"
   );
   const [activeEnquiryId, setActiveEnquiryId] = useState<string | null>(null);
@@ -187,7 +220,7 @@ export function DashboardView({ user, leads = [], trips = [], initialChatMessage
   const [activeJourneyTab, setActiveJourneyTab] = useState<"upcoming" | "completed">("upcoming");
 
   // Unified routing navigator
-  const navigateToView = (view: "home" | "explore" | "enquiries" | "journeys" | "wishlist" | "enquiry_detail" | "profile" | "messages" | "settings" | "admin", id?: string) => {
+  const navigateToView = (view: "home" | "explore" | "enquiries" | "bookings" | "journeys" | "wishlist" | "enquiry_detail" | "profile" | "messages" | "settings" | "admin", id?: string) => {
     setCurrentView(view);
     if (view === "enquiry_detail" && id) {
       setActiveEnquiryId(id);
@@ -215,7 +248,7 @@ export function DashboardView({ user, leads = [], trips = [], initialChatMessage
       const params = new URLSearchParams(window.location.search);
       const viewParam = params.get("view");
       const idParam = params.get("id");
-      if (viewParam === "home" || viewParam === "explore" || viewParam === "enquiries" || viewParam === "journeys" || viewParam === "wishlist" || viewParam === "enquiry_detail" || viewParam === "profile" || viewParam === "messages" || viewParam === "settings" || viewParam === "admin") {
+      if (viewParam === "home" || viewParam === "explore" || viewParam === "enquiries" || viewParam === "bookings" || viewParam === "journeys" || viewParam === "wishlist" || viewParam === "enquiry_detail" || viewParam === "profile" || viewParam === "messages" || viewParam === "settings" || viewParam === "admin") {
         setCurrentView(viewParam as any);
         if (viewParam === "enquiry_detail" && idParam) {
           setActiveEnquiryId(idParam);
@@ -307,6 +340,33 @@ export function DashboardView({ user, leads = [], trips = [], initialChatMessage
       document.removeEventListener("mousedown", handleClickOutside);
     };
   }, []);
+
+  // Bookings State & Logic for Traveler
+  const [bookings, setBookings] = useState<any[]>([]);
+  const [bookingsLoading, setBookingsLoading] = useState(true);
+
+  const loadBookings = async () => {
+    try {
+      setBookingsLoading(true);
+      const supabase = createClient();
+      const { data, error } = await supabase
+        .from("bookings")
+        .select("*, trips(*), profiles(*), travelers(*), payments(*), trip_departures(*)")
+        .eq("user_id", user.id)
+        .order("created_at", { ascending: false });
+
+      if (error) throw error;
+      setBookings(data || []);
+    } catch (err) {
+      console.error("Failed to load traveler bookings:", err);
+    } finally {
+      setBookingsLoading(false);
+    }
+  };
+
+  useEffect(() => {
+    loadBookings();
+  }, [user.id]);
 
   const notificationUnreadCount = notifications.filter((n) => !n.is_read).length;
 
@@ -1934,6 +1994,13 @@ export function DashboardView({ user, leads = [], trips = [], initialChatMessage
               My Enquiries
             </button>
             <button 
+              onClick={() => { navigateToView("bookings"); setMobileMenuOpen(false); }}
+              className={`flex items-center gap-3.5 px-4 py-3 text-sm font-semibold rounded-2xl w-full text-left transition-all ${currentView === 'bookings' ? 'bg-nomichi-rust/10 text-nomichi-rust' : 'text-nomichi-ink/75 hover:bg-nomichi-sand/10 hover:text-nomichi-rust'}`}
+            >
+              <CalendarDays className="w-5 h-5 stroke-[2px]" />
+              My Bookings
+            </button>
+            <button 
               onClick={() => { navigateToView("journeys"); setMobileMenuOpen(false); }}
               className={`flex items-center gap-3.5 px-4 py-3 text-sm font-semibold rounded-2xl w-full text-left transition-all ${currentView === 'journeys' ? 'bg-nomichi-rust/10 text-nomichi-rust' : 'text-nomichi-ink/75 hover:bg-nomichi-sand/10 hover:text-nomichi-rust'}`}
             >
@@ -2126,112 +2193,142 @@ export function DashboardView({ user, leads = [], trips = [], initialChatMessage
             </div>
 
             {/* Profile Avatar / Dropdown */}
-            <button 
-              onClick={() => navigateToView("profile")}
-              className="flex items-center gap-3 text-left hover:opacity-90 transition-opacity bg-transparent border-0 cursor-pointer p-0"
-            >
-              <div className="w-9 h-9 rounded-full bg-[#FFEFEA] text-[#FF5B26] border border-[#FF5B26]/10 flex items-center justify-center font-bold text-sm shrink-0 overflow-hidden">
-                {profileData?.avatar_url ? (
-                  <img 
-                    src={profileData.avatar_url} 
-                    alt="Profile Avatar" 
-                    className="w-full h-full object-cover"
-                  />
-                ) : (
-                  formatFriendlyName(user.fullName).charAt(0).toUpperCase() || "T"
-                )}
-              </div>
-              <div className="hidden sm:flex flex-col text-left">
-                <span className="text-xs font-bold text-nomichi-ink leading-none mb-0.5">
-                  {formatFullName(user.fullName)}
-                </span>
-                <span className="text-[10px] font-semibold text-nomichi-ink/50 leading-none">
-                  Explorer Member
-                </span>
-              </div>
-              <ChevronDown className="w-4 h-4 text-nomichi-ink/50" />
-            </button>
+            <UserMenu 
+              user={{
+                fullName: formatFullName(user.fullName),
+                avatarUrl: profileData?.avatar_url || user.avatarUrl,
+                email: user.email
+              }}
+              onNavigate={navigateToView}
+            />
           </div>
         </header>
 
-        {/* Mobile menu panel */}
+        {/* Mobile menu drawer backdrop */}
         {mobileMenuOpen && (
-          <div className="xl:hidden bg-nomichi-white border-b border-nomichi-sand/15 p-5 space-y-4 absolute top-[68px] left-0 w-full z-40 shadow-xl transition-all">
-            <nav className="flex flex-col gap-3 font-semibold text-sm">
-              <button 
-                onClick={() => { navigateToView("home"); setMobileMenuOpen(false); }}
-                className={`px-3 py-2.5 rounded-xl flex items-center gap-3 text-left w-full ${currentView === 'home' ? 'bg-nomichi-rust/10 text-nomichi-rust' : 'text-nomichi-ink/70'}`}
-              >
-                <Home className="w-4.5 h-4.5" /> Home
-              </button>
-              <button 
-                onClick={() => { navigateToView("explore"); setMobileMenuOpen(false); }}
-                className={`px-3 py-2.5 rounded-xl flex items-center gap-3 text-left w-full ${currentView === 'explore' ? 'bg-nomichi-rust/10 text-nomichi-rust' : 'text-nomichi-ink/70'}`}
-              >
-                <Compass className="w-4.5 h-4.5" /> Explore Trips
-              </button>
-              <button 
-                onClick={() => { navigateToView("enquiries"); setMobileMenuOpen(false); }}
-                className={`px-3 py-2.5 rounded-xl flex items-center gap-3 text-left w-full ${currentView === 'enquiries' ? 'bg-nomichi-rust/10 text-nomichi-rust' : 'text-nomichi-ink/70'}`}
-              >
-                <ClipboardList className="w-4.5 h-4.5" /> My Enquiries
-              </button>
-              {user.role?.toUpperCase() === "ADMIN" && (
-                <button 
-                  onClick={() => { navigateToView("admin"); setMobileMenuOpen(false); }}
-                  className="px-3 py-2.5 rounded-xl flex items-center gap-3 text-left w-full text-nomichi-ink/70 hover:bg-[#FAF8F4] hover:text-[#FF5B26]"
-                >
-                  <Shield className="w-4.5 h-4.5" /> Admin Panel
-                </button>
-              )}
-              <a href="/auth/signout" className="px-3 py-2.5 rounded-xl text-nomichi-rust flex items-center gap-3 font-bold text-left">
-                <LogOut className="w-4.5 h-4.5" /> Logout
-              </a>
-              <div className="h-px bg-[#e7e1d5]/40 my-2" />
-              <div className="flex flex-col gap-3.5 pl-3 pt-1">
-                <button 
-                  onClick={() => { navigateToView("explore"); setMobileMenuOpen(false); }}
-                  className="hover:text-[#FF5B26] transition-colors cursor-pointer bg-transparent border-0 font-bold text-xs uppercase tracking-wider text-left text-nomichi-ink/70"
-                >
-                  Destinations
-                </button>
-                <button 
-                  onClick={() => { navigateToView("explore"); setMobileMenuOpen(false); }}
-                  className="hover:text-[#FF5B26] transition-colors cursor-pointer bg-transparent border-0 font-bold text-xs uppercase tracking-wider text-left text-nomichi-ink/70"
-                >
-                  Trips
-                </button>
-                <button 
-                  onClick={() => { navigateToView("home"); setMobileMenuOpen(false); }}
-                  className="hover:text-[#FF5B26] transition-colors cursor-pointer bg-transparent border-0 font-bold text-xs uppercase tracking-wider text-left text-nomichi-ink/70"
-                >
-                  About Us
-                </button>
-                <button 
-                  onClick={() => { navigateToView("home"); setMobileMenuOpen(false); }}
-                  className="hover:text-[#FF5B26] transition-colors cursor-pointer bg-transparent border-0 font-bold text-xs uppercase tracking-wider text-left text-nomichi-ink/70"
-                >
-                  How It Works
-                </button>
-                <button 
-                  onClick={() => { navigateToView("home"); setMobileMenuOpen(false); }}
-                  className="hover:text-[#FF5B26] transition-colors cursor-pointer bg-transparent border-0 font-bold text-xs uppercase tracking-wider text-left text-nomichi-ink/70"
-                >
-                  Community
-                </button>
-                <button 
-                  onClick={() => { navigateToView("home"); setMobileMenuOpen(false); }}
-                  className="hover:text-[#FF5B26] transition-colors cursor-pointer bg-transparent border-0 font-bold text-xs uppercase tracking-wider text-left text-nomichi-ink/70"
-                >
-                  Blog
-                </button>
-              </div>
-            </nav>
-          </div>
+          <div 
+            className="fixed inset-0 bg-black/60 z-50 xl:hidden backdrop-blur-sm transition-opacity animate-in fade-in duration-300"
+            onClick={() => setMobileMenuOpen(false)}
+          />
         )}
 
+        {/* Mobile menu drawer container */}
+        <div 
+          className={`fixed inset-y-0 left-0 max-w-xs w-[85%] bg-white z-50 xl:hidden shadow-2xl p-6 flex flex-col justify-between overflow-y-auto transition-transform duration-300 ease-in-out ${
+            mobileMenuOpen ? "translate-x-0" : "-translate-x-full"
+          }`}
+        >
+          {/* Top Header */}
+          <div className="flex items-center justify-between pb-6 border-b border-[#e7e1d5]/30">
+            <div className="flex flex-col gap-1 text-left">
+              <img src="/logo.png" alt="Nomichi Logo" className="h-8 w-auto object-contain self-start" />
+              <span className="text-[8px] font-extrabold text-nomichi-rust tracking-[0.2em] uppercase mt-0.5">
+                WANDER • CONNECT • BELONG
+              </span>
+            </div>
+            <button
+              onClick={() => setMobileMenuOpen(false)}
+              className="w-8 h-8 rounded-full border border-[#e7e1d5]/50 hover:bg-[#FAF8F4] flex items-center justify-center text-nomichi-ink/50 cursor-pointer bg-white"
+            >
+              <X className="w-4 h-4" />
+            </button>
+          </div>
+
+          {/* Navigation Links */}
+          <nav className="flex-1 py-6 space-y-1">
+            {[
+              { id: "home", label: "Home", icon: Home },
+              { id: "explore", label: "Explore Trips", icon: Compass },
+              { id: "enquiries", label: "My Enquiries", icon: ClipboardList },
+              { id: "bookings", label: "My Bookings", icon: CalendarDays },
+              { id: "journeys", label: "My Journeys", icon: Map },
+              { id: "wishlist", label: "Wishlist", icon: Heart },
+              { id: "messages", label: "Messages", icon: MessageSquare, badge: displayMessages.length },
+              { id: "profile", label: "Profile", icon: UserIcon },
+              { id: "settings", label: "Settings", icon: Settings },
+            ].map((link) => {
+              const Icon = link.icon;
+              const isActive = currentView === link.id;
+              return (
+                <button
+                  key={link.id}
+                  onClick={() => { navigateToView(link.id as any); setMobileMenuOpen(false); }}
+                  className={`flex items-center justify-between px-4 py-3 text-sm font-semibold rounded-2xl w-full text-left transition-all border-0 bg-transparent cursor-pointer ${
+                    isActive 
+                      ? "bg-[#FFEFEA] text-[#FF5B26]" 
+                      : "text-nomichi-ink/75 hover:bg-nomichi-sand/10 hover:text-[#FF5B26]"
+                  }`}
+                >
+                  <span className="flex items-center gap-3.5">
+                    <Icon className="w-5 h-5 stroke-[2px]" />
+                    {link.label}
+                  </span>
+                  {link.badge !== undefined && link.badge > 0 && (
+                    <span className="w-5 h-5 rounded-full bg-[#FF5B26] text-white text-[10px] font-bold flex items-center justify-center">
+                      {link.badge}
+                    </span>
+                  )}
+                </button>
+              );
+            })}
+          </nav>
+
+          {/* Bottom fixed area */}
+          <div className="space-y-4 pt-6 border-t border-[#e7e1d5]/30">
+            <nav className="space-y-1">
+              <a href="#" className="flex items-center gap-3.5 px-4 py-3 text-sm font-semibold text-nomichi-ink/75 hover:bg-nomichi-sand/10 hover:text-nomichi-rust rounded-2xl transition-all no-underline text-left">
+                <HelpCircle className="w-5 h-5 stroke-[2px]" />
+                Help & Support
+              </a>
+              <a href="/auth/signout" className="flex items-center gap-3.5 px-4 py-3 text-sm font-semibold text-nomichi-rust hover:bg-nomichi-rust/5 rounded-2xl transition-all no-underline text-left">
+                <LogOut className="w-5 h-5 stroke-[2.2px]" />
+                Logout
+              </a>
+            </nav>
+
+            {/* Refer Promo Card */}
+            <div className="bg-gradient-to-br from-[#FFECE5] to-[#FFF6F4] rounded-2xl p-5 border border-[#FF5B26]/15 relative overflow-hidden flex flex-col justify-between h-[150px] shadow-sm text-left">
+              <div className="absolute top-[-10px] right-[-10px] w-20 h-20 bg-[#FF5B26]/10 rounded-full blur-xl pointer-events-none" />
+              <div className="relative z-10 space-y-1">
+                <h4 className="text-xs font-extrabold text-[#FF5B26] tracking-tight">Refer & Travel Together</h4>
+                <p className="text-[10px] text-nomichi-ink/65 leading-relaxed font-bold">
+                  Invite friends for rewards.
+                </p>
+              </div>
+              <button 
+                onClick={() => alert("Invite friends code: " + user.id)}
+                className="bg-white hover:bg-nomichi-rust/5 text-[#FF5B26] border border-[#FF5B26]/30 text-[10px] font-extrabold py-2 px-4 rounded-xl transition-all duration-300 flex items-center justify-center gap-1 relative z-10 w-fit shadow-sm hover:scale-102 cursor-pointer"
+              >
+                Invite Now →
+              </button>
+            </div>
+
+            {/* Social Links & Copyright */}
+            <div className="text-center pt-2 space-y-3">
+              <span className="text-[10px] font-bold uppercase tracking-wider text-nomichi-ink/40">Follow Us</span>
+              <div className="flex items-center justify-center gap-3">
+                <a href="#" className="w-8 h-8 rounded-full border border-[#e7e1d5]/50 flex items-center justify-center text-nomichi-ink/60 hover:text-nomichi-rust transition-colors">
+                  <svg className="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><rect width="20" height="20" x="2" y="2" rx="5" ry="5"/><path d="M16 11.37A4 4 0 1 1 12.63 8 4 4 0 0 1 16 11.37z"/><line x1="17.5" x2="17.51" y1="6.5" y2="6.5"/></svg>
+                </a>
+                <a href="#" className="w-8 h-8 rounded-full border border-[#e7e1d5]/50 flex items-center justify-center text-nomichi-ink/60 hover:text-[#FF5B26] transition-colors">
+                  <svg className="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M18 2h-3a5 5 0 0 0-5 5v3H7v4h3v8h4v-8h3l1-4h-4V7a1 1 0 0 1 1-1h3z"/></svg>
+                </a>
+                <a href="#" className="w-8 h-8 rounded-full border border-[#e7e1d5]/50 flex items-center justify-center text-nomichi-ink/60 hover:text-[#FF5B26] transition-colors">
+                  <svg className="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M2.5 17a24.12 24.12 0 0 1 0-10 2 2 0 0 1 1.4-1.4 49.56 49.56 0 0 1 16.2 0A2 2 0 0 1 21.5 7a24.12 24.12 0 0 1 0 10 2 2 0 0 1-1.4 1.4 49.55 49.55 0 0 1-16.2 0A2 2 0 0 1 2.5 17z"/><polygon points="10 15 15 12 10 9"/></svg>
+                </a>
+                <a href="#" className="w-8 h-8 rounded-full border border-[#e7e1d5]/50 flex items-center justify-center text-nomichi-ink/60 hover:text-[#FF5B26] transition-colors">
+                  <svg className="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M22 4s-.7 2.1-2 3.4c1.6 10-9.4 17.3-18 11.6 2.2.1 4.4-.6 6-2C3 15.5.5 9.6 3 5c2.2 2.6 5.6 4.1 9 4-.9-4.2 4-6.6 7-3.8 1.1 0 3-1.2 3-1.2z"/></svg>
+                </a>
+              </div>
+              <p className="text-[10px] text-nomichi-ink/40 font-medium">
+                © 2024 Nomichi. All rights reserved.
+              </p>
+            </div>
+          </div>
+        </div>
+
         {/* Main Content Dashboard Layout */}
-        <div className="p-6 lg:p-8 space-y-8 max-w-[1300px] w-full mx-auto">
+        <div className="p-6 lg:p-8 space-y-8 max-w-[1300px] w-full mx-auto pb-24 xl:pb-8">
 
           {currentView === "home" ? (
             <>
@@ -2284,15 +2381,18 @@ export function DashboardView({ user, leads = [], trips = [], initialChatMessage
                   )}
                 </div>
 
-                <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-4 items-end">
+                <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-4 items-center">
                   {/* Preference dropdown */}
-                  <div className="space-y-1.5">
-                    <label className="block text-[10px] font-bold text-nomichi-ink/55 uppercase tracking-wider">Travel Preference</label>
-                    <div className="relative flex items-center">
+                  <div className="bg-[#FAF8F4] border border-[#e7e1d5]/60 rounded-2xl px-4 py-2.5 flex items-center gap-3 relative">
+                    <div className="w-8 h-8 rounded-full bg-[#FFFFFF]/80 flex items-center justify-center text-nomichi-ink/65 shrink-0 shadow-sm border border-[#e7e1d5]/20">
+                      <SlidersHorizontal className="w-4 h-4" />
+                    </div>
+                    <div className="flex-1 min-w-0 text-left">
+                      <span className="block text-[8px] font-extrabold text-nomichi-ink/40 uppercase tracking-widest leading-none">Travel Preference</span>
                       <select 
                         value={prefFilter}
                         onChange={(e) => setPrefFilter(e.target.value)}
-                        className="w-full bg-[#FAF8F4] border border-[#e7e1d5]/60 rounded-xl pl-3 pr-8 py-2.5 text-xs font-semibold text-nomichi-ink focus:outline-none focus:border-nomichi-rust cursor-pointer appearance-none"
+                        className="w-full bg-transparent border-0 p-0 text-xs font-bold text-nomichi-ink focus:outline-none cursor-pointer appearance-none mt-1.5 leading-none"
                       >
                         <option value="All Preferences">All Preferences</option>
                         <option value="Solo Traveller">Solo Traveller</option>
@@ -2301,19 +2401,21 @@ export function DashboardView({ user, leads = [], trips = [], initialChatMessage
                         <option value="Nature">Nature</option>
                         <option value="Small Groups">Small Groups</option>
                       </select>
-                      <ChevronDown className="w-3.5 h-3.5 text-nomichi-ink/40 absolute right-3 pointer-events-none" />
                     </div>
+                    <ChevronDown className="w-3.5 h-3.5 text-nomichi-ink/40 pointer-events-none ml-2 shrink-0" />
                   </div>
 
-                  {/* Month dropdown with calendar icon */}
-                  <div className="space-y-1.5">
-                    <label className="block text-[10px] font-bold text-nomichi-ink/55 uppercase tracking-wider">Preferred Month</label>
-                    <div className="relative flex items-center">
-                      <Calendar className="w-3.5 h-3.5 text-nomichi-ink/40 absolute left-3 pointer-events-none" />
+                  {/* Month dropdown */}
+                  <div className="bg-[#FAF8F4] border border-[#e7e1d5]/60 rounded-2xl px-4 py-2.5 flex items-center gap-3 relative">
+                    <div className="w-8 h-8 rounded-full bg-[#FFFFFF]/80 flex items-center justify-center text-nomichi-ink/65 shrink-0 shadow-sm border border-[#e7e1d5]/20">
+                      <Calendar className="w-4 h-4" />
+                    </div>
+                    <div className="flex-1 min-w-0 text-left">
+                      <span className="block text-[8px] font-extrabold text-nomichi-ink/40 uppercase tracking-widest leading-none">Preferred Month</span>
                       <select 
                         value={monthFilter}
                         onChange={(e) => setMonthFilter(e.target.value)}
-                        className="w-full bg-[#FAF8F4] border border-[#e7e1d5]/60 rounded-xl pl-9 pr-8 py-2.5 text-xs font-semibold text-nomichi-ink focus:outline-none focus:border-nomichi-rust cursor-pointer appearance-none"
+                        className="w-full bg-transparent border-0 p-0 text-xs font-bold text-nomichi-ink focus:outline-none cursor-pointer appearance-none mt-1.5 leading-none"
                       >
                         <option value="Any Month">Any Month</option>
                         <option value="January">January</option>
@@ -2329,18 +2431,41 @@ export function DashboardView({ user, leads = [], trips = [], initialChatMessage
                         <option value="November">November</option>
                         <option value="December">December</option>
                       </select>
-                      <ChevronDown className="w-3.5 h-3.5 text-nomichi-ink/40 absolute right-3 pointer-events-none" />
                     </div>
+                    <ChevronDown className="w-3.5 h-3.5 text-nomichi-ink/40 pointer-events-none ml-2 shrink-0" />
+                  </div>
+
+                  {/* Location dropdown */}
+                  <div className="bg-[#FAF8F4] border border-[#e7e1d5]/60 rounded-2xl px-4 py-2.5 flex items-center gap-3 relative">
+                    <div className="w-8 h-8 rounded-full bg-[#FFFFFF]/80 flex items-center justify-center text-nomichi-ink/65 shrink-0 shadow-sm border border-[#e7e1d5]/20">
+                      <MapPin className="w-4 h-4" />
+                    </div>
+                    <div className="flex-1 min-w-0 text-left">
+                      <span className="block text-[8px] font-extrabold text-nomichi-ink/40 uppercase tracking-widest leading-none">Location</span>
+                      <select 
+                        value={regionFilter}
+                        onChange={(e) => setRegionFilter(e.target.value)}
+                        className="w-full bg-transparent border-0 p-0 text-xs font-bold text-nomichi-ink focus:outline-none cursor-pointer appearance-none mt-1.5 leading-none"
+                      >
+                        <option value="Any">Any Location</option>
+                        <option value="In Country">In Country</option>
+                        <option value="Out Country">Out Country</option>
+                      </select>
+                    </div>
+                    <ChevronDown className="w-3.5 h-3.5 text-nomichi-ink/40 pointer-events-none ml-2 shrink-0" />
                   </div>
 
                   {/* Trip Type dropdown */}
-                  <div className="space-y-1.5">
-                    <label className="block text-[10px] font-bold text-nomichi-ink/55 uppercase tracking-wider">Trip Type</label>
-                    <div className="relative flex items-center">
+                  <div className="bg-[#FAF8F4] border border-[#e7e1d5]/60 rounded-2xl px-4 py-2.5 flex items-center gap-3 relative">
+                    <div className="w-8 h-8 rounded-full bg-[#FFFFFF]/80 flex items-center justify-center text-nomichi-ink/65 shrink-0 shadow-sm border border-[#e7e1d5]/20">
+                      <Briefcase className="w-4 h-4" />
+                    </div>
+                    <div className="flex-1 min-w-0 text-left">
+                      <span className="block text-[8px] font-extrabold text-nomichi-ink/40 uppercase tracking-widest leading-none">Trip Type</span>
                       <select 
                         value={typeFilter}
                         onChange={(e) => setTypeFilter(e.target.value)}
-                        className="w-full bg-[#FAF8F4] border border-[#e7e1d5]/60 rounded-xl pl-3 pr-8 py-2.5 text-xs font-semibold text-nomichi-ink focus:outline-none focus:border-nomichi-rust cursor-pointer appearance-none"
+                        className="w-full bg-transparent border-0 p-0 text-xs font-bold text-nomichi-ink focus:outline-none cursor-pointer appearance-none mt-1.5 leading-none"
                       >
                         <option value="All Types">All Types</option>
                         <option value="Cultural">Cultural</option>
@@ -2349,53 +2474,39 @@ export function DashboardView({ user, leads = [], trips = [], initialChatMessage
                         <option value="Explorer">Explorer</option>
                         <option value="Adventure">Adventure</option>
                       </select>
-                      <ChevronDown className="w-3.5 h-3.5 text-nomichi-ink/40 absolute right-3 pointer-events-none" />
                     </div>
+                    <ChevronDown className="w-3.5 h-3.5 text-nomichi-ink/40 pointer-events-none ml-2 shrink-0" />
                   </div>
 
-                  {/* In Country / Out Country */}
-                  <div className="space-y-1.5">
-                    <label className="block text-[10px] font-bold text-nomichi-ink/55 uppercase tracking-wider">Location</label>
-                    <div className="relative flex items-center">
-                      <select 
-                        value={regionFilter}
-                        onChange={(e) => setRegionFilter(e.target.value)}
-                        className="w-full bg-[#FAF8F4] border border-[#e7e1d5]/60 rounded-xl pl-3 pr-8 py-2.5 text-xs font-semibold text-nomichi-ink focus:outline-none focus:border-nomichi-rust cursor-pointer appearance-none"
-                      >
-                        <option value="Any">Any Location</option>
-                        <option value="In Country">In Country</option>
-                        <option value="Out Country">Out Country</option>
-                      </select>
-                      <ChevronDown className="w-3.5 h-3.5 text-nomichi-ink/40 absolute right-3 pointer-events-none" />
+                  {/* Budget Range dropdown */}
+                  <div className="bg-[#FAF8F4] border border-[#e7e1d5]/60 rounded-2xl px-4 py-2.5 flex items-center gap-3 relative">
+                    <div className="w-8 h-8 rounded-full bg-[#FFFFFF]/80 flex items-center justify-center text-nomichi-ink/65 shrink-0 shadow-sm border border-[#e7e1d5]/20">
+                      <Wallet className="w-4 h-4" />
                     </div>
-                  </div>
-
-                  {/* Budget Range */}
-                  <div className="space-y-1.5">
-                    <label className="block text-[10px] font-bold text-nomichi-ink/55 uppercase tracking-wider">Budget Range</label>
-                    <div className="relative flex items-center">
+                    <div className="flex-1 min-w-0 text-left">
+                      <span className="block text-[8px] font-extrabold text-nomichi-ink/40 uppercase tracking-widest leading-none">Budget Range</span>
                       <select 
                         value={budgetFilter}
                         onChange={(e) => setBudgetFilter(e.target.value)}
-                        className="w-full bg-[#FAF8F4] border border-[#e7e1d5]/60 rounded-xl pl-3 pr-8 py-2.5 text-xs font-semibold text-nomichi-ink focus:outline-none focus:border-nomichi-rust cursor-pointer appearance-none"
+                        className="w-full bg-transparent border-0 p-0 text-xs font-bold text-nomichi-ink focus:outline-none cursor-pointer appearance-none mt-1.5 leading-none"
                       >
                         <option value="Any Budget">Any Budget</option>
                         <option value="Under ₹80,000">Under ₹80,000</option>
                         <option value="₹80,000 - ₹1,20,000">₹80,000 - ₹1,20,000</option>
                         <option value="Over ₹1,20,000">Over ₹1,20,000</option>
                       </select>
-                      <ChevronDown className="w-3.5 h-3.5 text-nomichi-ink/40 absolute right-3 pointer-events-none" />
                     </div>
+                    <ChevronDown className="w-3.5 h-3.5 text-nomichi-ink/40 pointer-events-none ml-2 shrink-0" />
                   </div>
-
-                  {/* Search Button */}
-                  <button 
-                    onClick={() => setIsFiltered(true)}
-                    className="w-full bg-nomichi-rust hover:bg-[#b04b1e] text-nomichi-white text-xs font-bold py-2.5 rounded-xl transition-all shadow-sm flex items-center justify-center gap-1.5 h-[38px] cursor-pointer"
-                  >
-                    Search Trips
-                  </button>
                 </div>
+
+                {/* Search Button */}
+                <button 
+                  onClick={() => setIsFiltered(true)}
+                  className="w-full bg-nomichi-rust hover:bg-[#b04b1e] text-nomichi-white text-xs font-bold py-3.5 rounded-2xl transition-all shadow-md flex items-center justify-center gap-1.5 h-[48px] cursor-pointer mt-4 border-0"
+                >
+                  Search Trips
+                </button>
               </div>
 
 
@@ -4163,6 +4274,128 @@ export function DashboardView({ user, leads = [], trips = [], initialChatMessage
                 </div>
               )}
             </div>
+          ) : currentView === "bookings" ? (
+            <div className="space-y-6 text-left animate-in fade-in duration-300">
+              <div className="flex flex-col gap-2">
+                <h2 className="text-2xl font-display font-extrabold text-nomichi-ink tracking-tight">My Bookings</h2>
+                <p className="text-xs text-nomichi-ink/50 font-medium">Manage your active bookings, view invoices, and complete payments.</p>
+              </div>
+
+              {bookingsLoading ? (
+                <div className="flex justify-center py-20">
+                  <Loader2 className="w-8 h-8 text-[#FF5B26] animate-spin" />
+                </div>
+              ) : bookings.length > 0 ? (
+                <div className="grid grid-cols-1 gap-6">
+                  {bookings.map((booking) => {
+                    const departureMeta = parseDepartureStatus(booking.trip_departures?.status);
+                    const formattedStartDate = formatDate(booking.trip_departures?.start_date);
+                    const formattedEndDate = formatDate(booking.trip_departures?.end_date);
+                    const priceFormatted = `₹${Number(booking.price || 0).toLocaleString("en-IN")}`;
+                    
+                    // Sum completed payments
+                    const completedPayments = (booking.payments || [])
+                      .filter((p: any) => p.status === "completed")
+                      .reduce((sum: number, p: any) => sum + Number(p.amount), 0);
+                    const pendingAmount = Math.max(0, Number(booking.price || 0) - completedPayments);
+
+                    return (
+                      <div key={booking.id} className="bg-white rounded-3xl border border-[#e7e1d5]/40 shadow-sm p-6 lg:p-8 flex flex-col lg:flex-row gap-6 justify-between items-start lg:items-center">
+                        <div className="space-y-4 max-w-xl">
+                          <div className="space-y-1">
+                            <span className="text-[10px] font-black uppercase tracking-wider text-[#FF5B26] px-2 py-0.5 rounded bg-[#FFEFEA] border border-[#FF5B26]/10 inline-block">
+                              Booking Reference: {booking.id.slice(0, 8).toUpperCase()}
+                            </span>
+                            <h3 className="text-lg font-display font-bold text-nomichi-ink">{booking.trips?.title || "Trip Details"}</h3>
+                            <div className="flex flex-wrap items-center gap-x-4 gap-y-2 text-xs text-nomichi-ink/60 font-semibold mt-1">
+                              <span className="flex items-center gap-1.5">
+                                <MapPin className="w-4 h-4 text-nomichi-sand" />
+                                {booking.trips?.destination || "—"}
+                              </span>
+                              <span className="flex items-center gap-1.5">
+                                <Calendar className="w-4 h-4 text-nomichi-sand" />
+                                {formattedStartDate} {formattedEndDate ? ` - ${formattedEndDate}` : ""}
+                              </span>
+                              {departureMeta.code && (
+                                <span className="font-mono bg-[#FAF8F4] px-1.5 py-0.5 rounded border border-[#e7e1d5]/30">
+                                  {departureMeta.code}
+                                </span>
+                              )}
+                            </div>
+                          </div>
+
+                          <div className="grid grid-cols-2 md:grid-cols-4 gap-4 pt-2">
+                            <div>
+                              <span className="text-[9px] font-extrabold text-nomichi-ink/40 uppercase tracking-wider block">Price</span>
+                              <span className="text-xs font-bold text-nomichi-ink mt-0.5 block">{priceFormatted}</span>
+                            </div>
+                            <div>
+                              <span className="text-[9px] font-extrabold text-nomichi-ink/40 uppercase tracking-wider block">Total Paid</span>
+                              <span className="text-xs font-bold text-emerald-600 mt-0.5 block">₹{completedPayments.toLocaleString("en-IN")}</span>
+                            </div>
+                            {pendingAmount > 0 && (
+                              <div>
+                                <span className="text-[9px] font-extrabold text-nomichi-ink/40 uppercase tracking-wider block">Balance Due</span>
+                                <span className="text-xs font-bold text-amber-600 mt-0.5 block">₹{pendingAmount.toLocaleString("en-IN")}</span>
+                              </div>
+                            )}
+                            <div>
+                              <span className="text-[9px] font-extrabold text-nomichi-ink/40 uppercase tracking-wider block">Payment Status</span>
+                              <span className={`inline-flex items-center rounded-full px-2 py-0.5 text-[10px] font-bold mt-1 ${
+                                booking.payment_status === "paid"
+                                  ? "bg-emerald-50 text-emerald-700 border border-emerald-200"
+                                  : booking.payment_status === "partial"
+                                  ? "bg-amber-50 text-amber-700 border border-amber-200"
+                                  : "bg-red-50 text-red-700 border border-red-200"
+                              }`}>
+                                {booking.payment_status.toUpperCase()}
+                              </span>
+                            </div>
+                          </div>
+                        </div>
+
+                        <div className="flex flex-col sm:flex-row gap-3 w-full lg:w-auto shrink-0 pt-4 lg:pt-0 border-t lg:border-t-0 border-[#e7e1d5]/20">
+                          {booking.payment_status !== "paid" && (
+                            <button
+                              onClick={() => {
+                                alert(`Redirecting to payment gateway for Booking #${booking.id.slice(0, 8).toUpperCase()}`);
+                              }}
+                              className="px-5 py-2.5 bg-[#FF5B26] hover:bg-[#b04b1e] text-white text-xs font-bold rounded-xl transition-all shadow-md cursor-pointer border-0 w-full sm:w-auto"
+                            >
+                              Pay Balance
+                            </button>
+                          )}
+                          <button
+                            onClick={() => {
+                              alert(`Generating invoice for Booking #${booking.id.slice(0, 8).toUpperCase()}...`);
+                            }}
+                            className="px-5 py-2.5 border border-[#e7e1d5] hover:bg-[#FAF8F4] text-nomichi-ink/80 text-xs font-bold rounded-xl transition-all cursor-pointer bg-white w-full sm:w-auto"
+                          >
+                            View Invoice
+                          </button>
+                        </div>
+                      </div>
+                    );
+                  })}
+                </div>
+              ) : (
+                <div className="text-center py-20 bg-nomichi-white rounded-3xl border border-[#e7e1d5]/40 p-10 max-w-lg mx-auto shadow-sm flex flex-col items-center">
+                  <div className="w-16 h-16 rounded-full bg-nomichi-sand/10 flex items-center justify-center text-nomichi-rust mb-6">
+                    <Map className="w-8 h-8 stroke-[1.5px]" />
+                  </div>
+                  <h3 className="text-xl font-display font-semibold text-nomichi-ink mb-2">No Bookings Yet</h3>
+                  <p className="text-nomichi-ink/60 max-w-sm font-light leading-relaxed text-xs">
+                    You don't have any registered trip bookings. Head over to our explore tab to book your next offbeat journey!
+                  </p>
+                  <button
+                    onClick={() => navigateToView("explore")}
+                    className="mt-6 px-6 py-3 bg-[#FF5B26] hover:bg-[#b04b1e] text-white font-bold text-xs rounded-xl shadow-md transition-all cursor-pointer border-0"
+                  >
+                    Explore Trips
+                  </button>
+                </div>
+              )}
+            </div>
           ) : currentView === "profile" ? (
             <div className="space-y-8 animate-in fade-in duration-300 relative">
               <input 
@@ -5845,6 +6078,32 @@ export function DashboardView({ user, leads = [], trips = [], initialChatMessage
         </div>
 
       </main>
+
+      {/* 3. MOBILE BOTTOM NAVIGATION BAR */}
+      <div className="xl:hidden fixed bottom-0 left-0 right-0 bg-white border-t border-[#e7e1d5]/40 py-2 px-6 flex items-center justify-between z-40 shadow-[0_-2px_10px_rgba(0,0,0,0.05)]" style={{ paddingBottom: "calc(env(safe-area-inset-bottom) + 6px)" }}>
+        {[
+          { id: "home", label: "Home", icon: Home },
+          { id: "explore", label: "Explore", icon: Compass },
+          { id: "enquiries", label: "My Enquiries", icon: ClipboardList },
+          { id: "wishlist", label: "Wishlist", icon: Heart },
+          { id: "profile", label: "Profile", icon: UserIcon },
+        ].map((tab) => {
+          const Icon = tab.icon;
+          const isActive = currentView === tab.id;
+          return (
+            <button
+              key={tab.id}
+              onClick={() => navigateToView(tab.id as any)}
+              className="flex flex-col items-center gap-1 border-0 bg-transparent cursor-pointer py-1"
+            >
+              <Icon className={`w-5.5 h-5.5 transition-colors ${isActive ? "text-[#FF5B26]" : "text-nomichi-ink/50"}`} />
+              <span className={`text-[9px] font-bold tracking-tight transition-colors ${isActive ? "text-[#FF5B26]" : "text-nomichi-ink/40"}`}>
+                {tab.label}
+              </span>
+            </button>
+          );
+        })}
+      </div>
 
     </div>
   );

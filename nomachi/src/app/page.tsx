@@ -115,6 +115,7 @@ export default async function Home({ searchParams }: PageProps) {
   }
 
   const userData = user ? {
+    id: user.id,
     fullName: user.user_metadata?.full_name || user.email?.split("@")[0] || "User",
     avatarUrl: user.user_metadata?.avatar_url,
     email: user.email || "",
