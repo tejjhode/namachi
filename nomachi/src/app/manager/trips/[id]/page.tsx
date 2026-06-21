@@ -86,17 +86,33 @@ export default async function ManagerTripDetailsPage({ params }: PageProps) {
       .eq("trip_id", id),
     supabase
       .from("trip_departures")
-      .select("id, status, created_at")
+      .select("*")
       .eq("trip_id", id),
   ]);
 
   const leads = (leadsResult.data || []) as Array<{ status?: string | null; group_size?: number | null }>;
-  const departures = (departuresResult.data || []) as Array<{ status?: string | null }>;
+  const departures = (departuresResult.data || []) as any[];
 
   const travellers = leads.reduce((sum, lead) => sum + (lead.group_size || 1), 0);
   const enquiries = leads.length;
   const confirmed = leads.filter((lead) => ["converted", "confirmed"].includes((lead.status || "").toLowerCase())).length;
-  const activeDepartures = departures.filter((departure) => (departure.status || "").toLowerCase() === "active").length;
+  
+  const activeDepartures = departures.filter((departure) => {
+    let depStatusLabel = "Active";
+    if (departure.status && typeof departure.status === "string") {
+      try {
+        if (departure.status.startsWith("{")) {
+          const parsed = JSON.parse(departure.status);
+          depStatusLabel = parsed.status || "active";
+        } else {
+          depStatusLabel = departure.status;
+        }
+      } catch {
+        depStatusLabel = departure.status;
+      }
+    }
+    return depStatusLabel.toLowerCase() === "active";
+  }).length;
 
   return (
     <ManagerTripDetailsClient
@@ -107,6 +123,7 @@ export default async function ManagerTripDetailsPage({ params }: PageProps) {
       }}
       trip={tripRow}
       creator={(creatorResult.data as { full_name?: string | null; avatar_url?: string | null; role?: string | null } | null) || null}
+      departures={departures}
       stats={{
         travellers,
         enquiries,

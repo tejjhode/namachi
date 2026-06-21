@@ -834,6 +834,38 @@ export const taskService = {
                   payment_status: "pending",
                 });
 
+                // Reduce seats left for departure and trip
+                try {
+                  if (departureId) {
+                    const { data: depData } = await supabase
+                      .from("trip_departures")
+                      .select("seats_left")
+                      .eq("id", departureId)
+                      .maybeSingle();
+                    if (depData && typeof depData.seats_left === "number") {
+                      await supabase
+                        .from("trip_departures")
+                        .update({ seats_left: Math.max(0, depData.seats_left - 1) })
+                        .eq("id", departureId);
+                    }
+                  }
+                  if (leadData.trip_id) {
+                    const { data: tripData } = await supabase
+                      .from("trips")
+                      .select("seats_left")
+                      .eq("id", leadData.trip_id)
+                      .maybeSingle();
+                    if (tripData && typeof tripData.seats_left === "number") {
+                      await supabase
+                        .from("trips")
+                        .update({ seats_left: Math.max(0, tripData.seats_left - 1) })
+                        .eq("id", leadData.trip_id);
+                    }
+                  }
+                } catch (seatErr) {
+                  console.error("Failed to decrement seats left during booking creation:", seatErr);
+                }
+
                 // Create corresponding traveler
                 await travelerService.createTraveler({
                   booking_id: booking.id,
@@ -899,18 +931,53 @@ export const taskService = {
               try {
                 const { data: booking } = await supabase
                   .from("bookings")
-                  .select("id")
+                  .select("id, departure_id")
                   .eq("lead_id", task.source_id)
                   .maybeSingle();
 
                 if (booking?.id) {
+                  const oldDepartureId = booking.departure_id;
+                  const newDepartureId = options.departureId;
+
                   await supabase
                     .from("bookings")
-                    .update({ departure_id: options.departureId })
+                    .update({ departure_id: newDepartureId })
                     .eq("id", booking.id);
+
+                  if (oldDepartureId !== newDepartureId) {
+                    // 1. Re-increment old departure seats
+                    if (oldDepartureId) {
+                      const { data: oldDep } = await supabase
+                        .from("trip_departures")
+                        .select("seats_left")
+                        .eq("id", oldDepartureId)
+                        .maybeSingle();
+                      if (oldDep && typeof oldDep.seats_left === "number") {
+                        await supabase
+                          .from("trip_departures")
+                          .update({ seats_left: oldDep.seats_left + 1 })
+                          .eq("id", oldDepartureId);
+                      }
+                    }
+
+                    // 2. Decrement new departure seats
+                    if (newDepartureId) {
+                      const { data: newDep } = await supabase
+                        .from("trip_departures")
+                        .select("seats_left")
+                        .eq("id", newDepartureId)
+                        .maybeSingle();
+                      if (newDep && typeof newDep.seats_left === "number") {
+                        await supabase
+                          .from("trip_departures")
+                          .update({ seats_left: Math.max(0, newDep.seats_left - 1) })
+                          .eq("id", newDepartureId);
+                      }
+                    }
+                  }
                 }
               } catch (bErr) {
-                console.error("Failed to update booking departure ID:", bErr);
+                console.error("Failed to update booking departure ID and balance seats:", bErr);
               }
             }
 

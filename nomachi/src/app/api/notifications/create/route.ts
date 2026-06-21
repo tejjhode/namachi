@@ -63,13 +63,15 @@ export async function POST(request: Request) {
             titleLower.includes("call") ||
             titleLower.includes("scheduled") ||
             titleLower.includes("vibe check") ||
+            titleLower.includes("brochure") ||
             typeLower.includes("booking") ||
             typeLower.includes("payment") ||
             typeLower.includes("welcome") ||
             typeLower.includes("enquiry") ||
             typeLower.includes("assign") ||
             typeLower.includes("communication") ||
-            typeLower.includes("vibe check");
+            typeLower.includes("vibe check") ||
+            typeLower.includes("brochure");
           console.log(`[Create Notification API] Role traveler matchesEmail: ${matchesEmail}`);
           if (matchesEmail && profile.email) {
             sendEmailTo = profile.email;
@@ -110,9 +112,11 @@ export async function POST(request: Request) {
             titleLower.includes("payment reminder") ||
             titleLower.includes("departure reminder") ||
             titleLower.includes("trip starts tomorrow") ||
+            titleLower.includes("brochure") ||
             typeLower.includes("booking confirmed") ||
             typeLower.includes("payment reminder") ||
-            typeLower.includes("departure reminder");
+            typeLower.includes("departure reminder") ||
+            typeLower.includes("brochure");
           if (matchesWA && profile.phone) {
             sendWATo = profile.phone;
           }

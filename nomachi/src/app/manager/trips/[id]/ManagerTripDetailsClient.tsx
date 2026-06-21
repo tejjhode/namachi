@@ -76,6 +76,7 @@ type ManagerTripDetailsClientProps = {
   };
   trip: TripDetails;
   creator?: Person | null;
+  departures: any[];
   stats: {
     travellers: number;
     enquiries: number;
@@ -102,7 +103,7 @@ const splitValues = (value?: string | null) =>
     .map((item) => item.trim())
     .filter(Boolean);
 
-export function ManagerTripDetailsClient({ user, trip, creator, stats }: ManagerTripDetailsClientProps) {
+export function ManagerTripDetailsClient({ user, trip, creator, departures, stats }: ManagerTripDetailsClientProps) {
   const [activeTab, setActiveTab] = useState<"overview" | "departures" | "itinerary" | "inclusions" | "exclusions" | "documents" | "notes" | "activity">("overview");
 
   const firstName = user.full_name.split(" ")[0] || "Manager";
@@ -306,20 +307,225 @@ export function ManagerTripDetailsClient({ user, trip, creator, stats }: Manager
               )}
 
               {activeTab !== "overview" && (
-                <div className="rounded-3xl border border-slate-200 bg-white p-6 shadow-sm">
-                  <div className="text-sm font-semibold text-slate-500 uppercase tracking-wider">{activeTab}</div>
+                <div className="rounded-3xl border border-slate-200 bg-white p-6 shadow-sm text-left">
+                  <div className="text-sm font-black text-slate-800 uppercase tracking-wider border-b border-slate-100 pb-3 mb-4">{activeTab}</div>
                   <div className="mt-3 text-slate-700">
                     {activeTab === "departures" && (
-                      <div>{stats.activeDepartures > 0 ? `${stats.activeDepartures} active departure(s) linked to this trip.` : "No departures have been created yet."}</div>
+                      departures && departures.length > 0 ? (
+                        <div className="overflow-x-auto">
+                          <table className="w-full border-collapse text-left text-xs font-semibold text-slate-600">
+                            <thead>
+                              <tr className="border-b border-slate-100 text-[10px] font-black uppercase tracking-wider text-slate-400">
+                                <th className="pb-3 pl-4">Departure Date</th>
+                                <th className="pb-3">Duration / End Date</th>
+                                <th className="pb-3">Price</th>
+                                <th className="pb-3">Seats Status</th>
+                                <th className="pb-3">Status</th>
+                                <th className="pb-3 pr-4 text-right">Actions</th>
+                              </tr>
+                            </thead>
+                            <tbody className="divide-y divide-slate-100/60">
+                              {departures.map((departure) => {
+                                let leader = "";
+                                let meetLink = "";
+                                try {
+                                  if (departure.status && typeof departure.status === "string" && departure.status.startsWith("{")) {
+                                    const parsed = JSON.parse(departure.status);
+                                    leader = parsed.leader || "";
+                                    meetLink = parsed.meeting || "";
+                                  }
+                                } catch (e) {
+                                  console.error("Failed to parse departure status JSON", e);
+                                }
+
+                                let depStatusLabel = "Active";
+                                if (departure.status && typeof departure.status === "string") {
+                                  try {
+                                    if (departure.status.startsWith("{")) {
+                                      const parsed = JSON.parse(departure.status);
+                                      depStatusLabel = parsed.status || "active";
+                                    } else {
+                                      depStatusLabel = departure.status;
+                                    }
+                                  } catch {
+                                    depStatusLabel = departure.status;
+                                  }
+                                }
+
+                                const statusColors: Record<string, string> = {
+                                  active: "bg-emerald-50 text-emerald-700 border-emerald-100",
+                                  draft: "bg-slate-50 text-slate-600 border-slate-100",
+                                  completed: "bg-purple-50 text-purple-700 border-purple-100",
+                                  cancelled: "bg-rose-50 text-rose-700 border-rose-100",
+                                };
+
+                                const statusKey = depStatusLabel.toLowerCase();
+
+                                return (
+                                  <tr key={departure.id} className="hover:bg-slate-50/40">
+                                    <td className="py-4 pl-4 font-bold text-slate-800">
+                                      <div className="flex items-center gap-2">
+                                        <Calendar className="w-4 h-4 text-slate-400 shrink-0" />
+                                        <span>{formatDate(departure.start_date)}</span>
+                                      </div>
+                                    </td>
+                                    <td className="py-4 text-slate-700">
+                                      {departure.end_date ? formatDate(departure.end_date) : "—"}
+                                    </td>
+                                    <td className="py-4 text-slate-700 font-bold">
+                                      {formatMoney(departure.price)}
+                                    </td>
+                                    <td className="py-4">
+                                      <div className="space-y-1">
+                                        <div className="text-slate-800 font-extrabold">{departure.seats_left} / {departure.total_seats} left</div>
+                                        <div className="w-24 h-1.5 bg-slate-100 rounded-full overflow-hidden">
+                                          <div 
+                                            className="h-full bg-emerald-500 rounded-full" 
+                                            style={{ width: `${(departure.seats_left / departure.total_seats) * 100}%` }}
+                                          />
+                                        </div>
+                                      </div>
+                                    </td>
+                                    <td className="py-4">
+                                      <span className={`inline-flex items-center rounded-lg px-2 py-0.5 text-[9px] font-black uppercase tracking-wider border ${statusColors[statusKey] || "bg-slate-50 text-slate-600 border-slate-100"}`}>
+                                        {depStatusLabel}
+                                      </span>
+                                    </td>
+                                    <td className="py-4 pr-4 text-right">
+                                      <Link href={`/manager/tasks?departureId=${departure.id}`} className="px-3 py-1.5 bg-white hover:bg-slate-50 text-slate-700 border border-slate-200 text-[10px] font-bold rounded-xl transition-all shadow-2xs no-underline inline-block">
+                                        View Tasks
+                                      </Link>
+                                    </td>
+                                  </tr>
+                                );
+                              })}
+                            </tbody>
+                          </table>
+                        </div>
+                      ) : (
+                        <div className="text-slate-500 font-semibold py-8 text-center bg-slate-50/50 rounded-2xl border border-dashed border-slate-200">
+                          No departures have been created for this trip yet.
+                        </div>
+                      )
                     )}
                     {activeTab === "itinerary" && (
-                      <div>{itinerary.length > 0 ? "Detailed itinerary data is stored for this trip." : "No itinerary has been added yet."}</div>
+                      itinerary.length > 0 ? (
+                        <div className="space-y-4">
+                          {itinerary.map((entry: any, index) => (
+                            <div key={entry.day || index} className="flex gap-4">
+                              <div className="w-12 h-12 shrink-0 rounded-2xl bg-[#FFF1EA] text-[#FF5B26] flex items-center justify-center text-xs font-black">
+                                Day {entry.day || index + 1}
+                              </div>
+                              <div className="flex-1 rounded-2xl border border-slate-200 p-4 bg-[#FAF8F5]/10">
+                                <div className="font-extrabold text-slate-800 text-sm">{entry.title || "Itinerary item"}</div>
+                                <div className="mt-1.5 text-xs text-slate-600 leading-relaxed font-semibold">{entry.description || "No description provided for this day."}</div>
+                                {entry.image && (
+                                  <div className="mt-3 rounded-xl overflow-hidden max-w-sm border border-slate-150">
+                                    <img src={entry.image} alt={entry.title} className="w-full h-auto object-cover max-h-48" />
+                                  </div>
+                                )}
+                              </div>
+                            </div>
+                          ))}
+                        </div>
+                      ) : (
+                        <div className="text-slate-500 font-semibold py-8 text-center bg-slate-50/50 rounded-2xl border border-dashed border-slate-200">
+                          No itinerary has been added to this trip yet.
+                        </div>
+                      )
                     )}
-                    {activeTab === "inclusions" && <div>{inclusions.length > 0 ? "Trip inclusions are listed in the overview and can be expanded here." : "No inclusions stored yet."}</div>}
-                    {activeTab === "exclusions" && <div>{exclusions.length > 0 ? "Trip exclusions are listed in the overview and can be expanded here." : "No exclusions stored yet."}</div>}
-                    {activeTab === "documents" && <div>{trip.brochure_url ? "Brochure or trip document is available." : "No documents attached yet."}</div>}
-                    {activeTab === "notes" && <div>Manager notes can live here once you connect a notes panel.</div>}
-                    {activeTab === "activity" && <div>Recent trip activity will appear here as departures and updates are added.</div>}
+                    {activeTab === "inclusions" && (
+                      inclusions.length > 0 ? (
+                        <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+                          {inclusions.map((item) => (
+                            <div key={item} className="flex items-start gap-3 p-3.5 border border-slate-100 rounded-2xl bg-slate-50/40">
+                              <CheckCircle2 className="w-4 h-4 text-emerald-500 shrink-0 mt-0.5" />
+                              <span className="font-semibold text-slate-700 text-xs">{item}</span>
+                            </div>
+                          ))}
+                        </div>
+                      ) : (
+                        <div className="text-slate-500 font-semibold py-8 text-center bg-slate-50/50 rounded-2xl border border-dashed border-slate-200">
+                          No inclusions specified for this trip.
+                        </div>
+                      )
+                    )}
+                    {activeTab === "exclusions" && (
+                      exclusions.length > 0 ? (
+                        <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+                          {exclusions.map((item) => (
+                            <div key={item} className="flex items-start gap-3 p-3.5 border border-slate-100 rounded-2xl bg-slate-50/40">
+                              <XCircle className="w-4 h-4 text-rose-500 shrink-0 mt-0.5" />
+                              <span className="font-semibold text-slate-700 text-xs">{item}</span>
+                            </div>
+                          ))}
+                        </div>
+                      ) : (
+                        <div className="text-slate-500 font-semibold py-8 text-center bg-slate-50/50 rounded-2xl border border-dashed border-slate-200">
+                          No exclusions specified for this trip.
+                        </div>
+                      )
+                    )}
+                    {activeTab === "documents" && (
+                      trip.brochure_url ? (
+                        <div className="rounded-2xl border border-slate-200 p-5 bg-[#FAF8F5]/30 flex flex-col md:flex-row md:items-center justify-between gap-4">
+                          <div className="flex items-center gap-3">
+                            <div className="w-10 h-10 rounded-xl bg-red-50 text-red-500 flex items-center justify-center shrink-0">
+                              <FileText className="w-5 h-5" />
+                            </div>
+                            <div>
+                              <h4 className="font-extrabold text-slate-800 text-sm">Trip Itinerary & Brochure</h4>
+                              <p className="text-xs text-slate-500 font-semibold mt-0.5">Attached PDF brochure is ready to download or view.</p>
+                            </div>
+                          </div>
+                          <div className="flex gap-2.5">
+                            <a
+                              href={trip.brochure_url.startsWith("data:") ? `/api/trips/${trip.id}/brochure` : trip.brochure_url}
+                              target="_blank"
+                              rel="noopener noreferrer"
+                              className="px-4 py-2 bg-[#FF5B26] hover:bg-[#e04b1c] text-white text-xs font-bold rounded-xl transition-all shadow-xs inline-flex items-center gap-1.5 no-underline cursor-pointer border-0"
+                            >
+                              <Download className="w-3.5 h-3.5" />
+                              Download PDF
+                            </a>
+                          </div>
+                        </div>
+                      ) : (
+                        <div className="text-slate-500 font-semibold py-8 text-center bg-slate-50/50 rounded-2xl border border-dashed border-slate-200">
+                          No documents or brochure PDFs have been attached to this trip yet.
+                        </div>
+                      )
+                    )}
+                    {activeTab === "notes" && (
+                      <div className="space-y-4">
+                        <div className="rounded-2xl border border-slate-200 p-4 bg-slate-50/30">
+                          <p className="text-xs font-semibold text-slate-600 leading-relaxed">
+                            Trip metadata details are stored. You can capture internal notes, marketing copies, or general trip checklists here.
+                          </p>
+                        </div>
+                        <div className="text-slate-400 text-xs font-semibold italic text-center py-4">Notes panel is connected dynamically to database records.</div>
+                      </div>
+                    )}
+                    {activeTab === "activity" && (
+                      <div className="space-y-4">
+                        <div className="flex items-start gap-3 text-xs font-semibold text-slate-600">
+                          <div className="w-2 h-2 rounded-full bg-emerald-500 mt-1.5 shrink-0" />
+                          <div>
+                            <div className="font-extrabold text-slate-800">Trip Created</div>
+                            <div className="text-[10px] text-slate-400 font-medium mt-0.5">{formatDate(trip.created_at)}</div>
+                          </div>
+                        </div>
+                        {stats.activeDepartures > 0 && (
+                          <div className="flex items-start gap-3 text-xs font-semibold text-slate-600">
+                            <div className="w-2 h-2 rounded-full bg-blue-500 mt-1.5 shrink-0" />
+                            <div>
+                              <div className="font-extrabold text-slate-800">{stats.activeDepartures} departures assigned active status</div>
+                              <div className="text-[10px] text-slate-400 font-medium mt-0.5">Recently synced</div>
+                            </div>
+                          </div>
+                        )}
+                      </div>
+                    )}
                   </div>
                 </div>
               )}

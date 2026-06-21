@@ -1,0 +1,19 @@
+[
+  {
+    "id": "email_5lcbncjtm",
+    "timestamp": "2026-06-21T18:35:45.599Z",
+    "recipient": "ayushsonwane65@gmail.com",
+    "channel": "Email",
+    "type": "Scheduled Call",
+    "title": "Call Scheduled - Nomichi Travels",
+    "body": "Hi Sonwane Ayush,\n\nYou have a scheduled call regarding the trip \"KANHA TIGER SAFARI & WILDERNESS\" with Tejaswa Jhode on 22 Jun 2026 at 12:05 AM.\n\nLooking forward to speaking with you!",
+    "priority": "High",
+    "status": "Success",
+    "details": {
+      "smtp_server": "smtp.resend.com",
+      "port": 587,
+      "messageId": "<0e71b9d8-c0e7-8925-f4e9-905a4a5fbfc9@edinsured.in>",
+      "live": true
+    }
+  }
+]

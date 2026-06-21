@@ -26,6 +26,7 @@ type LeadItem = {
   trip_title: string;
   trip_destination?: string | null;
   trip_image_url?: string | null;
+  avatar_url?: string | null;
 };
 
 type ManagerProfile = {
@@ -345,11 +346,19 @@ export function ManagerLeadsClient({ user, leads }: ManagerLeadsClientProps) {
                       <td className="px-6 py-4">
                         <div className="flex items-center gap-3">
                           <div className="w-9 h-9 rounded-full border border-[#e7e1d5]/40 bg-white overflow-hidden shrink-0 flex items-center justify-center font-bold text-[#FF5B26]">
-                            <img
-                              src={`https://api.dicebear.com/7.x/avataaars/svg?seed=${encodeURIComponent(lead.name || "default")}`}
-                              alt=""
-                              className="w-full h-full object-cover"
-                            />
+                            {lead.avatar_url ? (
+                              <img
+                                src={lead.avatar_url}
+                                alt={lead.name}
+                                className="w-full h-full object-cover"
+                              />
+                            ) : (
+                              <img
+                                src={`https://api.dicebear.com/7.x/avataaars/svg?seed=${encodeURIComponent(lead.name || "default")}`}
+                                alt=""
+                                className="w-full h-full object-cover"
+                              />
+                            )}
                           </div>
                           <div className="text-left">
                             <span className="font-extrabold text-[12px] block text-nomichi-ink">{lead.name}</span>

@@ -108,7 +108,31 @@ export const leadService = {
       data.lead_notes.sort((a: any, b: any) => new Date(a.created_at).getTime() - new Date(b.created_at).getTime());
     }
 
-    return data as Lead;
+    // Fetch traveler profile if user_id or email is present
+    let travelerProfile = null;
+    if (data.user_id) {
+      const { data: profile } = await supabase
+        .from("profiles")
+        .select("id, full_name, avatar_url, nationality, phone")
+        .eq("id", data.user_id)
+        .maybeSingle();
+      if (profile) travelerProfile = profile;
+    }
+    if (!travelerProfile && data.email) {
+      const { data: profile } = await supabase
+        .from("profiles")
+        .select("id, full_name, avatar_url, nationality, phone")
+        .eq("email", data.email)
+        .maybeSingle();
+      if (profile) travelerProfile = profile;
+    }
+
+    return {
+      ...data,
+      travelerProfile: travelerProfile || undefined,
+      phone: data.phone || travelerProfile?.phone || undefined,
+      nationality: data.nationality || travelerProfile?.nationality || undefined,
+    } as Lead;
   },
 
   async createLead(lead: Omit<Lead, "id" | "created_at">): Promise<Lead> {

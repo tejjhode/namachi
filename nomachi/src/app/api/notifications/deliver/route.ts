@@ -88,7 +88,7 @@ async function compileHtmlTemplate(params: {
   source_id?: string;
   origin?: string;
 }): Promise<string> {
-  const { type, source_id, title, origin } = params;
+  const { type, source_id, title, origin, contentText } = params;
   
   let travelerName = "Traveler";
   let tripTitle = "";
@@ -137,7 +137,11 @@ async function compileHtmlTemplate(params: {
 
           if (lead.trips) {
             tripTitle = lead.trips.title;
-            brochureUrl = lead.trips.brochure_url || "";
+            if (lead.trips.brochure_url) {
+              brochureUrl = lead.trips.brochure_url.startsWith("data:")
+                ? `${origin}/api/trips/${lead.trips.id || lead.trip_id}/brochure`
+                : lead.trips.brochure_url;
+            }
           }
 
           if (lead.assigned_to) {
@@ -271,38 +275,49 @@ async function compileHtmlTemplate(params: {
     const finalTripTitle = tripTitle || "your trip enquiry";
     bodyContent = `
       <p>Hi ${firstName},</p>
-      <p>Great news!</p>
-      <p>Your enquiry has been assigned to one of our travel experts who will personally guide you through the planning process.</p>
-      <div style="background-color: #FAF8F4; border: 1px solid #e7e1d5; padding: 18px; border-radius: 16px; margin: 25px 0; font-size: 13px; line-height: 1.6; color: #1e1e1e;">
-        <strong>Your Trip Expert:</strong> ${managerName || "Ananya Mehta"}<br/>
-        <strong>Interested Trip:</strong> ${finalTripTitle}
+      <p>Great news! Your enquiry has been assigned to one of our senior travel experts who will personally guide you through the planning process.</p>
+      
+      <div style="background-color: #FAF8F4; border: 1px solid #e7e1d5; padding: 20px; border-radius: 16px; margin: 25px 0; line-height: 1.8; color: #1e1e1e;">
+        <h4 style="margin: 0 0 10px 0; font-size: 14px; font-weight: 800; color: #b04b1e; text-transform: uppercase; letter-spacing: 0.05em;">Your Trip Expert</h4>
+        👤 <strong>Manager Name:</strong> ${managerName || "Ananya Mehta"}<br/>
+        📍 <strong>Trip Interest:</strong> ${finalTripTitle}<br/>
+        🆔 <strong>Enquiry ID:</strong> ${enquiryId || "N/A"}
       </div>
-      <p>Your trip expert will help with:</p>
-      <ul style="padding-left: 20px; line-height: 1.6; margin: 15px 0;">
-        <li>Trip planning & pricing</li>
-        <li>Itinerary guidance</li>
-        <li>Accommodation details</li>
-        <li>Group information</li>
-        <li>Travel preparation</li>
+
+      <h4 style="margin-top: 25px; margin-bottom: 10px; font-size: 14px; font-weight: 800; color: #1e1e1e;">What your expert will help with:</h4>
+      <ul style="padding-left: 20px; line-height: 1.65; margin: 15px 0;">
+        <li>✨ **Tailored Itineraries:** Adjusting routes and dates to match your travel goals.</li>
+        <li>🏨 **Stay & Transfers:** Clear information on accommodations and local logistics.</li>
+        <li>👥 **Group Cohort Vibe:** Overview of other travelers in your cohort.</li>
+        <li>💳 **Billing & Payments:** Direct support for secure booking and deposit payments.</li>
       </ul>
-      <p>You may receive a call, WhatsApp message, or email shortly.</p>
-      <p>We’re looking forward to helping you create an unforgettable journey.</p>
+
+      <p>Your Trip Expert will reach out shortly via Call, WhatsApp, or Email to schedule an informal 10-minute briefing (Vibe Check) call.</p>
+      <p>We’re looking forward to helping you plan an incredible journey!</p>
     `;
   } else if (type === "Brochure Shared") {
     const finalTripTitle = tripTitle || "your requested trip";
+    const customMessageHtml = contentText
+      ? `<div style="background-color: #FAF8F4; border-left: 4px solid #FF5B26; padding: 16px; border-radius: 12px; margin: 20px 0; font-family: inherit; font-size: 13px; line-height: 1.6; color: #555555; font-style: italic;">
+          &ldquo;${contentText.replace(/\n/g, "<br/>")}&rdquo;
+         </div>`
+      : "";
+
     bodyContent = `
       <p>Hi ${firstName},</p>
-      <p>We’ve prepared your trip brochure and itinerary details.</p>
-      <p>Here is what you will find inside:</p>
-      <ul style="padding-left: 20px; line-height: 1.6; margin: 15px 0;">
-        <li>Trip highlights & route map</li>
-        <li>Day-by-day itinerary walkthrough</li>
-        <li>Accommodation & meal details</li>
-        <li>Inclusions and exclusions checklist</li>
-        <li>Pricing information & billing</li>
-        <li>Frequently asked questions</li>
+      <p>We’ve prepared your trip brochure and detailed itinerary for <strong>${finalTripTitle}</strong>.</p>
+      
+      ${customMessageHtml}
+
+      <p>Take your time exploring the route, accommodations, inclusions, and daily schedule. Here is a brief look at what is inside:</p>
+      
+      <ul style="padding-left: 20px; line-height: 1.65; margin: 15px 0;">
+        <li>🏔️ <strong>Day-by-Day Itinerary:</strong> Walkthrough of daily adventures and highlights.</li>
+        <li>🏨 <strong>Accommodations:</strong> Stay images, standard ratings, and descriptions.</li>
+        <li>🍽️ <strong>Inclusions & Exclusions:</strong> Clear breakdown of meals, transfers, and activities.</li>
+        <li>💳 <strong>Pricing details:</strong> Flexible payment schedule and slots overview.</li>
       </ul>
-      <p>Take your time exploring the details.</p>
+
       ${
         brochureUrl
           ? `
@@ -312,8 +327,9 @@ async function compileHtmlTemplate(params: {
       `
           : ""
       }
-      <p>If you have any questions, simply reply to this email or connect with your Nomichi Trip Expert.</p>
-      <p>Adventure awaits.</p>
+
+      <p>If you have any questions or want to customize dates/activities, simply reply to this email or contact your assigned Trip Expert, <strong>${managerName || "Team Nomichi"}</strong>.</p>
+      <p>Adventure awaits!</p>
     `;
   } else if (type === "New Enquiry") {
     const finalTripTitle = tripTitle || leadData?.trip_interest || "Selected Trip";
@@ -322,69 +338,278 @@ async function compileHtmlTemplate(params: {
       : new Date().toLocaleString("en-IN", { timeZone: "Asia/Kolkata" });
 
     bodyContent = `
-      <p>A new enquiry has been submitted.</p>
+      <p>A new enquiry has been submitted through the website.</p>
 
       <div style="background-color: #FAF8F4; border: 1px solid #e7e1d5; padding: 20px; border-radius: 16px; margin: 20px 0; line-height: 1.8; color: #1e1e1e;">
         <h4 style="margin: 0 0 10px 0; font-size: 14px; font-weight: 800; color: #b04b1e; text-transform: uppercase; letter-spacing: 0.05em;">Traveler Information</h4>
-        <strong>Name:</strong> ${leadData?.name || "N/A"}<br/>
-        <strong>Email:</strong> ${leadData?.email || "N/A"}<br/>
-        <strong>Phone:</strong> ${leadData?.phone || "N/A"}<br/>
-        <strong>Gender:</strong> ${leadData?.gender || "Not specified"}<br/>
-        <strong>Nationality:</strong> ${leadData?.nationality || "Indian"}
+        👤 <strong>Name:</strong> ${leadData?.name || "N/A"}<br/>
+        📧 <strong>Email:</strong> ${leadData?.email || "N/A"}<br/>
+        📞 <strong>Phone:</strong> ${leadData?.phone || "N/A"}<br/>
+        ⚧️ <strong>Gender:</strong> ${leadData?.gender || "Not specified"}<br/>
+        🇮🇳 <strong>Nationality:</strong> ${leadData?.nationality || "Indian"}
       </div>
 
       <div style="background-color: #FAF8F4; border: 1px solid #e7e1d5; padding: 20px; border-radius: 16px; margin: 20px 0; line-height: 1.8; color: #1e1e1e;">
-        <h4 style="margin: 0 0 10px 0; font-size: 14px; font-weight: 800; color: #b04b1e; text-transform: uppercase; letter-spacing: 0.05em;">Trip Information</h4>
-        <strong>Trip:</strong> ${finalTripTitle}<br/>
-        <strong>Travel Month:</strong> ${leadData?.preferred_month || "Not specified"}<br/>
-        <strong>Travelers:</strong> ${leadData?.group_size || 1} ${leadData?.group_type ? `(${leadData.group_type})` : ""}<br/>
-        <strong>Budget:</strong> ${leadData?.trips?.price ? `₹${leadData.trips.price}` : "Not specified"}<br/>
-        <strong>Travel Style:</strong> ${leadData?.hope_trip_feels_like || "Not specified"}<br/>
-        <strong>Special Requests / Dietary / Accessibility:</strong> ${leadData?.dietary_and_accessibility || "None"}
+        <h4 style="margin: 0 0 10px 0; font-size: 14px; font-weight: 800; color: #b04b1e; text-transform: uppercase; letter-spacing: 0.05em;">Trip Request</h4>
+        📍 <strong>Trip:</strong> ${finalTripTitle}<br/>
+        📅 <strong>Travel Month:</strong> ${leadData?.preferred_month || "Not specified"}<br/>
+        👥 <strong>Travelers:</strong> ${leadData?.group_size || 1} ${leadData?.group_type ? `(${leadData.group_type})` : ""}<br/>
+        💳 <strong>Budget:</strong> ${leadData?.trips?.price ? `₹${leadData.trips.price}` : "Not specified"}<br/>
+        ✨ <strong>Travel Style:</strong> ${leadData?.hope_trip_feels_like || "Not specified"}<br/>
+        📝 <strong>Dietary/Accessibility:</strong> ${leadData?.dietary_and_accessibility || "None"}
       </div>
 
       <div style="background-color: #FAF8F4; border: 1px solid #e7e1d5; padding: 20px; border-radius: 16px; margin: 20px 0; line-height: 1.8; color: #1e1e1e;">
-        <h4 style="margin: 0 0 10px 0; font-size: 14px; font-weight: 800; color: #b04b1e; text-transform: uppercase; letter-spacing: 0.05em;">Source Information</h4>
-        <strong>Source:</strong> Website<br/>
-        <strong>Enquiry ID:</strong> ${enquiryId || "N/A"}<br/>
-        <strong>Submitted At:</strong> ${submittedAt}
+        <h4 style="margin: 0 0 10px 0; font-size: 14px; font-weight: 800; color: #b04b1e; text-transform: uppercase; letter-spacing: 0.05em;">Enquiry Source</h4>
+        🌐 <strong>Source:</strong> Web Portal<br/>
+        🆔 <strong>Enquiry ID:</strong> ${enquiryId || "N/A"}<br/>
+        📅 <strong>Timestamp:</strong> ${submittedAt}
       </div>
 
       <div style="margin-top: 30px; text-align: center; border-top: 1px solid #e7e1d5; padding-top: 20px;">
         <h4 style="margin: 0 0 15px 0; font-size: 14px; font-weight: 800; color: #1e1e1e;">Action Required</h4>
-        <p style="margin-bottom: 20px;">Assign this enquiry to a manager.</p>
-        
-        <a href="${origin || 'https://nomichii.vercel.app'}/admin/enquiries" style="background-color: #1e1e1e; color: #ffffff; padding: 12px 24px; border-radius: 12px; font-weight: bold; text-decoration: none; display: inline-block; font-size: 13px; margin-right: 10px;">Open Admin Dashboard</a>
-        <a href="${origin || 'https://nomichii.vercel.app'}/admin/enquiries" style="background-color: #FF5B26; color: #ffffff; padding: 12px 24px; border-radius: 12px; font-weight: bold; text-decoration: none; display: inline-block; font-size: 13px;">Assign Manager &rarr;</a>
+        <p style="margin-bottom: 20px;">Please assign this new enquiry to an active manager in the workspace.</p>
+        <a href="${origin || 'https://nomichii.vercel.app'}/admin/enquiries" style="background-color: #FF5B26; color: #ffffff; padding: 12px 24px; border-radius: 12px; font-weight: bold; text-decoration: none; display: inline-block; font-size: 13px; box-shadow: 0 4px 10px rgba(255,91,38,0.25);">Open Admin Panel &rarr;</a>
       </div>
     `;
   } else if (type === "Lead Assigned") {
     const finalTripTitle = tripTitle || leadData?.trip_interest || "Selected Trip";
     bodyContent = `
-      <p>A new lead has been assigned to you.</p>
+      <p>Hello,</p>
+      <p>A new lead has been assigned to you for management.</p>
 
       <div style="background-color: #FAF8F4; border: 1px solid #e7e1d5; padding: 20px; border-radius: 16px; margin: 20px 0; line-height: 1.8; color: #1e1e1e;">
-        <strong>Lead:</strong> ${leadData?.name || "N/A"}<br/>
-        <strong>Trip:</strong> ${finalTripTitle}<br/>
-        <strong>Phone:</strong> ${leadData?.phone || "N/A"}<br/>
-        <strong>Priority:</strong> High
+        <h4 style="margin: 0 0 10px 0; font-size: 14px; font-weight: 800; color: #b04b1e; text-transform: uppercase; letter-spacing: 0.05em;">Lead Information</h4>
+        👤 <strong>Lead Name:</strong> ${leadData?.name || "N/A"}<br/>
+        📍 <strong>Interested Trip:</strong> ${finalTripTitle}<br/>
+        📞 <strong>Phone:</strong> ${leadData?.phone || "N/A"}<br/>
+        📧 <strong>Email:</strong> ${leadData?.email || "N/A"}<br/>
+        🚩 <strong>Priority:</strong> High (Intake Checklist Pending)
       </div>
 
-      <h4 style="margin-top: 25px; margin-bottom: 10px; font-size: 14px; font-weight: 800; color: #1e1e1e;">Required Actions:</h4>
-      <ol style="padding-left: 20px; line-height: 1.6; margin: 15px 0; list-style-type: none;">
-        <li>1. Contact traveler</li>
-        <li>2. Share brochure</li>
-        <li>3. Schedule follow-up</li>
+      <h4 style="margin-top: 25px; margin-bottom: 10px; font-size: 14px; font-weight: 800; color: #1e1e1e;">Required Workflow Pipeline Tasks:</h4>
+      <ol style="padding-left: 20px; line-height: 1.65; margin: 15px 0;">
+        <li>📞 **Contact Traveler:** Introduce Nomichi & assess travel style.</li>
+        <li>📁 **Share Brochure:** Dispatch itinerary brochure.</li>
+        <li>💬 **Follow Up:** Evaluate traveler interest & slot vibe check call.</li>
       </ol>
 
       <div style="text-align: center; margin: 25px 0;">
-        <a href="${origin || 'https://nomichii.vercel.app'}/manager/leads" style="background-color: #FF5B26; color: #ffffff; padding: 12px 24px; border-radius: 12px; font-weight: bold; text-decoration: none; display: inline-block; font-size: 13px; box-shadow: 0 4px 10px rgba(255,91,38,0.25);">View Lead &rarr;</a>
+        <a href="${origin || 'https://nomichii.vercel.app'}/manager/leads" style="background-color: #FF5B26; color: #ffffff; padding: 12px 24px; border-radius: 12px; font-weight: bold; text-decoration: none; display: inline-block; font-size: 13px; box-shadow: 0 4px 10px rgba(255,91,38,0.25);">Open My Leads &rarr;</a>
       </div>
+    `;
+  } else if (type === "Scheduled Call") {
+    const finalTripTitle = tripTitle || "your selected trip";
+    let callTime = "Scheduled Date & Time";
+    if (params.contentText.includes(" on ")) {
+      const parts = params.contentText.split(" on ");
+      if (parts.length > 1) {
+        callTime = parts[1].split(".")[0];
+      }
+    } else {
+      callTime = params.contentText;
+    }
+
+    bodyContent = `
+      <p>Hi ${firstName},</p>
+      <p>We're excited to connect with you! Your informal <strong>Vibe Check Call</strong> has been scheduled.</p>
+      <p>This is a quick 10-15 minute voice/video call to understand your travel preferences, answer any questions about the route/accommodations, and verify group cohort compatibility.</p>
+
+      <div style="background-color: #FAF8F4; border: 1px solid #e7e1d5; padding: 20px; border-radius: 16px; margin: 25px 0; line-height: 1.8; color: #1e1e1e;">
+        <h4 style="margin: 0 0 10px 0; font-size: 14px; font-weight: 800; color: #b04b1e; text-transform: uppercase; letter-spacing: 0.05em;">Meeting Details</h4>
+        📍 <strong>Trip:</strong> ${finalTripTitle}<br/>
+        📅 <strong>Date & Time:</strong> ${callTime}<br/>
+        🤝 <strong>Trip Expert:</strong> ${managerName || "Your assigned manager"}<br/>
+        📞 <strong>Communication:</strong> Your expert will contact you directly on your mobile/WhatsApp.
+      </div>
+
+      <h4 style="margin-top: 25px; margin-bottom: 10px; font-size: 14px; font-weight: 800; color: #1e1e1e;">What we will review:</h4>
+      <ul style="padding-left: 20px; line-height: 1.65; margin: 15px 0;">
+        <li>🚶 **Pace & Fitness:** Ensure the daily trekking/walking matches your expectations.</li>
+        <li>🌦️ **Weather & Stays:** Overview of weather conditions and accommodation types.</li>
+        <li>👥 **Group Vibe:** Brief info about your cohort members and group dynamics.</li>
+        <li>💳 **Next Steps:** Advance booking deposit details to secure your spot.</li>
+      </ul>
+
+      <p style="font-style: italic; color: #555555; margin-top: 25px; border-top: 1px dashed #e7e1d5; padding-top: 15px;">
+        If you need to adjust or reschedule this call, please email us or reach out directly to your Trip Expert.
+      </p>
+    `;
+  } else if (type === "Booking Confirmed") {
+    const finalTripTitle = tripTitle || "your selected trip";
+    const isManager = params.contentText.toLowerCase().includes("booking confirmed for");
+
+    if (isManager) {
+      bodyContent = `
+        <p>Hello,</p>
+        <p>A booking deposit has been successfully confirmed and logged in the database.</p>
+
+        <div style="background-color: #FAF8F4; border: 1px solid #e7e1d5; padding: 20px; border-radius: 16px; margin: 25px 0; line-height: 1.8; color: #1e1e1e;">
+          <h4 style="margin: 0 0 10px 0; font-size: 14px; font-weight: 800; color: #b04b1e; text-transform: uppercase; letter-spacing: 0.05em;">Booking Log</h4>
+          👤 <strong>Traveler Name:</strong> ${travelerName}<br/>
+          📍 <strong>Trip Interest:</strong> ${finalTripTitle}<br/>
+          📞 <strong>Phone:</strong> ${leadData?.phone || "N/A"}<br/>
+          📧 <strong>Email:</strong> ${leadData?.email || "N/A"}<br/>
+          🆔 <strong>Enquiry Ref:</strong> ${enquiryId || "N/A"}<br/>
+          💳 <strong>Advance Receipt:</strong> Verified
+        </div>
+
+        <h4 style="margin-top: 25px; margin-bottom: 10px; font-size: 14px; font-weight: 800; color: #1e1e1e;">Next Actions Required:</h4>
+        <ul style="padding-left: 20px; line-height: 1.65; margin: 15px 0;">
+          <li>ID Collection (Step 7) & Emergency Contact Details (Step 8) are now active.</li>
+          <li>Ensure traveler uploads their ID document reference copy.</li>
+          <li>Confirm departure assignment (Step 9) once documents are verified.</li>
+        </ul>
+
+        <div style="text-align: center; margin: 25px 0;">
+          <a href="${origin || 'https://nomichii.vercel.app'}/manager/leads" style="background-color: #FF5B26; color: #ffffff; padding: 12px 24px; border-radius: 12px; font-weight: bold; text-decoration: none; display: inline-block; font-size: 13px; box-shadow: 0 4px 10px rgba(255,91,38,0.25);">Open Leads Dashboard &rarr;</a>
+        </div>
+      `;
+    } else {
+      bodyContent = `
+        <p>Hi ${firstName},</p>
+        <p><strong>Your spot is secured! Welcome to the cohort!</strong> 🎉</p>
+        <p>We've successfully verified your booking deposit payment. Your reservation for <strong>${finalTripTitle}</strong> is active and locked in.</p>
+
+        <div style="background-color: #FAF8F4; border: 1px solid #e7e1d5; padding: 20px; border-radius: 16px; margin: 25px 0; line-height: 1.8; color: #1e1e1e;">
+          <h4 style="margin: 0 0 10px 0; font-size: 14px; font-weight: 800; color: #b04b1e; text-transform: uppercase; letter-spacing: 0.05em;">Reservation Receipt</h4>
+          📍 <strong>Confirmed Trip:</strong> ${finalTripTitle}<br/>
+          🤝 <strong>Trip Expert:</strong> ${managerName || "Team Nomichi"}<br/>
+          💳 <strong>Deposit Payment:</strong> Received & Verified<br/>
+          🆔 <strong>Booking Reference:</strong> ${enquiryId || "N/A"}
+        </div>
+
+        <h4 style="margin-top: 25px; margin-bottom: 10px; font-size: 14px; font-weight: 800; color: #1e1e1e;">Required Preparation Actions:</h4>
+        <p>To finalize travel logistics and secure required local permits, please provide your documents:</p>
+        <ul style="padding-left: 20px; line-height: 1.65; margin: 15px 0;">
+          <li>🛡️ **Upload ID Document:** Securely upload your ID copy (Passport or Aadhaar card) to your profile.</li>
+          <li>📞 **Emergency Contact details:** Fill out your emergency contact person's name and phone.</li>
+          <li>📅 **Departure Schedule:** Your expert will confirm your departure dates in the system.</li>
+        </ul>
+
+        <div style="text-align: center; margin: 25px 0;">
+          <a href="${origin || 'https://nomichii.vercel.app'}/login" style="background-color: #FF5B26; color: #ffffff; padding: 14px 28px; border-radius: 14px; font-weight: bold; text-decoration: none; display: inline-block; font-size: 13px; box-shadow: 0 4px 10px rgba(255,91,38,0.25);">Complete Profile Setup</a>
+        </div>
+
+        <p style="font-style: italic; color: #555555; margin-top: 25px; border-top: 1px dashed #e7e1d5; padding-top: 15px;">
+          Welcome to the family. We can't wait to wander, connect, and explore together!
+        </p>
+      `;
+    }
+  } else if (type === "Document Required") {
+    const finalTripTitle = tripTitle || "your upcoming trip";
+    const isId = params.contentText.toLowerCase().includes("id") || params.contentText.toLowerCase().includes("passport");
+
+    bodyContent = `
+      <p>Hi ${firstName},</p>
+      <p>We hope you're excited for your upcoming journey on <strong>${finalTripTitle}</strong>!</p>
+      <p>To finalize permits, reserve accommodations, and plan cohort safety briefings, we require additional info for your traveler profile.</p>
+
+      <div style="background-color: #FAF8F4; border: 1px solid #e7e1d5; padding: 20px; border-radius: 16px; margin: 25px 0; line-height: 1.8; color: #1e1e1e;">
+        <h4 style="margin: 0 0 10px 0; font-size: 14px; font-weight: 800; color: #b04b1e; text-transform: uppercase; letter-spacing: 0.05em;">Information Request</h4>
+        📍 <strong>Trip:</strong> ${finalTripTitle}<br/>
+        📁 <strong>Required Detail:</strong> ${isId ? "Government Issued ID Document Copy" : "Emergency Contact Details"}<br/>
+        📝 <strong>Action Needed:</strong> ${isId ? "Please upload your ID number & clear scanned image (Passport/Aadhaar) to secure your permits." : "Please input emergency contact person name, relationship, and phone number."}
+      </div>
+
+      ${
+        isId
+          ? `
+      <h4 style="margin-top: 25px; margin-bottom: 10px; font-size: 14px; font-weight: 800; color: #1e1e1e;">ID Copy Guidelines:</h4>
+      <ul style="padding-left: 20px; line-height: 1.65; margin: 15px 0;">
+        <li>Ensure all text is readable and image is not blurry.</li>
+        <li>Must have at least 6 months validity remaining.</li>
+        <li>Names must exactly match travel tickets.</li>
+      </ul>
+      `
+          : ""
+      }
+
+      <div style="text-align: center; margin: 25px 0;">
+        <a href="${origin || 'https://nomichii.vercel.app'}/login" style="background-color: #FF5B26; color: #ffffff; padding: 14px 28px; border-radius: 14px; font-weight: bold; text-decoration: none; display: inline-block; font-size: 13px; box-shadow: 0 4px 10px rgba(255,91,38,0.25);">Provide Document/Info</a>
+      </div>
+
+      <p style="font-style: italic; color: #555555; margin-top: 25px; border-top: 1px dashed #e7e1d5; padding-top: 15px;">
+        Thank you for helping us keep your travel organization secure and seamless.
+      </p>
+    `;
+  } else if (type === "Departure Assigned") {
+    const finalTripTitle = tripTitle || "your selected trip";
+    const depInfo = params.contentText.replace("You have been assigned to ", "");
+
+    bodyContent = `
+      <p>Hi ${firstName},</p>
+      <p>Your departure date has been officially confirmed for <strong>${finalTripTitle}</strong>!</p>
+
+      <div style="background-color: #FAF8F4; border: 1px solid #e7e1d5; padding: 20px; border-radius: 16px; margin: 25px 0; line-height: 1.8; color: #1e1e1e;">
+        <h4 style="margin: 0 0 10px 0; font-size: 14px; font-weight: 800; color: #b04b1e; text-transform: uppercase; letter-spacing: 0.05em;">Departure Confirmed</h4>
+        📍 <strong>Trip Name:</strong> ${finalTripTitle}<br/>
+        📅 <strong>Assigned Date:</strong> ${depInfo}<br/>
+        🤝 <strong>Trip Expert:</strong> ${managerName || "Team Nomichi"}<br/>
+        🚩 <strong>Status:</strong> Active & Permitted
+      </div>
+
+      <h4 style="margin-top: 25px; margin-bottom: 10px; font-size: 14px; font-weight: 800; color: #1e1e1e;">What to expect next:</h4>
+      <p>We are mapping your stay schedules and booking transport. Keep an eye out for:</p>
+      <ul style="padding-left: 20px; line-height: 1.65; margin: 15px 0;">
+        <li>📁 **Final Day-by-Day Itinerary:** Full detailed route itinerary document.</li>
+        <li>💬 **Cohort chat link:** WhatsApp group invite to connect with other traveler members.</li>
+        <li>🧭 **Pre-Trip briefing call:** Virtual kickoff meet details.</li>
+      </ul>
+
+      <div style="text-align: center; margin: 25px 0;">
+        <a href="${origin || 'https://nomichii.vercel.app'}/login" style="background-color: #FF5B26; color: #ffffff; padding: 14px 28px; border-radius: 14px; font-weight: bold; text-decoration: none; display: inline-block; font-size: 13px; box-shadow: 0 4px 10px rgba(255,91,38,0.25);">Open My Travel Portal</a>
+      </div>
+    `;
+  } else if (type === "Trip Reminder") {
+    const finalTripTitle = tripTitle || "your adventure";
+
+    bodyContent = `
+      <p>Hi ${firstName},</p>
+      <p><strong>The countdown begins! 7 days left until your departure.</strong> 🎒✈️</p>
+      <p>Your upcoming cohort adventure on <strong>${finalTripTitle}</strong> is starting in exactly one week. We are wrapping up ground logistics, stays, and cohort guides. Here is how you should prepare:</p>
+
+      <div style="background-color: #FAF8F4; border: 1px solid #e7e1d5; padding: 20px; border-radius: 16px; margin: 25px 0; line-height: 1.8; color: #1e1e1e;">
+        <h4 style="margin: 0 0 10px 0; font-size: 14px; font-weight: 800; color: #b04b1e; text-transform: uppercase; letter-spacing: 0.05em;">Departure Summary</h4>
+        📍 <strong>Trip:</strong> ${finalTripTitle}<br/>
+        📅 <strong>Timeline:</strong> Starts in 7 Days<br/>
+        🤝 <strong>Trip Lead:</strong> ${managerName || "Team Nomichi"}
+      </div>
+
+      <h4 style="margin-top: 25px; margin-bottom: 10px; font-size: 14px; font-weight: 800; color: #1e1e1e;">Departure Checklist:</h4>
+      <ul style="padding-left: 20px; line-height: 1.65; margin: 15px 0;">
+        <li>💬 **Join traveler group:** Check your messages for the WhatsApp cohort group invitation link.</li>
+        <li>🎒 **Review packing list:** Gather weather-appropriate apparel and trekking gear.</li>
+        <li>🛡️ **Travel Insurance:** Verify you have uploaded your travel insurance document.</li>
+        <li>📞 **Kickoff briefing:** Ensure you join the virtual kickoff call with other travelers.</li>
+      </ul>
+
+      <div style="text-align: center; margin: 25px 0;">
+        <a href="${origin || 'https://nomichii.vercel.app'}/login" style="background-color: #FF5B26; color: #ffffff; padding: 14px 28px; border-radius: 14px; font-weight: bold; text-decoration: none; display: inline-block; font-size: 13px; box-shadow: 0 4px 10px rgba(255,91,38,0.25);">Review My Travel Checklist</a>
+      </div>
+    `;
+  } else if (type === "Review Request") {
+    const finalTripTitle = tripTitle || "your trip";
+
+    bodyContent = `
+      <p>Hi ${firstName},</p>
+      <p><strong>Welcome back from your incredible journey!</strong> 🏔️✨</p>
+      <p>We hope you returned with a backpack full of memories, new friends, and inspiring stories.</p>
+      <p>Our travel community grows on experiences shared by travelers like you. We would be extremely grateful if you could take 2 minutes to rate and share your review for <strong>${finalTripTitle}</strong>.</p>
+
+      <div style="text-align: center; margin: 30px 0;">
+        <a href="${origin || 'https://nomichii.vercel.app'}/login" style="background-color: #FF5B26; color: #ffffff; padding: 14px 28px; border-radius: 14px; font-weight: bold; text-decoration: none; display: inline-block; font-size: 13px; box-shadow: 0 4px 10px rgba(255,91,38,0.25);">Share Your Review &rarr;</a>
+      </div>
+
+      <p>Your honest comments help us refine itineraries, support guides, and help other travelers plan their next journeys.</p>
+      <p style="font-style: italic; color: #555555; margin-top: 25px; border-top: 1px dashed #e7e1d5; padding-top: 15px;">
+        Thank you for traveling with Nomichi. Wander &bull; Connect &bull; Belong!
+      </p>
     `;
   } else {
     bodyContent = `
       <p>Hi ${firstName},</p>
-      <p>${params.contentText}</p>
+      <p style="line-height: 1.7; font-size: 14px; color: #1e1e1e;">${params.contentText.replace(/\n/g, "<br/>")}</p>
     `;
   }
 

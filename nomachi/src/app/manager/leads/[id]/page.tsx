@@ -106,6 +106,13 @@ export default function ManagerLeadDetailPage({ params }: ManagerLeadDetailPageP
   const [taskDueDate, setTaskDueDate] = useState("");
   const [addingTask, setAddingTask] = useState(false);
   const [rescheduling, setRescheduling] = useState(false);
+
+  // Brochure upload states
+  const [brochureFile, setBrochureFile] = useState<File | null>(null);
+  const [brochureMsg, setBrochureMsg] = useState(
+    `I'm excited to share the curated brochure for your upcoming adventure. It contains the detailed day-by-day itinerary, stay details, package inclusions, and cost breakdown.\n\nPlease let me know if you would like to adjust the itinerary or have any questions. Looking forward to our vibe check call!`
+  );
+  const [uploadingBrochure, setUploadingBrochure] = useState(false);
   
   // Action Dropdowns
   const [actionsOpen, setActionsOpen] = useState(false);
@@ -341,6 +348,80 @@ export default function ManagerLeadDetailPage({ params }: ManagerLeadDetailPageP
     }
   };
 
+  const handleUploadAndShareBrochure = async () => {
+    if (!leadData?.trip_id) {
+      alert("No trip is associated with this lead.");
+      return;
+    }
+
+    let brochureUrl = leadData?.trips?.brochure_url;
+
+    if (!brochureFile && !brochureUrl) {
+      alert("Please select a brochure PDF file to upload.");
+      return;
+    }
+
+    setUploadingBrochure(true);
+    try {
+      if (brochureFile) {
+        // Read file as base64
+        const reader = new FileReader();
+        const base64Promise = new Promise<string>((resolve, reject) => {
+          reader.onloadend = () => resolve(reader.result as string);
+          reader.onerror = reject;
+        });
+        reader.readAsDataURL(brochureFile);
+        const base64Data = await base64Promise;
+
+        // Upload to database trips table
+        const { error: updateError } = await supabase
+          .from("trips")
+          .update({ brochure_url: base64Data })
+          .eq("id", leadData.trip_id);
+
+        if (updateError) throw updateError;
+        brochureUrl = base64Data;
+      }
+
+      // Send the email with the professional message
+      if (leadData.email) {
+        await notificationService.notifyTraveler(
+          leadData.email,
+          "Brochure Shared",
+          brochureMsg.trim(),
+          "Brochure Shared",
+          leadData.id,
+          "High"
+        );
+      }
+
+      // Add interaction log note
+      if (currentUser) {
+        await addNote(
+          `Share Brochure: Uploaded and shared trip brochure PDF with custom message: "${brochureMsg.trim().slice(0, 100)}..."`,
+          currentUser.id
+        );
+      }
+
+      // Complete the task (Step 2 is Share Brochure)
+      const shareBrochureTask = tasks.find((t) => t.step === 2 && t.status !== "completed");
+      if (shareBrochureTask) {
+        await handleCompleteTask(shareBrochureTask.id);
+      } else {
+        await handleUpdateStatusDirect("contacted");
+      }
+
+      alert("Brochure uploaded, professional email sent, and task marked complete!");
+      setBrochureFile(null);
+      await refresh();
+    } catch (err: any) {
+      console.error("Failed to upload/share brochure:", err);
+      alert("Failed to upload/share brochure: " + (err.message || err));
+    } finally {
+      setUploadingBrochure(false);
+    }
+  };
+
   const handleMoveToNextStage = async () => {
     let nextStatus = "";
     const currentStatus = (leadData?.status || "new").toLowerCase();
@@ -364,7 +445,7 @@ export default function ManagerLeadDetailPage({ params }: ManagerLeadDetailPageP
   const handleShareBrochureDirect = async () => {
     const brochureUrl = leadData?.trips?.brochure_url;
     if (!brochureUrl) {
-      alert("No brochure document is attached to this trip yet. You can attach one in the Trip Details page.");
+      alert("No brochure document is attached to this trip yet. Please use the 'Upload & Share Brochure' form in the 'Next Action' panel to attach and send one.");
       return;
     }
 
@@ -783,9 +864,11 @@ export default function ManagerLeadDetailPage({ params }: ManagerLeadDetailPageP
               <div className="flex items-start gap-4 flex-1">
                 <div className="w-16 h-16 rounded-full border border-slate-200 bg-white overflow-hidden shrink-0 flex items-center justify-center font-bold">
                   <img
-                    src={leadData.name === "Smita Jhode"
-                      ? "https://images.unsplash.com/photo-1494790108377-be9c29b29330?auto=format&fit=crop&w=150&h=150&q=80"
-                      : `https://api.dicebear.com/7.x/avataaars/svg?seed=${encodeURIComponent(leadData.name || "default")}`
+                    src={leadData.travelerProfile?.avatar_url
+                      ? leadData.travelerProfile.avatar_url
+                      : (leadData.name === "Smita Jhode"
+                        ? "https://images.unsplash.com/photo-1494790108377-be9c29b29330?auto=format&fit=crop&w=150&h=150&q=80"
+                        : `https://api.dicebear.com/7.x/avataaars/svg?seed=${encodeURIComponent(leadData.name || "default")}`)
                     }
                     alt={leadData.name}
                     className="w-full h-full object-cover"
@@ -989,8 +1072,8 @@ export default function ManagerLeadDetailPage({ params }: ManagerLeadDetailPageP
                       {/* Trip Interest card */}
                       <div>
                         <h2 className="text-sm font-black uppercase tracking-wider text-slate-400 text-left mb-3">Trip Interest</h2>
-                        <div className="flex flex-col md:flex-row gap-4 items-stretch border border-[#e7e1d5]/55 rounded-2xl overflow-hidden p-3.5 text-left bg-[#FAF8F5]/20">
-                          <div className="relative w-full md:w-36 h-28 rounded-xl overflow-hidden shrink-0 shadow-2xs">
+                        <div className="flex flex-col gap-4 border border-[#e7e1d5]/55 rounded-2xl overflow-hidden p-3.5 text-left bg-[#FAF8F5]/20">
+                          <div className="relative w-full h-40 rounded-xl overflow-hidden shrink-0 shadow-2xs">
                             <img
                               src={leadData.trips?.image_url || "https://images.unsplash.com/photo-1540959733332-eab4deabeeaf?auto=format&fit=crop&w=600&q=80"}
                               alt={leadData.trips?.title || "Trip"}
@@ -1012,7 +1095,7 @@ export default function ManagerLeadDetailPage({ params }: ManagerLeadDetailPageP
                             </div>
                             
                             <div className="flex justify-between items-end border-t border-slate-200/50 pt-2.5 text-[9px] font-bold text-slate-500">
-                              <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-5 gap-4 flex-1">
+                              <div className="grid grid-cols-2 sm:grid-cols-3 gap-x-6 gap-y-2.5 flex-1 pr-3">
                                 <div>
                                   <span className="text-[8px] font-black uppercase text-slate-400 tracking-wider">Seats Available</span>
                                   <span className="block text-slate-700 font-extrabold mt-0.5">
@@ -1033,7 +1116,7 @@ export default function ManagerLeadDetailPage({ params }: ManagerLeadDetailPageP
                                 </div>
                                 <div>
                                   <span className="text-[8px] font-black uppercase text-slate-400 tracking-wider">Next Departure</span>
-                                  <span className="block text-slate-700 font-extrabold mt-0.5 truncate max-w-[65px]">
+                                  <span className="block text-slate-700 font-extrabold mt-0.5 truncate max-w-[100px]">
                                     {leadData?.name === "Smita Jhode" ? "12 Jul 2026" : (leadData.trips?.dates || "TBD")}
                                   </span>
                                 </div>
@@ -1045,7 +1128,7 @@ export default function ManagerLeadDetailPage({ params }: ManagerLeadDetailPageP
                                       alt="Manager"
                                       className="w-4 h-4 rounded-full object-cover shrink-0"
                                     />
-                                    <span className="text-slate-700 font-extrabold text-[8px] truncate max-w-[60px]">
+                                    <span className="text-slate-700 font-extrabold text-[8px] truncate max-w-[80px]">
                                       {assignedProfile?.full_name || "Manager"}
                                     </span>
                                   </div>
@@ -1426,20 +1509,107 @@ export default function ManagerLeadDetailPage({ params }: ManagerLeadDetailPageP
                   )}
                 </div>
                 {nextActionTask && (
-                  <div className="flex gap-2 pl-7">
-                    <button
-                      onClick={() => handleCompleteTask(nextActionTask.id)}
-                      className="flex-1 py-2 bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-bold rounded-xl transition-all shadow-xs cursor-pointer border-0"
-                    >
-                      Complete
-                    </button>
-                    <button
-                      onClick={() => handleRescheduleClick(nextActionTask)}
-                      className="flex-1 py-2 bg-white hover:bg-slate-50 text-slate-700 border border-[#e7e1d5]/55 text-xs font-bold rounded-xl transition-all shadow-xs cursor-pointer"
-                    >
-                      Reschedule
-                    </button>
-                  </div>
+                  nextActionTask.step === 2 ? (
+                    <div className="pl-7 space-y-4 pt-2">
+                      <div className="space-y-1.5 text-left">
+                        <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest block">Upload Brochure PDF</label>
+                        <input
+                          type="file"
+                          accept="application/pdf"
+                          id="brochure-pdf-upload"
+                          className="hidden"
+                          onChange={(e) => {
+                            const file = e.target.files?.[0];
+                            if (file) {
+                              if (file.type !== "application/pdf") {
+                                alert("Please select a PDF file.");
+                                return;
+                              }
+                              if (file.size > 20 * 1024 * 1024) {
+                                alert("PDF file must be under 20MB.");
+                                return;
+                              }
+                              setBrochureFile(file);
+                            }
+                          }}
+                        />
+                        <div className="flex flex-col gap-2 pt-1">
+                          <div className="flex items-center">
+                            <label
+                              htmlFor="brochure-pdf-upload"
+                              className="px-4 py-2 border border-dashed border-[#e7e1d5] hover:border-[#FF5B26]/30 bg-white hover:bg-[#FAF8F5] text-slate-700 hover:text-slate-900 rounded-xl text-xs font-bold transition-all shadow-xs cursor-pointer inline-flex items-center gap-1.5"
+                            >
+                              <FileText className="w-3.5 h-3.5 text-[#FF5B26]" />
+                              {brochureFile ? "Change PDF" : "Choose PDF File"}
+                            </label>
+                          </div>
+                          {brochureFile && (
+                            <span className="text-xs font-semibold text-slate-600 truncate max-w-full">
+                              Selected: {brochureFile.name}
+                            </span>
+                          )}
+                          {!brochureFile && leadData?.trips?.brochure_url && (
+                            <span className="text-xs font-bold text-emerald-600">
+                              ✓ Brochure already attached
+                            </span>
+                          )}
+                        </div>
+                      </div>
+
+                      <div className="space-y-1.5">
+                        <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest block">Custom Professional Message</label>
+                        <textarea
+                          rows={4}
+                          className="w-full rounded-xl border border-[#e7e1d5]/70 focus:border-[#FF5B26]/30 focus:ring-0 focus:outline-none p-3 text-xs font-semibold text-slate-700 bg-white"
+                          value={brochureMsg}
+                          onChange={(e) => setBrochureMsg(e.target.value)}
+                          placeholder="Enter a professional message to the traveler..."
+                        />
+                      </div>
+
+                      <div className="flex gap-2">
+                        <button
+                          disabled={uploadingBrochure}
+                          onClick={handleUploadAndShareBrochure}
+                          className="flex-1 py-2.5 bg-[#FF5B26] hover:bg-[#e04b1c] disabled:bg-slate-300 text-white text-xs font-bold rounded-xl transition-all shadow-xs cursor-pointer border-0 flex items-center justify-center gap-1.5"
+                        >
+                          {uploadingBrochure ? (
+                            <>
+                              <Loader2 className="w-3.5 h-3.5 animate-spin" />
+                              Uploading & Sending...
+                            </>
+                          ) : (
+                            <>
+                              <Send className="w-3.5 h-3.5" />
+                              Upload & Send Brochure
+                            </>
+                          )}
+                        </button>
+                        <button
+                          disabled={uploadingBrochure}
+                          onClick={() => handleRescheduleClick(nextActionTask)}
+                          className="px-4 py-2.5 bg-white hover:bg-slate-50 text-slate-700 border border-[#e7e1d5]/55 text-xs font-bold rounded-xl transition-all shadow-xs cursor-pointer"
+                        >
+                          Reschedule
+                        </button>
+                      </div>
+                    </div>
+                  ) : (
+                    <div className="flex gap-2 pl-7">
+                      <button
+                        onClick={() => handleCompleteTask(nextActionTask.id)}
+                        className="flex-1 py-2 bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-bold rounded-xl transition-all shadow-xs cursor-pointer border-0"
+                      >
+                        Complete
+                      </button>
+                      <button
+                        onClick={() => handleRescheduleClick(nextActionTask)}
+                        className="flex-1 py-2 bg-white hover:bg-slate-50 text-slate-700 border border-[#e7e1d5]/55 text-xs font-bold rounded-xl transition-all shadow-xs cursor-pointer"
+                      >
+                        Reschedule
+                      </button>
+                    </div>
+                  )
                 )}
               </div>
             </div>
@@ -1472,35 +1642,7 @@ export default function ManagerLeadDetailPage({ params }: ManagerLeadDetailPageP
               </div>
             </div>
 
-            {/* Lead Health Card */}
-            <div className="bg-white rounded-3xl border border-[#e7e1d5]/55 shadow-xs p-6 text-left space-y-4">
-              <h2 className="text-sm font-black uppercase tracking-wider text-slate-800">Lead Health</h2>
-              <div className="grid grid-cols-3 gap-2 border-b border-slate-100 pb-4 text-xs font-semibold">
-                <div>
-                  <div className="text-[9px] font-black uppercase tracking-wider text-slate-400">Lead Score</div>
-                  <div className="mt-1 text-sm font-black text-slate-800">85 / 100</div>
-                </div>
-                <div>
-                  <div className="text-[9px] font-black uppercase tracking-wider text-slate-400">Response Rate</div>
-                  <div className="mt-1 text-xs font-black text-emerald-600">High</div>
-                </div>
-                <div>
-                  <div className="text-[9px] font-black uppercase tracking-wider text-slate-400">Last Contact</div>
-                  <div className="mt-1 text-xs font-black text-emerald-600">Today</div>
-                </div>
-              </div>
-              <div className="text-xs font-semibold">
-                <div className="text-[9px] font-black uppercase tracking-wider text-slate-400">Priority</div>
-                <div className={`mt-1 text-xs font-black ${
-                  (leadData.priority || "High").toLowerCase() === "high" ? "text-rose-600" :
-                  (leadData.priority || "High").toLowerCase() === "medium" ? "text-amber-600" : "text-emerald-600"
-                }`}>
-                  {leadData.priority || "High"}
-                </div>
-              </div>
-            </div>
-
-          </div>
+           </div>
         </div>
 
         {/* Inline Modal: Create Task Dialog */}

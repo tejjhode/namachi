@@ -29,22 +29,53 @@ export default async function ManagerLeadsPage() {
 
   const { data: leads } = await client
     .from("leads")
-    .select("id, name, email, phone, source, status, created_at, assigned_to, trips(id, title, destination, image_url)")
+    .select("id, name, email, phone, source, status, created_at, assigned_to, user_id, trips(id, title, destination, image_url)")
     .eq("assigned_to", user.id)
     .order("created_at", { ascending: false });
 
-  const leadItems = (leads || []).map((lead: any) => ({
-    id: lead.id,
-    name: lead.name || "Unknown Lead",
-    email: lead.email || "",
-    phone: lead.phone || null,
-    source: lead.source || null,
-    status: lead.status || "new",
-    created_at: lead.created_at || null,
-    trip_title: lead.trips?.title || "General Enquiry",
-    trip_destination: lead.trips?.destination || null,
-    trip_image_url: lead.trips?.image_url || null,
-  }));
+  const travelerEmails = [...new Set((leads || []).map((l: any) => l.email).filter(Boolean))];
+  const travelerUserIds = [...new Set((leads || []).map((l: any) => l.user_id).filter(Boolean))];
+
+  const profileMap = new Map<string, string>();
+
+  if (travelerUserIds.length > 0 || travelerEmails.length > 0) {
+    const filters = [];
+    if (travelerUserIds.length > 0) {
+      filters.push(`id.in.(${travelerUserIds.join(",")})`);
+    }
+    if (travelerEmails.length > 0) {
+      filters.push(`email.in.(${travelerEmails.join(",")})`);
+    }
+
+    const { data: travelerProfiles } = await client
+      .from("profiles")
+      .select("id, email, avatar_url")
+      .or(filters.join(","));
+
+    (travelerProfiles || []).forEach((p: any) => {
+      if (p.id && p.avatar_url) profileMap.set(p.id, p.avatar_url);
+      if (p.email && p.avatar_url) profileMap.set(p.email.toLowerCase().trim(), p.avatar_url);
+    });
+  }
+
+  const leadItems = (leads || []).map((lead: any) => {
+    const avatarUrl = (lead.user_id ? profileMap.get(lead.user_id) : null) || 
+                      (lead.email ? profileMap.get(lead.email.toLowerCase().trim()) : null) || 
+                      null;
+    return {
+      id: lead.id,
+      name: lead.name || "Unknown Lead",
+      email: lead.email || "",
+      phone: lead.phone || null,
+      source: lead.source || null,
+      status: lead.status || "new",
+      created_at: lead.created_at || null,
+      avatar_url: avatarUrl,
+      trip_title: lead.trips?.title || "General Enquiry",
+      trip_destination: lead.trips?.destination || null,
+      trip_image_url: lead.trips?.image_url || null,
+    };
+  });
 
   return (
     <ManagerLeadsClient

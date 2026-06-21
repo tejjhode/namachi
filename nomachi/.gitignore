@@ -1,1 +1,5 @@
-public/mock_deliveries.json
+node_modules
+.env.local
+.next
+.vscode
+.DS_Store

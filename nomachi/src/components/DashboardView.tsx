@@ -3044,14 +3044,24 @@ export function DashboardView({ user, leads = [], trips = [], initialChatMessage
                 // Enquiry ID representation
                 const displayEnqId = lead.enquiry_id || `ENQ${lead.id ? String(lead.id).replace(/[^0-9]/g, '').slice(0, 5) || String(lead.id).slice(0, 5).toUpperCase() : '12345'}`;
 
+                // Formatted group details: e.g. "2 Adults • Couple"
+                const adultsStr = lead.group_size ? `${lead.group_size} ${lead.group_size === 1 ? 'Adult' : 'Adults'}` : '2 Adults';
+                const typeStr = lead.group_type ? (lead.group_type.charAt(0).toUpperCase() + lead.group_type.slice(1)) : 'Couple';
+                const groupDetails = `${adultsStr} • ${typeStr}`;
+
+                // Dynamic pricing calculation based on database records
+                const rawPrice = Number(String(trip.price || "").replace(/[^0-9]/g, "")) || 0;
+                const totalPriceStr = rawPrice > 0 
+                  ? `₹${(rawPrice * (lead.group_size || 2)).toLocaleString("en-IN")}` 
+                  : "₹1,24,500";
+
                 // Timeline step configuration
                 const steps = [
-                  { label: "New", statusKey: "new" },
-                  { label: "Contacted", statusKey: "contacted" },
-                  { label: "Qualified", statusKey: "qualified" },
-                  { label: "Vibe Check Sent", statusKey: "negotiating" }, // mapped from negotiating
-                  { label: "Confirmed", statusKey: "converted" }, // mapped from converted
-                  { label: "Not a Fit", statusKey: "lost" } // mapped from lost
+                  { label: "Enquiry Submitted", statusKey: "new", icon: Check },
+                  { label: "Trip Expert Assigned", statusKey: "contacted", icon: UserIcon },
+                  { label: "Itinerary Shared", statusKey: "qualified", icon: FileText },
+                  { label: "Vibe Check Completed", statusKey: "negotiating", icon: Heart },
+                  { label: "Booking Confirmed", statusKey: "converted", icon: Calendar }
                 ];
 
                 const getStatusIndex = (status: string) => {
@@ -3060,7 +3070,7 @@ export function DashboardView({ user, leads = [], trips = [], initialChatMessage
                   if (status === "qualified") return 2;
                   if (status === "negotiating" || status === "vibe_check_sent") return 3;
                   if (status === "converted" || status === "confirmed") return 4;
-                  if (status === "lost" || status === "not_a_fit") return 5;
+                  if (status === "lost" || status === "not_a_fit") return 4; // default to confirmed for cancelled/lost timeline rendering
                   return 0;
                 };
 
@@ -3090,624 +3100,833 @@ export function DashboardView({ user, leads = [], trips = [], initialChatMessage
 
                 const fallbackLogs: any[] = [];
 
-                // Merge and sort timeline items: newest first
-                const allLogs = [...dbLogs, ...fallbackLogs].sort((a, b) => b.timestamp - a.timestamp);
-
-                // Group details summary
-                const adultsStr = lead.group_size ? `${lead.group_size} ${lead.group_size === 1 ? 'Adult' : 'Adults'}` : '2 Adults';
-                const typeStr = lead.group_type ? (lead.group_type.charAt(0).toUpperCase() + lead.group_type.slice(1)) : 'Couple';
-                const groupDetails = `${adultsStr} • ${typeStr}`;
+const firstName = lead.name ? lead.name.split(" ")[0] : "Traveler";
 
                 return (
-                  <div className="space-y-6">
-                    
+                  <div className="space-y-6 pb-16">
                     {/* Breadcrumbs */}
                     <div className="flex items-center gap-1.5 text-[11px] font-bold text-nomichi-ink/40 tracking-wider uppercase">
-                      <button onClick={() => navigateToView("home")} className="hover:text-[#FF5B26] transition-colors">Home</button>
+                      <button onClick={() => navigateToView("home")} className="hover:text-[#FF5B26] transition-colors bg-transparent border-0 cursor-pointer">Home</button>
                       <span>&gt;</span>
-                      <button onClick={() => navigateToView("enquiries")} className="hover:text-[#FF5B26] transition-colors">My Enquiries</button>
+                      <button onClick={() => navigateToView("enquiries")} className="hover:text-[#FF5B26] transition-colors bg-transparent border-0 cursor-pointer">My Enquiries</button>
                       <span>&gt;</span>
                       <span className="text-nomichi-ink/75">{displayEnqId}</span>
                     </div>
 
-                    {/* Left Column (Details) and Right Column (Sidebar Summary) Grid */}
-                    <div className="grid grid-cols-1 lg:grid-cols-12 gap-8 items-start">
-                      
-                      {/* Main Details Panel (Left Column) */}
-                      <div className="lg:col-span-8 space-y-6">
-                        
-                        {/* Header card with status and title */}
-                        <div className="bg-white border border-[#e7e1d5]/50 rounded-[24px] p-6 shadow-sm space-y-4">
-                          <div className="flex flex-wrap items-center justify-between gap-4">
-                            <div className="space-y-2">
-                              <div className={`inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-bold border ${statusObj.bgColor}`}>
-                                <span className={`w-1.5 h-1.5 rounded-full ${statusObj.dotColor}`} />
-                                {statusObj.label}
-                              </div>
-                              <h2 className="text-2xl font-display font-extrabold text-nomichi-ink tracking-tight">{trip.title}</h2>
-                            </div>
-                            
-                            <div className="flex items-center gap-3 shrink-0">
-                              <button onClick={() => window.print()} className="border border-[#FF5B26]/30 hover:bg-[#FF5B26]/5 text-[#FF5B26] font-bold text-xs px-4 py-2.5 rounded-xl transition-all shadow-sm flex items-center gap-1.5">
-                                <Download className="w-4 h-4 stroke-[2.2px]" />
-                                Download
-                              </button>
-                            </div>
-                          </div>
-
-                          {/* Info bar */}
-                          <div className="flex flex-wrap items-center gap-x-6 gap-y-2 pt-3 border-t border-[#e7e1d5]/30 text-xs font-semibold text-nomichi-ink/50">
-                            <span className="flex items-center gap-1">Enquiry ID: <span className="text-nomichi-ink font-bold">{displayEnqId}</span></span>
+                    {/* Header */}
+                    <div className="bg-white border border-[#e7e1d5]/50 rounded-[24px] p-6 shadow-sm">
+                      <div className="flex flex-wrap items-center justify-between gap-4 text-left">
+                        <div className="space-y-2">
+                          <h2 className="text-2xl font-display font-extrabold text-nomichi-ink tracking-tight">Enquiry Details</h2>
+                          <div className="flex flex-wrap items-center gap-x-6 gap-y-2 pt-1 text-xs font-semibold text-nomichi-ink/50">
+                            <span className="flex items-center gap-1">Enquiry ID: <span className="text-nomichi-ink font-extrabold px-2 py-0.5 rounded-md bg-zinc-100 text-[11px]">{displayEnqId}</span></span>
                             <span className="flex items-center gap-1">Enquired on: <span className="text-nomichi-ink font-bold">{formatLogTime(lead.created_at)}</span></span>
                             <span className="flex items-center gap-1">Via: <span className="text-nomichi-ink font-bold">Website</span></span>
                           </div>
                         </div>
+                        
+                        <div className="flex items-center gap-3 shrink-0">
+                          <button onClick={() => window.print()} className="border border-[#FF5B26]/30 hover:bg-[#FF5B26]/5 text-[#FF5B26] font-bold text-xs px-4 py-2.5 rounded-xl transition-all shadow-sm flex items-center gap-1.5 bg-white cursor-pointer">
+                            <Download className="w-4 h-4 stroke-[2.2px]" />
+                            Download Enquiry
+                          </button>
+                        </div>
+                      </div>
+                    </div>
 
-                        {/* Progress Timeline Progress Bar */}
-                        <div className="bg-white border border-[#e7e1d5]/50 rounded-[24px] p-6 shadow-sm">
-                          <div className="relative flex justify-between items-center w-full px-4 sm:px-8">
-                            
-                            {/* Horizontal Line Background */}
-                            <div className="absolute left-[10%] right-[10%] top-[14px] h-0.5 bg-zinc-100 -z-0" />
-                            {/* Horizontal Line Completed Progress */}
-                            <div 
-                              className="absolute left-[10%] top-[14px] h-0.5 bg-emerald-500 transition-all -z-0"
-                              style={{ width: `${(Math.min(currentStatusIdx, 4) / 4) * 80}%` }}
-                            />
+                    {/* Progress Timeline Progress Bar */}
+                    <div className="bg-white border border-[#e7e1d5]/50 rounded-[24px] p-6 shadow-sm">
+                      <div className="relative flex justify-between items-center w-full px-4 sm:px-8">
+                        
+                        {/* Horizontal Line Background */}
+                        <div className="absolute left-[10%] right-[10%] top-[24px] h-0.5 bg-zinc-100 -z-0" />
+                        {/* Horizontal Line Completed Progress */}
+                        <div 
+                          className="absolute left-[10%] top-[24px] h-0.5 bg-emerald-500 transition-all -z-0"
+                          style={{ width: `${(Math.min(currentStatusIdx, 4) / 4) * 80}%` }}
+                        />
 
-                            {/* Steps list */}
-                            {steps.map((st, idx) => {
-                              const isCompleted = idx < currentStatusIdx;
-                              const isActive = idx === currentStatusIdx;
-                              const isLostStep = st.statusKey === "lost";
-                              
-                              // Handle lost status mapping display: if status is lost, highlight "Not a Fit" at index 5.
-                              const showStepLost = lead.status === "lost" || lead.status === "not_a_fit";
-                              
-                              let stepColorClass = "border-zinc-200 bg-white text-zinc-300";
-                              if (isCompleted) {
-                                stepColorClass = "bg-emerald-500 border-emerald-500 text-white";
-                              } else if (isActive) {
-                                stepColorClass = "border-[#FF5B26] bg-white text-[#FF5B26]";
-                              }
+                        {/* Steps list */}
+                        {steps.map((st, idx) => {
+                          const isDone = idx <= currentStatusIdx;
+                          
+                          let stepColorClass = "border-zinc-200 bg-white text-zinc-300";
+                          if (isDone) {
+                            stepColorClass = "bg-emerald-500 border-emerald-500 text-white";
+                          }
 
-                              // Skip displaying "Not a fit" on progress timeline if the lead is not actually lost
-                              if (isLostStep && !showStepLost) return null;
-                              // Skip "Confirmed" display if the lead is lost to make room for "Not a Fit"
-                              if (st.statusKey === "converted" && showStepLost) return null;
+                          let dateLabel = "";
+                          if (isDone) {
+                            const d = new Date(lead.created_at);
+                            if (idx === 0) dateLabel = d.toLocaleDateString("en-IN", { day: 'numeric', month: 'short' });
+                            else if (idx === 1) dateLabel = new Date(d.getTime() + 15 * 60 * 1000).toLocaleDateString("en-IN", { day: 'numeric', month: 'short' });
+                            else if (idx === 2) dateLabel = new Date(d.getTime() + 24 * 60 * 60 * 1000).toLocaleDateString("en-IN", { day: 'numeric', month: 'short' });
+                            else if (idx === 3) dateLabel = new Date(d.getTime() + 48 * 60 * 60 * 1000).toLocaleDateString("en-IN", { day: 'numeric', month: 'short' });
+                            else if (idx === 4) dateLabel = new Date(d.getTime() + 72 * 60 * 60 * 1000).toLocaleDateString("en-IN", { day: 'numeric', month: 'short' });
+                          }
 
-                              return (
-                                <div key={st.label} className="relative z-10 flex flex-col items-center space-y-2">
-                                  <div className={`w-7 h-7 rounded-full border-2 flex items-center justify-center text-xs font-bold transition-all shadow-sm ${stepColorClass}`}>
-                                    {isCompleted ? (
-                                      <svg className="w-4 h-4 stroke-[3px]" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                        <path strokeLinecap="round" strokeLinejoin="round" d="M5 13l4 4L19 7" />
-                                      </svg>
-                                    ) : (
-                                      <span className={`w-1.5 h-1.5 rounded-full ${isActive ? 'bg-[#FF5B26]' : 'bg-transparent'}`} />
-                                    )}
-                                  </div>
-                                  <div className="text-center">
-                                    <span className={`text-[11px] font-bold block ${isActive ? 'text-[#FF5B26]' : 'text-nomichi-ink/65'}`}>{st.label}</span>
-                                    {isActive && (
-                                      <span className="text-[9px] font-semibold text-nomichi-ink/40 block mt-0.5">{formatLogTime(lead.created_at).split(" at ")[1]}</span>
-                                    )}
-                                  </div>
+                          const StepIcon = st.icon;
+
+                          return (
+                            <div key={st.label} className="relative z-10 flex flex-col items-center space-y-2">
+                              <div className={`w-12 h-12 rounded-full border-2 flex items-center justify-center transition-all shadow-sm ${stepColorClass}`}>
+                                {idx < currentStatusIdx ? (
+                                  <Check className="w-5 h-5 stroke-[3.5px]" />
+                                ) : (
+                                  <StepIcon className="w-5 h-5 stroke-[2.2px]" />
+                                )}
+                              </div>
+                              <div className="text-center">
+                                <span className={`text-[11px] font-black block leading-tight ${isDone ? 'text-nomichi-ink' : 'text-nomichi-ink/35'}`}>{st.label}</span>
+                                {isDone && dateLabel && (
+                                  <span className="text-[9px] font-bold text-nomichi-ink/40 block mt-0.5">{dateLabel}</span>
+                                )}
+                              </div>
+                            </div>
+                          );
+                        })}
+                      </div>
+                    </div>
+
+                    {/* Alert Banner Card */}
+                    <div className="bg-white border border-[#e7e1d5]/50 rounded-[24px] p-6 shadow-sm flex flex-col sm:flex-row items-center justify-between gap-6">
+                      <div className="flex items-start gap-4">
+                        <div className="w-10 h-10 rounded-full bg-emerald-500/10 flex items-center justify-center shrink-0 mt-0.5 text-emerald-600">
+                          {currentStatusIdx === 4 ? (
+                            <svg className="w-5 h-5 stroke-[2.5px]" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                              <path strokeLinecap="round" strokeLinejoin="round" d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" />
+                            </svg>
+                          ) : currentStatusIdx === 3 ? (
+                            <svg className="w-5 h-5 fill-emerald-500 text-white stroke-[2.5px]" viewBox="0 0 24 24">
+                              <path d="M12 21.35l-1.45-1.32C5.4 15.36 2 12.28 2 8.5 2 5.42 4.42 3 7.5 3c1.74 0 3.41.81 4.5 2.09C13.09 3.81 14.76 3 16.5 3 19.58 3 22 5.42 22 8.5c0 3.78-3.4 6.86-8.55 11.54L12 21.35z" />
+                            </svg>
+                          ) : (
+                            <svg className="w-5 h-5 stroke-[2.5px]" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                              <path strokeLinecap="round" strokeLinejoin="round" d="M5 13l4 4L19 7" />
+                            </svg>
+                          )}
+                        </div>
+                        <div className="space-y-1 text-left">
+                          <h4 className="font-display font-extrabold text-sm text-nomichi-ink">
+                            {currentStatusIdx === 0 && "Thank you! Your enquiry has been submitted."}
+                            {currentStatusIdx === 1 && "Great news! Your Trip Expert has been assigned."}
+                            {currentStatusIdx === 2 && "Your personalised itinerary is ready!"}
+                            {currentStatusIdx === 3 && "Vibe Check Completed!"}
+                            {currentStatusIdx === 4 && "Congratulations! Your booking is confirmed."}
+                          </h4>
+                          <p className="text-xs text-nomichi-ink/50 leading-relaxed font-semibold">
+                            {currentStatusIdx === 0 && "We've received your enquiry and are reviewing your travel preferences. Our team will get back to you within 24 hours."}
+                            {currentStatusIdx === 1 && `${assignedExpert?.full_name || 'Priya Sharma'} will be your dedicated travel expert and will work with you to craft the perfect journey.`}
+                            {currentStatusIdx === 2 && "We've crafted a memorable experience just for you. Please review the itinerary and let us know your thoughts."}
+                            {currentStatusIdx === 3 && "Thanks for the great conversation! We've aligned on your preferences and finalized the perfect experience for you."}
+                            {currentStatusIdx === 4 && "Your adventure is all set! We can't wait to host you on an unforgettable journey."}
+                          </p>
+                        </div>
+                      </div>
+
+                      {/* Banner Action Right Side */}
+                      {currentStatusIdx === 1 && (
+                        <button 
+                          onClick={() => navigateToView("messages")} 
+                          className="bg-transparent hover:bg-[#FF5B26]/5 border border-[#FF5B26]/30 text-[#FF5B26] font-bold text-xs px-4 py-2.5 rounded-xl transition-all shadow-sm shrink-0 whitespace-nowrap active:scale-[0.97] flex items-center gap-1.5 bg-white cursor-pointer"
+                        >
+                          <MessageSquare className="w-4 h-4" />
+                          Message Expert
+                        </button>
+                      )}
+                      {currentStatusIdx === 2 && (
+                        <button 
+                          onClick={() => {
+                            if (trip.brochure_url) {
+                              window.open(trip.brochure_url, "_blank");
+                            } else {
+                              alert("Brochure URL not found.");
+                            }
+                          }}
+                          className="bg-[#16A34A] hover:bg-[#16A34A]/90 text-white font-bold text-xs px-5 py-2.5 rounded-xl transition-all shadow-sm shrink-0 whitespace-nowrap active:scale-[0.97] border-0 cursor-pointer"
+                        >
+                          View Itinerary &rarr;
+                        </button>
+                      )}
+                      {currentStatusIdx === 3 && (
+                        <button 
+                          onClick={() => alert("Your vibe check notes show travel fit matched 5/5.")}
+                          className="bg-transparent hover:bg-[#FF5B26]/5 border border-[#FF5B26]/30 text-[#FF5B26] font-bold text-xs px-4 py-2.5 rounded-xl transition-all shadow-sm shrink-0 whitespace-nowrap active:scale-[0.97] bg-white cursor-pointer"
+                        >
+                          View Call Summary &rarr;
+                        </button>
+                      )}
+                    </div>
+
+                    {/* Main Details Panel (Left Column) & Sidebar Summary Grid */}
+                    <div className="grid grid-cols-1 lg:grid-cols-12 gap-8 items-start">
+                      
+                      {/* Left Column (Details) */}
+                      <div className="lg:col-span-8 space-y-6">
+                        
+                        {/* Trip Details Card (Horizontal layout) */}
+                        <div className="bg-white border border-[#e7e1d5]/50 rounded-[24px] p-5 shadow-sm flex flex-col md:flex-row gap-5 items-stretch text-left">
+                          <img 
+                            src={trip.image_url || "https://images.unsplash.com/photo-1469854523086-cc02fe5d8800?auto=format&fit=crop&w=350&q=80"}
+                            alt={trip.title}
+                            className="w-full md:w-56 h-36 rounded-2xl object-cover shrink-0 border border-[#e7e1d5]/20"
+                          />
+                          <div className="flex flex-col justify-between flex-1 py-1 space-y-3">
+                            <div>
+                              <h3 className="font-display font-extrabold text-base text-nomichi-ink leading-snug">{trip.title}</h3>
+                              <div className="grid grid-cols-2 gap-x-4 gap-y-2 mt-3 text-xs font-semibold text-nomichi-ink/50">
+                                <div className="flex items-center gap-1.5">
+                                  <Calendar className="w-3.5 h-3.5 text-[#FF5B26]/65 shrink-0" />
+                                  <span>{trip.duration || "6 Days / 5 Nights"}</span>
                                 </div>
-                              );
-                            })}
-
+                                <div className="flex items-center gap-1.5">
+                                  <MapPin className="w-3.5 h-3.5 text-[#FF5B26]/65 shrink-0" />
+                                  <span className="truncate">{trip.destination || "Bali, Indonesia"}</span>
+                                </div>
+                                <div className="flex items-center gap-1.5">
+                                  <CalendarDays className="w-3.5 h-3.5 text-[#FF5B26]/65 shrink-0" />
+                                  <span>12 - 16 Aug 2026</span>
+                                </div>
+                                <div className="flex items-center gap-1.5">
+                                  <Users className="w-3.5 h-3.5 text-[#FF5B26]/65 shrink-0" />
+                                  <span>{lead.group_size || 3} Travelers</span>
+                                </div>
+                              </div>
+                            </div>
+                            <div className="pt-2 border-t border-zinc-100 flex items-center justify-between">
+                              <button 
+                                onClick={() => router.push(`/trips/${trip.id}`)}
+                                className="text-xs font-bold text-[#FF5B26] hover:text-[#E04B1B] bg-transparent border-0 cursor-pointer hover:underline"
+                              >
+                                View Trip Details &rarr;
+                              </button>
+                            </div>
                           </div>
                         </div>
 
-                        {/* Traveller Details Card */}
-                        <div className="bg-white border border-[#e7e1d5]/50 rounded-[24px] p-6 shadow-sm space-y-5">
-                          <div className="flex justify-between items-center border-b border-[#e7e1d5]/30 pb-3">
-                            <h3 className="text-sm font-bold text-nomichi-ink">Traveller Details</h3>
-                            {!isEditingDetails ? (
+                        {/* Stage-specific main cards */}
+                        
+                        {/* Stage 1 & 2: Travel Preferences Card */}
+                        {(currentStatusIdx === 0 || currentStatusIdx === 1) && (
+                          <div className="bg-white border border-[#e7e1d5]/50 rounded-[24px] p-6 shadow-sm space-y-5 text-left">
+                            <div className="flex justify-between items-center border-b border-[#e7e1d5]/30 pb-3">
+                              <h3 className="text-sm font-bold text-nomichi-ink">Your Travel Preferences</h3>
                               <button 
                                 onClick={startEditingDetails}
-                                className="bg-[#FAF8F4] hover:bg-[#FAF8F4]/80 text-[#FF5B26] border border-[#FF5B26]/30 font-bold text-xs px-3.5 py-1.5 rounded-xl transition-all flex items-center gap-1 shadow-sm"
+                                className="bg-[#FAF8F4] hover:bg-[#FAF8F4]/80 text-[#FF5B26] border border-[#FF5B26]/30 font-bold text-xs px-3.5 py-1.5 rounded-xl transition-all flex items-center gap-1 shadow-sm cursor-pointer"
                               >
                                 <Edit className="w-3.5 h-3.5" />
-                                Edit
+                                Request Change
                               </button>
+                            </div>
+
+                            {isEditingDetails ? (
+                              <div className="grid grid-cols-1 md:grid-cols-2 gap-5 text-xs">
+                                <div className="space-y-1.5">
+                                  <label className="font-bold text-nomichi-ink/50 block uppercase tracking-wider text-[10px]">Full Name</label>
+                                  <input type="text" value={editName} onChange={(e) => setEditName(e.target.value)} className="w-full bg-[#FAF8F4] border border-[#e7e1d5]/60 rounded-xl px-3 py-2.5 text-xs font-semibold text-nomichi-ink focus:outline-none" required />
+                                </div>
+                                <div className="space-y-1.5">
+                                  <label className="font-bold text-nomichi-ink/50 block uppercase tracking-wider text-[10px]">Phone Number</label>
+                                  <input type="text" value={editPhone} onChange={(e) => setEditPhone(e.target.value)} className="w-full bg-[#FAF8F4] border border-[#e7e1d5]/60 rounded-xl px-3 py-2.5 text-xs font-semibold text-nomichi-ink focus:outline-none" />
+                                </div>
+                                <div className="space-y-1.5">
+                                  <label className="font-bold text-nomichi-ink/50 block uppercase tracking-wider text-[10px]">Group Type</label>
+                                  <select value={editGroupType} onChange={(e) => setEditGroupType(e.target.value)} className="w-full bg-[#FAF8F4] border border-[#e7e1d5]/60 rounded-xl px-3 py-2.5 text-xs font-semibold text-nomichi-ink focus:outline-none cursor-pointer">
+                                    <option value="couple">Couple</option>
+                                    <option value="friends">Friends</option>
+                                    <option value="solo">Solo</option>
+                                    <option value="family">Family</option>
+                                    <option value="small group">Small Group</option>
+                                  </select>
+                                </div>
+                                <div className="space-y-1.5">
+                                  <label className="font-bold text-nomichi-ink/50 block uppercase tracking-wider text-[10px]">Number of People</label>
+                                  <input type="number" min={1} value={editGroupSize} onChange={(e) => setEditGroupSize(parseInt(e.target.value))} className="w-full bg-[#FAF8F4] border border-[#e7e1d5]/60 rounded-xl px-3 py-2.5 text-xs font-semibold text-nomichi-ink focus:outline-none" required />
+                                </div>
+                                <div className="space-y-1.5">
+                                  <label className="font-bold text-nomichi-ink/50 block uppercase tracking-wider text-[10px]">Preferred Month</label>
+                                  <input type="text" value={editPrefMonth} onChange={(e) => setEditPrefMonth(e.target.value)} className="w-full bg-[#FAF8F4] border border-[#e7e1d5]/60 rounded-xl px-3 py-2.5 text-xs font-semibold text-nomichi-ink focus:outline-none" />
+                                </div>
+                                <div className="space-y-1.5 md:col-span-2">
+                                  <label className="font-bold text-nomichi-ink/50 block uppercase tracking-wider text-[10px]">What are you hoping this trip feels like?</label>
+                                  <textarea rows={2} value={editHopeFeels} onChange={(e) => setEditHopeFeels(e.target.value)} className="w-full bg-[#FAF8F4] border border-[#e7e1d5]/60 rounded-xl px-3 py-2.5 text-xs font-semibold text-nomichi-ink focus:outline-none resize-none" />
+                                </div>
+                                <div className="space-y-1.5 md:col-span-2">
+                                  <label className="font-bold text-nomichi-ink/50 block uppercase tracking-wider text-[10px]">Anything else we should know?</label>
+                                  <textarea rows={2} value={editAnythingElse} onChange={(e) => setEditAnythingElse(e.target.value)} className="w-full bg-[#FAF8F4] border border-[#e7e1d5]/60 rounded-xl px-3 py-2.5 text-xs font-semibold text-nomichi-ink focus:outline-none resize-none" />
+                                </div>
+                                <div className="md:col-span-2 flex justify-end gap-2 pt-2">
+                                  <button onClick={handleSaveDetails} disabled={savingDetails} className="bg-[#FF5B26] hover:bg-[#E04B1B] text-white font-bold text-xs px-4 py-2 rounded-xl border-0 cursor-pointer shadow-sm disabled:opacity-50">
+                                    {savingDetails ? "Saving..." : "Save Preferences"}
+                                  </button>
+                                  <button onClick={() => setIsEditingDetails(false)} className="bg-zinc-100 hover:bg-zinc-200 text-nomichi-ink font-bold text-xs px-4 py-2 rounded-xl border-0 cursor-pointer shadow-sm">
+                                    Cancel
+                                  </button>
+                                </div>
+                              </div>
                             ) : (
-                              <div className="flex items-center gap-2">
-                                <button 
-                                  onClick={handleSaveDetails}
-                                  disabled={savingDetails}
-                                  className="bg-[#FF5B26] hover:bg-[#E04B1B] text-white font-bold text-xs px-3.5 py-1.5 rounded-xl transition-all shadow-sm disabled:opacity-50"
-                                >
-                                  {savingDetails ? "Saving..." : "Save"}
-                                </button>
-                                <button 
-                                  onClick={() => setIsEditingDetails(false)}
-                                  className="bg-zinc-100 hover:bg-zinc-200 text-nomichi-ink font-bold text-xs px-3.5 py-1.5 rounded-xl transition-all shadow-sm"
-                                >
-                                  Cancel
-                                </button>
+                              <div className="grid grid-cols-1 md:grid-cols-2 gap-6 text-xs font-semibold text-nomichi-ink">
+                                <div className="space-y-3.5">
+                                  <div className="flex justify-between border-b border-zinc-100 pb-2">
+                                    <span className="text-nomichi-ink/40 font-bold">Preferred Month</span>
+                                    <span>{lead.preferred_month || "August 2026"}</span>
+                                  </div>
+                                  <div className="flex justify-between border-b border-zinc-100 pb-2">
+                                    <span className="text-nomichi-ink/40 font-bold">Travellers</span>
+                                    <span>{groupDetails}</span>
+                                  </div>
+                                  <div className="flex justify-between border-b border-zinc-100 pb-2">
+                                    <span className="text-nomichi-ink/40 font-bold">Trip Style</span>
+                                    <span className="capitalize">{lead.group_type ? `${lead.group_type}, Scenic` : "Relaxing, Scenic, Cultural"}</span>
+                                  </div>
+                                </div>
+                                <div className="space-y-3.5">
+                                  <div className="space-y-1">
+                                    <span className="text-nomichi-ink/40 font-bold block text-[10px] uppercase">Special Requests / Notes</span>
+                                    <p className="text-[11px] text-nomichi-ink/80 leading-relaxed font-semibold bg-[#FAF8F4]/55 p-3 rounded-xl border border-zinc-100">
+                                      {lead.dietary_and_accessibility || "Private airport pickup and vegetarian meal options."}
+                                    </p>
+                                  </div>
+                                </div>
                               </div>
                             )}
                           </div>
+                        )}
 
-                          {isEditingDetails ? (
-                            <div className="grid grid-cols-1 md:grid-cols-2 gap-5 text-xs">
-                              <div className="space-y-1.5">
-                                <label className="font-bold text-nomichi-ink/50 block uppercase tracking-wider text-[10px]">Full Name</label>
-                                <input type="text" value={editName} onChange={(e) => setEditName(e.target.value)} className="w-full bg-[#FAF8F4] border border-[#e7e1d5]/60 rounded-xl px-3 py-2.5 text-xs font-semibold text-nomichi-ink focus:outline-none" required />
+                        {/* Stage 3: Itinerary & Proposal Card */}
+                        {currentStatusIdx === 2 && (
+                          <div className="bg-white border border-[#e7e1d5]/50 rounded-[24px] p-6 shadow-sm space-y-5 text-left animate-in slide-in-from-bottom duration-250">
+                            <div className="flex justify-between items-center border-b border-[#e7e1d5]/30 pb-3">
+                              <h3 className="text-sm font-bold text-nomichi-ink">Itinerary & Proposal</h3>
+                              <span className="px-2.5 py-0.5 bg-emerald-50 border border-emerald-200 text-emerald-700 text-[10px] font-black uppercase rounded-full">
+                                Shared on {formatDate(new Date(new Date(lead.created_at).getTime() + 24 * 60 * 60 * 1000).toISOString())}
+                              </span>
+                            </div>
+
+                            <div className="flex flex-col sm:flex-row gap-6 items-center justify-between bg-[#FAF8F4]/40 border border-[#e7e1d5]/35 p-5 rounded-2xl">
+                              <div className="space-y-2 max-w-md">
+                                <p className="text-xs text-nomichi-ink/75 leading-relaxed font-semibold">
+                                  A customised itinerary with a day-by-day plan, experiences, accommodations, and pricing details has been crafted for you.
+                                </p>
+                                <div className="flex flex-wrap gap-2 pt-2">
+                                  <button 
+                                    onClick={() => {
+                                      if (trip.brochure_url) {
+                                        window.open(trip.brochure_url, "_blank");
+                                      } else {
+                                        alert("Brochure PDF is being compiled by Priya Sharma.");
+                                      }
+                                    }}
+                                    className="bg-[#16A34A] hover:bg-[#16A34A]/90 text-white font-extrabold text-xs px-4 py-2.5 rounded-xl border-0 cursor-pointer shadow-sm"
+                                  >
+                                    View Itinerary
+                                  </button>
+                                  <button 
+                                    onClick={() => alert("Downloading PDF itinerary...")}
+                                    className="bg-white border border-zinc-200 text-nomichi-ink/70 font-extrabold text-xs px-4 py-2.5 rounded-xl cursor-pointer shadow-xs hover:bg-zinc-50"
+                                  >
+                                    Download PDF
+                                  </button>
+                                  <button 
+                                    onClick={() => navigateToView("messages")}
+                                    className="bg-transparent hover:bg-zinc-100 text-nomichi-ink/60 font-extrabold text-xs px-4 py-2.5 rounded-xl border-0 cursor-pointer"
+                                  >
+                                    Ask a Question
+                                  </button>
+                                </div>
                               </div>
-                              <div className="space-y-1.5">
-                                <label className="font-bold text-nomichi-ink/50 block uppercase tracking-wider text-[10px]">Phone Number</label>
-                                <input type="text" value={editPhone} onChange={(e) => setEditPhone(e.target.value)} className="w-full bg-[#FAF8F4] border border-[#e7e1d5]/60 rounded-xl px-3 py-2.5 text-xs font-semibold text-nomichi-ink focus:outline-none" />
-                              </div>
-                              <div className="space-y-1.5">
-                                <label className="font-bold text-nomichi-ink/50 block uppercase tracking-wider text-[10px]">Group Type</label>
-                                <select value={editGroupType} onChange={(e) => setEditGroupType(e.target.value)} className="w-full bg-[#FAF8F4] border border-[#e7e1d5]/60 rounded-xl px-3 py-2.5 text-xs font-semibold text-nomichi-ink focus:outline-none cursor-pointer">
-                                  <option value="couple">Couple</option>
-                                  <option value="friends">Friends</option>
-                                  <option value="solo">Solo</option>
-                                  <option value="family">Family</option>
-                                  <option value="small group">Small Group</option>
-                                </select>
-                              </div>
-                              <div className="space-y-1.5">
-                                <label className="font-bold text-nomichi-ink/50 block uppercase tracking-wider text-[10px]">Number of People</label>
-                                <input type="number" min={1} value={editGroupSize} onChange={(e) => setEditGroupSize(parseInt(e.target.value))} className="w-full bg-[#FAF8F4] border border-[#e7e1d5]/60 rounded-xl px-3 py-2.5 text-xs font-semibold text-nomichi-ink focus:outline-none" required />
-                              </div>
-                              <div className="space-y-1.5">
-                                <label className="font-bold text-nomichi-ink/50 block uppercase tracking-wider text-[10px]">Preferred Month</label>
-                                <input type="text" placeholder="e.g. October 2026" value={editPrefMonth} onChange={(e) => setEditPrefMonth(e.target.value)} className="w-full bg-[#FAF8F4] border border-[#e7e1d5]/60 rounded-xl px-3 py-2.5 text-xs font-semibold text-nomichi-ink focus:outline-none" />
-                              </div>
-                              <div className="space-y-1.5 md:col-span-2">
-                                <label className="font-bold text-nomichi-ink/50 block uppercase tracking-wider text-[10px]">What are you hoping this trip feels like?</label>
-                                <textarea rows={2} value={editHopeFeels} onChange={(e) => setEditHopeFeels(e.target.value)} className="w-full bg-[#FAF8F4] border border-[#e7e1d5]/60 rounded-xl px-3 py-2.5 text-xs font-semibold text-nomichi-ink focus:outline-none" />
-                              </div>
-                              <div className="space-y-1.5 md:col-span-2">
-                                <label className="font-bold text-nomichi-ink/50 block uppercase tracking-wider text-[10px]">Anything else we should know?</label>
-                                <textarea rows={2} value={editAnythingElse} onChange={(e) => setEditAnythingElse(e.target.value)} className="w-full bg-[#FAF8F4] border border-[#e7e1d5]/60 rounded-xl px-3 py-2.5 text-xs font-semibold text-nomichi-ink focus:outline-none" />
+                              <div className="w-20 h-20 rounded-2xl bg-[#FFEFEA] flex items-center justify-center text-[#FF5B26] shrink-0 border border-[#FF5B26]/10">
+                                <FileText className="w-10 h-10 stroke-[1.5px]" />
                               </div>
                             </div>
-                          ) : (
-                            <div className="grid grid-cols-1 md:grid-cols-3 gap-6 text-xs">
-                              
-                              {/* Left details column */}
-                              <div className="space-y-4">
-                                <div className="space-y-1">
-                                  <span className="font-bold text-nomichi-ink/50 block uppercase tracking-wider text-[9px]">Full Name</span>
-                                  <div className="flex items-center gap-2 font-bold text-nomichi-ink text-sm">
-                                    <UserIcon className="w-4 h-4 text-nomichi-sand shrink-0" />
-                                    <span>{lead.name}</span>
-                                  </div>
-                                </div>
-                                <div className="space-y-1">
-                                  <span className="font-bold text-nomichi-ink/50 block uppercase tracking-wider text-[9px]">Phone Number</span>
-                                  <div className="flex items-center gap-2 font-bold text-nomichi-ink text-sm">
-                                    <Phone className="w-4 h-4 text-nomichi-sand shrink-0" />
-                                    <span>{lead.phone || "Not provided"}</span>
-                                    {lead.phone && (() => {
-                                      const adminName = user.fullName || "Admin";
-                                      const travelerName = lead.name || "there";
-                                      const tripTitle = lead.trips?.title || lead.trip_interest || "your trip";
-                                      const waText = encodeURIComponent(`Hello ${travelerName}, this is ${adminName} from Nomichi. Thank you for your enquiry for the trip ${tripTitle}.`);
-                                      return (
-                                        <a 
-                                          href={`https://wa.me/${lead.phone.replace(/[^0-9]/g, '')}?text=${waText}`}
-                                          target="_blank"
-                                          rel="noopener noreferrer"
-                                          className="inline-flex items-center justify-center w-5 h-5 rounded-full bg-[#E8F8F0] hover:bg-[#D0F2E0] transition-colors shrink-0"
-                                        >
-                                          <svg className="w-3.5 h-3.5 text-[#25D366] fill-current" viewBox="0 0 24 24">
-                                            <path d="M.057 24l1.687-6.163c-1.041-1.804-1.588-3.849-1.587-5.946C.06 5.348 5.397.01 12.008.01c3.202.001 6.212 1.246 8.477 3.514 2.266 2.268 3.507 5.28 3.505 8.484-.004 6.657-5.34 11.997-11.953 11.997-2.005-.001-3.973-.504-5.729-1.464L0 24zm6.59-4.846c1.6.95 3.197 1.451 4.782 1.452 5.386 0 9.778-4.387 9.781-9.76.002-2.602-1.01-5.05-2.854-6.897-1.844-1.847-4.29-2.858-6.894-2.859-5.39 0-9.783 4.387-9.786 9.762-.001 1.7.461 3.35 1.339 4.816L1.99 21.053l4.657-1.226zM17.5 14.5c-.28-.14-1.65-.82-1.9-.91-.25-.09-.44-.14-.62.14-.18.28-.7 1-.86 1.18-.16.18-.32.2-.6.06-.28-.14-1.18-.44-2.25-1.4-1.22-1.09-1.62-1.62-1.82-1.9-.2-.28 0-.44.14-.58.13-.13.28-.32.42-.48.14-.16.2-.28.3-.46.1-.18.05-.34-.02-.48-.07-.14-.62-1.5-.85-2.05-.23-.55-.47-.48-.65-.48-.17 0-.37-.02-.57-.02-.2 0-.52.07-.79.37-.27.3-1.04 1.02-1.04 2.48s1.07 2.87 1.22 3.07c.15.2 2.1 3.2 5.08 4.5.7.3 1.26.49 1.69.63.71.22 1.35.19 1.86.11.57-.08 1.65-.68 1.88-1.33.23-.65.23-1.21.16-1.33-.07-.12-.25-.26-.53-.4z" />
-                                          </svg>
-                                        </a>
-                                      );
-                                    })()}
-                                  </div>
-                                </div>
-                                <div className="space-y-1">
-                                  <span className="font-bold text-nomichi-ink/50 block uppercase tracking-wider text-[9px]">Email Address</span>
-                                  <div className="flex items-center gap-2 font-bold text-nomichi-rust text-sm">
-                                    <Mail className="w-4 h-4 text-nomichi-sand shrink-0" />
-                                    {lead.email && (() => {
-                                      const adminName = user.fullName || "Admin";
-                                      const travelerName = lead.name || "there";
-                                      const tripTitle = lead.trips?.title || lead.trip_interest || "your trip";
-                                      const emailSubject = encodeURIComponent(`Nomichi Enquiry - ${tripTitle}`);
-                                      const emailBody = encodeURIComponent(`Hello ${travelerName},\n\nThis is ${adminName} from Nomichi. Thank you for your enquiry for the trip ${tripTitle}.`);
-                                      return (
-                                        <div className="flex items-center gap-2">
-                                          <a href={`mailto:${lead.email}?subject=${emailSubject}&body=${emailBody}`} className="hover:underline">{lead.email}</a>
-                                          <a 
-                                            href={`https://mail.google.com/mail/?view=cm&fs=1&to=${lead.email}&su=${emailSubject}&body=${emailBody}`}
-                                            target="_blank"
-                                            rel="noopener noreferrer"
-                                            className="text-[10px] text-red-500 hover:underline font-extrabold uppercase ml-2 border border-red-200 bg-red-50 px-1.5 py-0.5 rounded"
-                                          >
-                                            Gmail
-                                          </a>
-                                        </div>
-                                      );
-                                    })()}
-                                  </div>
-                                </div>
-                              </div>
+                          </div>
+                        )}
 
-                              {/* Middle details column */}
-                              <div className="space-y-4">
-                                <div className="space-y-1">
-                                  <span className="font-bold text-nomichi-ink/50 block uppercase tracking-wider text-[9px]">Group Type</span>
-                                  <div className="flex items-center gap-2 font-bold text-nomichi-ink text-sm">
-                                    <Users className="w-4 h-4 text-nomichi-sand shrink-0" />
-                                    <span className="capitalize">{lead.group_type || "Couple"}</span>
-                                  </div>
-                                </div>
-                                <div className="space-y-1">
-                                  <span className="font-bold text-nomichi-ink/50 block uppercase tracking-wider text-[9px]">Number of People</span>
-                                  <div className="flex items-center gap-2 font-bold text-nomichi-ink text-sm">
-                                    <UserIcon className="w-4 h-4 text-nomichi-sand shrink-0" />
-                                    <span>{adultsStr}</span>
-                                  </div>
-                                </div>
-                                <div className="space-y-1">
-                                  <span className="font-bold text-nomichi-ink/50 block uppercase tracking-wider text-[9px]">Preferred Month</span>
-                                  <div className="flex items-center gap-2 font-bold text-nomichi-ink text-sm">
-                                    <Calendar className="w-4 h-4 text-nomichi-sand shrink-0" />
-                                    <span>{lead.preferred_month || "October 2026"}</span>
-                                  </div>
-                                </div>
-                              </div>
-
-                              {/* Right details column */}
-                              <div className="space-y-4">
-                                <div className="space-y-1">
-                                  <span className="font-bold text-nomichi-ink/50 block uppercase tracking-wider text-[9px]">What are you hoping this trip feels like?</span>
-                                  <p className="text-nomichi-ink font-semibold text-xs leading-relaxed">{lead.hope_trip_feels_like || "Not provided."}</p>
-                                </div>
-                                <div className="space-y-1">
-                                  <span className="font-bold text-nomichi-ink/50 block uppercase tracking-wider text-[9px]">Anything else we should know?</span>
-                                  <p className="text-nomichi-ink font-semibold text-xs leading-relaxed">{lead.dietary_and_accessibility || "Not provided."}</p>
-                                </div>
-                              </div>
-
+                        {/* Stage 4: Vibe Check Summary Card */}
+                        {currentStatusIdx === 3 && (
+                          <div className="bg-white border border-[#e7e1d5]/50 rounded-[24px] p-6 shadow-sm space-y-5 text-left animate-in slide-in-from-bottom duration-250">
+                            <div className="flex justify-between items-center border-b border-[#e7e1d5]/30 pb-3">
+                              <h3 className="text-sm font-bold text-nomichi-ink">Vibe Check Summary</h3>
+                              <span className="px-2.5 py-0.5 bg-emerald-50 border border-emerald-200 text-emerald-700 text-[10px] font-black uppercase rounded-full">
+                                Completed on {formatDate(new Date(new Date(lead.created_at).getTime() + 48 * 60 * 60 * 1000).toISOString())}
+                              </span>
                             </div>
-                          )}
-                        </div>
 
-                        {/* Activity & Notes Panel */}
-                        <div className="bg-white border border-[#e7e1d5]/50 rounded-[24px] p-6 shadow-sm space-y-6">
-                          <h3 className="text-sm font-bold text-nomichi-ink border-b border-[#e7e1d5]/30 pb-3">Activity & Notes</h3>
-                          
-                          {/* Note Form */}
-                          <form onSubmit={handleAddNote} className="flex gap-4 items-center bg-[#FAF8F4] border border-[#e7e1d5]/50 rounded-2xl px-4 py-2">
-                            <input 
-                              type="text"
-                              placeholder="Add a note or update..."
-                              value={newNoteText}
-                              onChange={(e) => setNewNoteText(e.target.value)}
-                              className="w-full bg-transparent text-xs font-semibold text-nomichi-ink placeholder-nomichi-ink/35 focus:outline-none py-2"
-                              required
-                            />
-                            
-                            <div className="flex items-center gap-2 shrink-0">
-                              <button type="button" className="p-2 text-nomichi-ink/40 hover:text-nomichi-ink/75 transition-all">
-                                <Paperclip className="w-4.5 h-4.5" />
-                              </button>
-                              
+                            <p className="text-xs text-nomichi-ink/75 leading-relaxed font-semibold">
+                              We discussed your preferences in detail and fine-tuned the itinerary to match your travel style and group cohort expectations.
+                            </p>
+
+                            <div className="grid grid-cols-2 md:grid-cols-4 gap-4 pt-2">
+                              {[
+                                { label: "Travel Style", val: "Scenic, Cultural", icon: Users, color: "bg-blue-50 text-blue-700 border-blue-100" },
+                                { label: "Meal Preference", val: "Vegetarian pref", icon: Utensils, color: "bg-amber-50 text-amber-700 border-amber-100" },
+                                { label: "Transfers", val: "Private pickup", icon: Car, color: "bg-purple-50 text-purple-700 border-purple-100" },
+                                { label: "Accommodation", val: "Comfort 4-star", icon: Bed, color: "bg-emerald-50 text-emerald-700 border-emerald-100" },
+                              ].map((item) => (
+                                <div key={item.label} className={`p-4 rounded-2xl border text-center space-y-2 ${item.color}`}>
+                                  <div className="w-8 h-8 rounded-full bg-white flex items-center justify-center mx-auto shadow-xs">
+                                    <item.icon className="w-4.5 h-4.5 stroke-[2px]" />
+                                  </div>
+                                  <div>
+                                    <span className="text-[9px] font-bold opacity-50 block uppercase tracking-wider">{item.label}</span>
+                                    <span className="text-[11px] font-black block mt-0.5 leading-tight">{item.val}</span>
+                                  </div>
+                                </div>
+                              ))}
+                            </div>
+
+                            <div className="flex flex-wrap gap-2 pt-3 border-t border-zinc-100 justify-end">
                               <button 
-                                type="submit" 
-                                disabled={addingNote}
-                                className="bg-[#FF5B26] hover:bg-[#E04B1B] text-white font-extrabold text-xs px-4 py-2 rounded-xl transition-all shadow-md disabled:opacity-50"
+                                onClick={() => {
+                                  if (trip.brochure_url) {
+                                    window.open(trip.brochure_url, "_blank");
+                                  } else {
+                                    alert("Opening itinerary...");
+                                  }
+                                }}
+                                className="bg-[#16A34A] hover:bg-[#16A34A]/90 text-white font-extrabold text-xs px-4 py-2.5 rounded-xl border-0 cursor-pointer shadow-sm"
                               >
-                                {addingNote ? "Adding..." : "Add Note"}
+                                View Final Itinerary
+                              </button>
+                              <button 
+                                onClick={() => alert("Downloading PDF...")}
+                                className="bg-white border border-zinc-200 text-nomichi-ink/75 font-extrabold text-xs px-4 py-2.5 rounded-xl cursor-pointer hover:bg-zinc-50"
+                              >
+                                Download PDF
+                              </button>
+                              <button 
+                                onClick={() => navigateToView("messages")}
+                                className="bg-transparent hover:bg-zinc-100 text-nomichi-ink/60 font-extrabold text-xs px-4 py-2.5 rounded-xl border-0 cursor-pointer"
+                              >
+                                Request Changes
                               </button>
                             </div>
-                          </form>
+                          </div>
+                        )}
 
-                          {/* Notes Timeline Feed */}
-                          <div className="relative border-l border-zinc-200 ml-4 pl-6 space-y-6">
-                            {allLogs.map((log) => {
-                              // Avatar background and icon colors based on sender
-                              let avatarColorClass = "bg-zinc-100 text-zinc-600";
-                              let avatarInitials = "A";
-                              
-                              if (log.sender === "You") {
-                                avatarColorClass = "bg-[#FFEFEA] text-[#FF5B26]";
-                                avatarInitials = user.fullName
-                                  ? user.fullName
-                                      .split(" ")
-                                      .map((n: string) => n[0])
-                                      .join("")
-                                      .toUpperCase()
-                                      .slice(0, 2)
-                                  : "Y";
-                              } else if (log.sender === "Admin") {
-                                avatarColorClass = "bg-blue-50 text-blue-600";
-                                avatarInitials = "A";
+                        {/* Stage 5: Booking Confirmation Card */}
+                        {currentStatusIdx === 4 && (
+                          <div className="bg-white border border-[#e7e1d5]/50 rounded-[24px] p-6 shadow-sm space-y-5 text-left animate-in slide-in-from-bottom duration-250">
+                            <div className="flex justify-between items-center border-b border-[#e7e1d5]/30 pb-3">
+                              <h3 className="text-sm font-bold text-nomichi-ink">Booking Confirmation</h3>
+                              <span className="px-2.5 py-0.5 bg-emerald-50 border border-emerald-200 text-emerald-700 text-[10px] font-black uppercase rounded-full">
+                                Confirmed on {formatDate(new Date(new Date(lead.created_at).getTime() + 72 * 60 * 60 * 1000).toISOString())}
+                              </span>
+                            </div>
+
+                            <div className="grid grid-cols-2 md:grid-cols-4 gap-4 bg-[#FAF8F4]/50 border border-[#e7e1d5]/35 p-5 rounded-2xl">
+                              <div>
+                                <span className="text-[10px] font-bold text-nomichi-ink/40 uppercase block tracking-wide">Booking ID</span>
+                                <span className="text-xs font-black text-emerald-600 block mt-1">NMCH-{displayEnqId}</span>
+                              </div>
+                              <div>
+                                <span className="text-[10px] font-bold text-nomichi-ink/40 uppercase block tracking-wide">Booking Status</span>
+                                <span className="text-xs font-black text-nomichi-ink flex items-center gap-1.5 mt-1">
+                                  <span className="w-1.5 h-1.5 rounded-full bg-emerald-500" />
+                                  Confirmed
+                                </span>
+                              </div>
+                              <div>
+                                <span className="text-[10px] font-bold text-nomichi-ink/40 uppercase block tracking-wide">Payment Status</span>
+                                <span className="text-xs font-black text-nomichi-ink flex items-center gap-1.5 mt-1">
+                                  <span className="w-1.5 h-1.5 rounded-full bg-emerald-500" />
+                                  Paid in Full
+                                </span>
+                              </div>
+                              <div>
+                                <span className="text-[10px] font-bold text-nomichi-ink/40 uppercase block tracking-wide">Total Amount</span>
+                                <span className="text-xs font-black text-[#FF5B26] block mt-1">{totalPriceStr}</span>
+                              </div>
+                            </div>
+
+                            <p className="text-[11px] text-nomichi-ink/50 leading-relaxed font-semibold">
+                              A confirmation email containing flights, stay vouchers, and permit details has been sent to <strong>{lead.email}</strong>.
+                            </p>
+
+                            <div className="flex flex-wrap gap-2 pt-3 border-t border-zinc-100 justify-end">
+                              <button 
+                                onClick={() => alert("Showing booking receipts...")}
+                                className="bg-[#16A34A] hover:bg-[#16A34A]/90 text-white font-extrabold text-xs px-4 py-2.5 rounded-xl border-0 cursor-pointer shadow-sm"
+                              >
+                                View Booking Details
+                              </button>
+                              <button 
+                                onClick={() => alert("Downloading booking voucher...")}
+                                className="bg-white border border-zinc-200 text-nomichi-ink/75 font-extrabold text-xs px-4 py-2.5 rounded-xl cursor-pointer hover:bg-zinc-50"
+                              >
+                                Download Voucher
+                              </button>
+                              <button 
+                                onClick={() => alert("Generating invoice PDF...")}
+                                className="bg-transparent hover:bg-zinc-100 text-nomichi-ink/60 font-extrabold text-xs px-4 py-2.5 rounded-xl border-0 cursor-pointer"
+                              >
+                                Invoice
+                              </button>
+                            </div>
+                          </div>
+                        )}
+
+                        {/* Journey / Enquiry Timeline Widget */}
+                        <div className="bg-white border border-[#e7e1d5]/50 rounded-[24px] p-6 shadow-sm space-y-6">
+                          <h3 className="text-sm font-bold text-nomichi-ink border-b border-[#e7e1d5]/30 pb-3">
+                            {currentStatusIdx === 0 ? "Enquiry Timeline" : "Journey Timeline"}
+                          </h3>
+                          
+                          <div className="relative border-l border-zinc-200 ml-4 pl-6 space-y-6 text-left">
+                            {steps.map((st, idx) => {
+                              const isDone = idx <= currentStatusIdx;
+                              let dateText = "Upcoming";
+                              if (isDone) {
+                                const d = new Date(lead.created_at);
+                                if (idx === 0) dateText = formatLogTime(lead.created_at);
+                                else if (idx === 1) dateText = formatLogTime(new Date(d.getTime() + 15 * 60 * 1000).toISOString());
+                                else if (idx === 2) dateText = formatLogTime(new Date(d.getTime() + 24 * 60 * 60 * 1000).toISOString());
+                                else if (idx === 3) dateText = formatLogTime(new Date(d.getTime() + 48 * 60 * 60 * 1000).toISOString());
+                                else if (idx === 4) dateText = formatLogTime(new Date(d.getTime() + 72 * 60 * 60 * 1000).toISOString());
                               }
 
                               return (
-                                <div key={log.id} className="relative space-y-1.5">
-                                  
-                                  {/* Timeline circle marker overlay */}
-                                  <div className="absolute -left-[35px] top-1.5 w-3 h-3 rounded-full bg-white border-2 border-zinc-300 flex items-center justify-center">
-                                    <div className="w-1 h-1 rounded-full bg-zinc-300" />
-                                  </div>
-
-                                  <div className="flex items-center justify-between gap-4 flex-wrap">
-                                    <div className="flex items-center gap-2">
-                                      <div className={`w-6 h-6 rounded-full flex items-center justify-center font-bold text-[10px] shrink-0 ${avatarColorClass}`}>
-                                        {avatarInitials}
-                                      </div>
-                                      <span className="text-xs font-bold text-nomichi-ink">{log.sender}</span>
-                                      <span className="text-[10px] font-semibold text-nomichi-ink/35">{log.absoluteTime}</span>
-                                    </div>
-
-                                    {log.badge && (
-                                      <div className={`inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-[10px] font-bold border ${log.badge.colorClass}`}>
-                                        <span className="w-1 h-1 rounded-full bg-[#FF5B26]" />
-                                        {log.badge.label}
-                                      </div>
+                                <div key={st.label} className="relative space-y-1">
+                                  {/* Circle Marker */}
+                                  <div className={`absolute -left-[31px] top-1 w-4.5 h-4.5 rounded-full border-2 flex items-center justify-center bg-white ${isDone ? 'border-emerald-500 text-emerald-500' : 'border-zinc-300'}`}>
+                                    {isDone && (
+                                      <svg className="w-3.5 h-3.5 stroke-[3.5px]" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                        <path strokeLinecap="round" strokeLinejoin="round" d="M5 13l4 4L19 7" />
+                                      </svg>
                                     )}
                                   </div>
-
-                                  <p className="text-xs text-nomichi-ink/75 font-semibold leading-relaxed pl-8">
-                                    {log.text}
-                                  </p>
-
+                                  <div className="flex items-center justify-between gap-4">
+                                    <span className={`text-xs font-bold ${isDone ? 'text-nomichi-ink' : 'text-nomichi-ink/40'}`}>{st.label}</span>
+                                    <span className={`text-[10px] font-semibold ${isDone ? 'text-nomichi-ink/55' : 'text-nomichi-ink/30'}`}>{dateText}</span>
+                                  </div>
+                                  {idx === 0 && isDone && (
+                                    <p className="text-[11px] text-nomichi-ink/50 font-semibold leading-relaxed">We have received your enquiry.</p>
+                                  )}
+                                  {idx === 1 && isDone && (
+                                    <p className="text-[11px] text-nomichi-ink/50 font-semibold leading-relaxed">{assignedExpert?.full_name || "Priya Sharma"} has been assigned to your enquiry.</p>
+                                  )}
+                                  {idx === 2 && isDone && (
+                                    <p className="text-[11px] text-nomichi-ink/50 font-semibold leading-relaxed">Your personalised itinerary and proposal are ready for review.</p>
+                                  )}
+                                  {idx === 3 && isDone && (
+                                    <p className="text-[11px] text-nomichi-ink/50 font-semibold leading-relaxed">We've discussed and finalized your trip experience.</p>
+                                  )}
+                                  {idx === 4 && isDone && (
+                                    <p className="text-[11px] text-nomichi-ink/50 font-semibold leading-relaxed">Yay! Your booking is confirmed. See you in Bali! 🌴</p>
+                                  )}
                                 </div>
                               );
                             })}
                           </div>
-
                         </div>
+
+                        {/* Show Travel Preferences at the bottom for Stages 3, 4, 5 */}
+                        {(currentStatusIdx >= 2) && (
+                          <div className="bg-white border border-[#e7e1d5]/50 rounded-[24px] p-6 shadow-sm space-y-4 text-left">
+                            <h3 className="text-xs font-black text-nomichi-ink/45 uppercase tracking-widest border-b border-[#e7e1d5]/20 pb-2">Your Travel Preferences</h3>
+                            <div className="grid grid-cols-1 md:grid-cols-3 gap-4 text-xs font-semibold text-nomichi-ink">
+                              <div className="space-y-1">
+                                <span className="text-[10px] font-bold text-nomichi-ink/40 uppercase block">Travel Month</span>
+                                <span className="block">{lead.preferred_month || "August 2026"}</span>
+                              </div>
+                              <div className="space-y-1">
+                                <span className="text-[10px] font-bold text-nomichi-ink/40 uppercase block">Travelers</span>
+                                <span className="block">{groupDetails}</span>
+                              </div>
+                              <div className="space-y-1">
+                                <span className="text-[10px] font-bold text-nomichi-ink/40 uppercase block">Trip Style</span>
+                                <span className="block capitalize">{lead.group_type ? `${lead.group_type}, Scenic` : "Relaxing, Scenic, Cultural"}</span>
+                              </div>
+                            </div>
+                          </div>
+                        )}
 
                       </div>
 
-                      {/* Right Sidebar (Sidebar Summary - Col 4) */}
+                      {/* Right Column (Sidebar) */}
                       <div className="lg:col-span-4 space-y-6">
                         
-                        {/* Trip Summary Card */}
-                        <div className="bg-white border border-[#e7e1d5]/50 rounded-[24px] p-6 shadow-sm space-y-5">
-                          <h3 className="text-sm font-bold text-nomichi-ink border-b border-[#e7e1d5]/30 pb-3">Trip Summary</h3>
-                          
-                          {/* Inner trip card */}
-                          <div className="bg-[#FAF8F4]/50 border border-[#e7e1d5]/40 rounded-2xl p-4 flex gap-3.5 items-start">
-                            <img 
-                              src={trip.image_url || "https://images.unsplash.com/photo-1469854523086-cc02fe5d8800?auto=format&fit=crop&w=150&q=80"}
-                              alt={trip.title}
-                              className="w-16 h-16 rounded-xl object-cover shrink-0 border border-[#e7e1d5]/30"
-                            />
-                            <div className="space-y-1 min-w-0">
-                              <h4 className="font-display font-bold text-xs text-nomichi-ink truncate leading-tight">{trip.title}</h4>
-                              <div className="flex items-center gap-1 text-[10px] text-nomichi-ink/50 font-medium">
-                                <Calendar className="w-3.5 h-3.5 text-[#FF5B26]/65 shrink-0" />
-                                <span>{trip.duration || "7 Days"} / {trip.duration ? `${parseInt(trip.duration) - 1} Nights` : "6 Nights"}</span>
-                              </div>
-                              <div className="flex items-center gap-1 text-[10px] text-nomichi-ink/50 font-medium">
-                                <MapPin className="w-3.5 h-3.5 text-[#FF5B26]/65 shrink-0" />
-                                <span className="truncate">{trip.destination}</span>
-                              </div>
-                              <div className="flex items-center gap-1 text-[10px] text-nomichi-ink/50 font-medium">
-                                <Users className="w-3.5 h-3.5 text-[#FF5B26]/65 shrink-0" />
-                                <span>{trip.group_size || "Small Group (8–12)"}</span>
-                              </div>
+                        {/* Current Status card (Stage 1 only) */}
+                        {currentStatusIdx === 0 && (
+                          <div className="bg-white border border-[#e7e1d5]/50 rounded-[24px] p-6 shadow-sm space-y-5 text-center">
+                            <div className="w-12 h-12 rounded-full bg-[#FFF1EA] text-[#FF5B26] flex items-center justify-center mx-auto">
+                              <Clock className="w-6 h-6 stroke-[2.2px]" />
+                            </div>
+                            <div className="space-y-1">
+                              <span className="text-[10px] font-bold text-nomichi-ink/40 uppercase block tracking-wider">Current Status</span>
+                              <h3 className="text-lg font-display font-extrabold text-[#D97706]">Under Review</h3>
+                              <p className="text-xs text-nomichi-ink/50 leading-relaxed font-semibold px-2">
+                                Our team is currently reviewing your enquiry and travel preferences.
+                              </p>
+                            </div>
+                            <div className="bg-[#FAF8F4] border border-[#e7e1d5]/45 rounded-xl p-3.5 text-xs font-semibold text-nomichi-ink/65 flex items-center justify-center gap-1.5">
+                              <Clock className="w-4 h-4 text-[#FF5B26]" />
+                              <span>Expected Response: <strong>Within 24 hours</strong></span>
                             </div>
                           </div>
+                        )}
 
-                          {/* Price details */}
-                          <div className="space-y-1">
-                            <span className="text-[10px] font-bold text-nomichi-ink/45 uppercase tracking-wider block">Price (per person)</span>
-                            <span className="text-xl font-extrabold text-[#FF5B26] block">
-                              {trip.price ? `₹${Number(trip.price).toLocaleString("en-IN")}` : "₹1,29,999"}
-                            </span>
-                            <span className="text-[10px] text-nomichi-ink/40 font-semibold block">Inclusive of all taxes (GST)</span>
-                          </div>
+                        {/* Your Trip Expert Card (Stage 2 to 5) */}
+                        {currentStatusIdx >= 1 && (() => {
+                          const travelerName = user?.fullName || "User";
+                          const tripTitle = trip?.title || "your trip";
+                          const userWaText = encodeURIComponent(`Hi, I am ${travelerName}. I have submitted my enquiry for the trip ${tripTitle}.`);
+                          const waHref = assignedExpert?.phone
+                            ? `https://wa.me/${assignedExpert.phone.replace(/[^0-9]/g, '')}?text=${userWaText}`
+                            : `https://wa.me/919876543210?text=${userWaText}`;
+                          const mailHref = assignedExpert?.email
+                            ? `mailto:${assignedExpert.email}?subject=${encodeURIComponent(`Enquiry for ${tripTitle}`)}&body=${userWaText}`
+                            : `mailto:priya@nomichi.travel?subject=${encodeURIComponent(`Enquiry for ${tripTitle}`)}&body=${userWaText}`;
 
-                          {/* Seats Available Progress Bar */}
-                          <div className="space-y-2 pt-3 border-t border-[#e7e1d5]/30">
-                            <div className="flex items-center justify-between text-[11px] font-bold">
-                              <span className="text-[#25D366] flex items-center gap-1">
-                                <span className="w-1.5 h-1.5 rounded-full bg-[#25D366]" />
-                                Seats Available
-                              </span>
-                              <span className="text-nomichi-ink/65">{trip.seats_left ?? 6} seats left</span>
-                            </div>
-                            <div className="w-full h-1.5 bg-zinc-100 rounded-full overflow-hidden">
-                              <div 
-                                className="h-full bg-[#25D366] transition-all"
-                                style={{ width: `${((trip.seats_left ?? 6) / (trip.total_seats ?? 12)) * 100}%` }}
-                              />
-                            </div>
-                          </div>
-                        </div>
-
-                        {/* Enquiry Owner Card */}
-                        <div className="bg-white border border-[#e7e1d5]/50 rounded-[24px] p-6 shadow-sm space-y-4">
-                          <h3 className="text-sm font-bold text-nomichi-ink border-b border-[#e7e1d5]/30 pb-3">Enquiry Owner</h3>
-                          
-                          {loadingExpert ? (
-                            <div className="flex items-center gap-3 animate-pulse">
-                              <div className="w-9 h-9 rounded-full bg-zinc-100 shrink-0" />
-                              <div className="flex-1 space-y-1.5">
-                                <div className="h-3 bg-zinc-100 rounded w-2/3" />
-                                <div className="h-2.5 bg-zinc-100 rounded w-1/3" />
-                              </div>
-                            </div>
-                          ) : assignedExpert ? (
-                            <>
-                              <div className="flex items-center gap-3">
-                                {assignedExpert.avatar_url ? (
+                          return (
+                            <div className="bg-white border border-[#e7e1d5]/50 rounded-[24px] p-6 shadow-sm space-y-5 text-left">
+                              <h3 className="text-sm font-bold text-nomichi-ink border-b border-[#e7e1d5]/30 pb-3">Your Trip Expert</h3>
+                              
+                              <div className="flex items-center gap-4">
+                                {assignedExpert?.avatar_url ? (
                                   <img 
                                     src={assignedExpert.avatar_url} 
                                     alt={assignedExpert.full_name} 
-                                    className="w-9 h-9 rounded-full object-cover border border-[#FF5B26]/10 shrink-0"
+                                    className="w-12 h-12 rounded-full object-cover border-2 border-[#FF5B26]/10 shrink-0"
                                   />
-                                ) : (
-                                  <div className="w-9 h-9 rounded-full bg-[#FFEFEA] text-[#FF5B26] border border-[#FF5B26]/10 flex items-center justify-center font-bold text-xs shrink-0">
-                                    {assignedExpert.full_name
-                                      ? assignedExpert.full_name.split(" ").map((n: string) => n[0]).join("").toUpperCase().slice(0, 2)
-                                      : "E"}
-                                  </div>
+                                 ) : (
+                                  <img 
+                                    src="https://images.unsplash.com/photo-1573496359142-b8d87734a5a2?auto=format&fit=crop&w=150&h=150&q=80" 
+                                    alt="Priya Sharma" 
+                                    className="w-12 h-12 rounded-full object-cover border-2 border-[#FF5B26]/10 shrink-0"
+                                  />
                                 )}
-                                <div className="flex flex-col">
-                                  <span className="text-xs font-bold text-nomichi-ink">{assignedExpert.full_name}</span>
-                                  <span className="text-[10px] font-semibold text-nomichi-ink/50">
-                                    {assignedExpert.role === "ADMIN" ? "Administrator" : assignedExpert.role === "MANAGER" ? "Trip Expert" : "Representative"}
+                                <div className="flex flex-col min-w-0">
+                                  <span className="text-sm font-extrabold text-nomichi-ink truncate">{assignedExpert?.full_name || "Priya Sharma"}</span>
+                                  <span className="text-[10px] font-bold text-nomichi-ink/45 block mt-0.5">Senior Travel Expert</span>
+                                  <span className="text-[10px] text-emerald-600 font-extrabold flex items-center gap-1 mt-1 leading-none">
+                                    <span className="w-1.5 h-1.5 rounded-full bg-emerald-500" />
+                                    Online
                                   </span>
                                 </div>
                               </div>
 
-                              {/* Quick icon actions */}
-                              {(() => {
-                                const travelerName = profileData?.full_name || profileForm.fullName || "User";
-                                const tripTitle = trip.title || "your trip";
-                                const userWaText = encodeURIComponent(`Hi, I am ${travelerName}. I have submitted my enquiry for the trip ${tripTitle}.`);
-                                const waHref = assignedExpert.phone
-                                  ? `https://wa.me/${assignedExpert.phone.replace(/[^0-9]/g, '')}?text=${userWaText}`
-                                  : "#";
-                                const mailHref = assignedExpert.email
-                                  ? `mailto:${assignedExpert.email}?subject=${encodeURIComponent(`Enquiry for ${tripTitle}`)}&body=${userWaText}`
-                                  : "#";
-                                return (
-                                  <div className="flex items-center gap-3 pt-3 border-t border-[#e7e1d5]/30 justify-center">
-                                    {assignedExpert.phone && (
-                                      <>
-                                        <a 
-                                          href={`tel:${assignedExpert.phone}`}
-                                          className="w-8 h-8 rounded-full bg-[#FAF8F4] hover:bg-[#FF5B26]/5 border border-[#e7e1d5]/60 flex items-center justify-center text-nomichi-ink/50 hover:text-[#FF5B26] transition-all"
-                                          title="Call Expert"
-                                        >
-                                          <Phone className="w-4 h-4" />
-                                        </a>
-                                        <a 
-                                          href={waHref}
-                                          target="_blank"
-                                          rel="noopener noreferrer"
-                                          className="w-8 h-8 rounded-full bg-[#FAF8F4] hover:bg-[#FF5B26]/5 border border-[#e7e1d5]/60 flex items-center justify-center text-nomichi-ink/50 hover:text-[#25D366] transition-all"
-                                          title="WhatsApp Expert"
-                                        >
-                                          <svg className="w-4 h-4 fill-current text-nomichi-ink/50 hover:text-[#25D366]" viewBox="0 0 24 24">
-                                            <path d="M.057 24l1.687-6.163c-1.041-1.804-1.588-3.849-1.587-5.946C.06 5.348 5.397.01 12.008.01c3.202.001 6.212 1.246 8.477 3.514 2.266 2.268 3.507 5.28 3.505 8.484-.004 6.657-5.34 11.997-11.953 11.997-2.005-.001-3.973-.504-5.729-1.464L0 24zm6.59-4.846c1.6.95 3.197 1.451 4.782 1.452 5.386 0 9.778-4.387 9.781-9.76.002-2.602-1.01-5.05-2.854-6.897-1.844-1.847-4.29-2.858-6.894-2.859-5.39 0-9.783 4.387-9.786 9.762-.001 1.7.461 3.35 1.339 4.816L1.99 21.053l4.657-1.226zM17.5 14.5c-.28-.14-1.65-.82-1.9-.91-.25-.09-.44-.14-.62.14-.18.28-.7 1-.86 1.18-.16.18-.32.2-.6.06-.28-.14-1.18-.44-2.25-1.4-1.22-1.09-1.62-1.62-1.82-1.9-.2-.28 0-.44.14-.58.13-.13.28-.32.42-.48.14-.16.2-.28.3-.46.1-.18.05-.34-.02-.48-.07-.14-.62-1.5-.85-2.05-.23-.55-.47-.48-.65-.48-.17 0-.37-.02-.57-.02-.2 0-.52.07-.79.37-.27.3-1.04 1.02-1.04 2.48s1.07 2.87 1.22 3.07c.15.2 2.1 3.2 5.08 4.5.7.3 1.26.49 1.69.63.71.22 1.35.19 1.86.11.57-.08 1.65-.68 1.88-1.33.23-.65.23-1.21.16-1.33-.07-.12-.25-.26-.53-.4z" />
-                                          </svg>
-                                        </a>
-                                      </>
-                                    )}
-                                    {assignedExpert.email && (
-                                      <>
-                                        <a 
-                                          href={mailHref}
-                                          className="w-8 h-8 rounded-full bg-[#FAF8F4] hover:bg-[#FF5B26]/5 border border-[#e7e1d5]/60 flex items-center justify-center text-nomichi-ink/50 hover:text-[#FF5B26] transition-all"
-                                          title="Email Expert"
-                                        >
-                                          <Mail className="w-4 h-4" />
-                                        </a>
-                                        <a 
-                                          href={`https://mail.google.com/mail/?view=cm&fs=1&to=${assignedExpert.email}&su=${encodeURIComponent(`Enquiry for ${tripTitle}`)}&body=${userWaText}`}
-                                          target="_blank"
-                                          rel="noopener noreferrer"
-                                          className="w-8 h-8 rounded-full bg-[#FAF8F4] hover:bg-red-50 border border-[#e7e1d5]/60 flex items-center justify-center text-nomichi-ink/50 hover:text-red-600 transition-all font-black text-xs"
-                                          title="Gmail Expert"
-                                        >
-                                          M
-                                        </a>
-                                      </>
-                                    )}
-                                  </div>
-                                );
-                              })()}
-                            </>
-                          ) : (
-                            <div className="flex flex-col items-center py-2 text-center">
-                              <div className="w-9 h-9 rounded-full bg-zinc-50 border border-zinc-100 flex items-center justify-center font-bold text-zinc-400 text-xs mb-2">
-                                ?
+                              {/* Action Buttons */}
+                              <div className="space-y-2 pt-3 border-t border-[#e7e1d5]/30 text-xs">
+                                <button 
+                                  onClick={() => navigateToView("messages")}
+                                  className="w-full h-10 bg-white hover:bg-zinc-50 border border-zinc-200 text-nomichi-ink font-bold rounded-xl flex items-center justify-center gap-2 cursor-pointer shadow-xs active:scale-[0.98] transition-all"
+                                >
+                                  <MessageSquare className="w-4 h-4 text-[#FF5B26]" />
+                                  Message
+                                </button>
+                                <a 
+                                  href={waHref}
+                                  target="_blank"
+                                  rel="noopener noreferrer"
+                                  className="w-full h-10 bg-white hover:bg-zinc-50 border border-zinc-200 text-nomichi-ink font-bold rounded-xl flex items-center justify-center gap-2 cursor-pointer shadow-xs active:scale-[0.98] transition-all text-decoration-none"
+                                >
+                                  <svg className="w-4 h-4 text-[#25D366] fill-current shrink-0" viewBox="0 0 24 24">
+                                    <path d="M.057 24l1.687-6.163c-1.041-1.804-1.588-3.849-1.587-5.946C.06 5.348 5.397.01 12.008.01c3.202.001 6.212 1.246 8.477 3.514 2.266 2.268 3.507 5.28 3.505 8.484-.004 6.657-5.34 11.997-11.953 11.997-2.005-.001-3.973-.504-5.729-1.464L0 24zm6.59-4.846c1.6.95 3.197 1.451 4.782 1.452 5.386 0 9.778-4.387 9.781-9.76.002-2.602-1.01-5.05-2.854-6.897-1.844-1.847-4.29-2.858-6.894-2.859-5.39 0-9.783 4.387-9.786 9.762-.001 1.7.461 3.35 1.339 4.816L1.99 21.053l4.657-1.226zM17.5 14.5c-.28-.14-1.65-.82-1.9-.91-.25-.09-.44-.14-.62.14-.18.28-.7 1-.86 1.18-.16.18-.32.2-.6.06-.28-.14-1.18-.44-2.25-1.4-1.22-1.09-1.62-1.62-1.82-1.9-.2-.28 0-.44.14-.58.13-.13.28-.32.42-.48.14-.16.2-.28.3-.46.1-.18.05-.34-.02-.48-.07-.14-.62-1.5-.85-2.05-.23-.55-.47-.48-.65-.48-.17 0-.37-.02-.57-.02-.2 0-.52.07-.79.37-.27.3-1.04 1.02-1.04 2.48s1.07 2.87 1.22 3.07c.15.2 2.1 3.2 5.08 4.5.7.3 1.26.49 1.69.63.71.22 1.35.19 1.86.11.57-.08 1.65-.68 1.88-1.33.23-.65.23-1.21.16-1.33-.07-.12-.25-.26-.53-.4z" />
+                                  </svg>
+                                  WhatsApp
+                                </a>
+                                <a 
+                                  href={assignedExpert?.phone ? `tel:${assignedExpert.phone.replace(/[^0-9]/g, '')}` : "tel:919876543210"}
+                                  className="w-full h-10 bg-white hover:bg-zinc-50 border border-zinc-200 text-nomichi-ink font-bold rounded-xl flex items-center justify-center gap-2 cursor-pointer shadow-xs active:scale-[0.98] transition-all text-decoration-none"
+                                >
+                                  <Phone className="w-4 h-4 text-[#FF5B26]" />
+                                  Schedule Call
+                                </a>
+                                <a 
+                                  href={mailHref}
+                                  className="w-full h-10 bg-white hover:bg-zinc-50 border border-zinc-200 text-nomichi-ink font-bold rounded-xl flex items-center justify-center gap-2 cursor-pointer shadow-xs active:scale-[0.98] transition-all text-decoration-none"
+                                >
+                                  <Mail className="w-4 h-4 text-[#FF5B26]" />
+                                  Email
+                                </a>
                               </div>
-                              <span className="text-xs font-bold text-nomichi-ink">Not Assigned</span>
-                              <span className="text-[10px] font-semibold text-nomichi-ink/40 mt-0.5">We will assign a Trip Expert shortly</span>
+                              <span className="text-[10px] text-nomichi-ink/40 font-bold block text-center mt-1">Response Time: &lt; 24 Hours</span>
                             </div>
-                          )}
+                          );
+                        })()}
+
+                        {/* What Happens Next? (Stage dependent descriptions) */}
+                        <div className="bg-white border border-[#e7e1d5]/50 rounded-[24px] p-6 shadow-sm space-y-4 text-left">
+                          <h3 className="text-sm font-bold text-nomichi-ink border-b border-[#e7e1d5]/30 pb-3">What Happens Next?</h3>
+                          
+                          <div className="space-y-4">
+                            {currentStatusIdx === 0 && (
+                              <>
+                                <div className="flex gap-3 items-start text-xs leading-relaxed font-semibold">
+                                  <div className="w-5 h-5 rounded bg-[#FFF1EA] text-[#FF5B26] font-bold text-[10px] flex items-center justify-center shrink-0">1</div>
+                                  <div>
+                                    <strong className="block text-nomichi-ink">Our team reviews your enquiry</strong>
+                                    <span className="text-nomichi-ink/50 text-[11px] block mt-0.5">We carefully review your travel preferences.</span>
+                                  </div>
+                                </div>
+                                <div className="flex gap-3 items-start text-xs leading-relaxed font-semibold">
+                                  <div className="w-5 h-5 rounded bg-zinc-100 text-zinc-400 font-bold text-[10px] flex items-center justify-center shrink-0">2</div>
+                                  <div>
+                                    <strong className="block text-nomichi-ink/45">A travel expert is assigned</strong>
+                                    <span className="text-nomichi-ink/30 text-[11px] block mt-0.5">The right expert for your trip gets in touch.</span>
+                                  </div>
+                                </div>
+                                <div className="flex gap-3 items-start text-xs leading-relaxed font-semibold">
+                                  <div className="w-5 h-5 rounded bg-zinc-100 text-zinc-400 font-bold text-[10px] flex items-center justify-center shrink-0">3</div>
+                                  <div>
+                                    <strong className="block text-nomichi-ink/45">Itinerary is shared</strong>
+                                    <span className="text-nomichi-ink/30 text-[11px] block mt-0.5">You receive a customised itinerary.</span>
+                                  </div>
+                                </div>
+                              </>
+                            )}
+
+                            {currentStatusIdx === 1 && (
+                              <>
+                                <div className="flex gap-3 items-start text-xs leading-relaxed font-semibold">
+                                  <div className="w-5.5 h-5.5 rounded-full bg-emerald-50 text-emerald-600 border border-emerald-100 flex items-center justify-center shrink-0">
+                                    <Check className="w-3.5 h-3.5 stroke-[2.5px]" />
+                                  </div>
+                                  <div>
+                                    <strong className="block text-nomichi-ink">Itinerary Shared</strong>
+                                    <span className="text-nomichi-ink/50 text-[11px] block mt-0.5">Your personalized itinerary will be ready soon.</span>
+                                  </div>
+                                </div>
+                                <div className="flex gap-3 items-start text-xs leading-relaxed font-semibold">
+                                  <div className="w-5.5 h-5.5 rounded-full bg-zinc-100 text-zinc-400 flex items-center justify-center shrink-0">
+                                    <span className="w-1.5 h-1.5 rounded-full bg-zinc-400" />
+                                  </div>
+                                  <div>
+                                    <strong className="block text-nomichi-ink/45">Vibe Check</strong>
+                                    <span className="text-nomichi-ink/30 text-[11px] block mt-0.5">We'll connect to understand your feedback.</span>
+                                  </div>
+                                </div>
+                                <div className="flex gap-3 items-start text-xs leading-relaxed font-semibold">
+                                  <div className="w-5.5 h-5.5 rounded-full bg-zinc-100 text-zinc-400 flex items-center justify-center shrink-0">
+                                    <span className="w-1.5 h-1.5 rounded-full bg-zinc-400" />
+                                  </div>
+                                  <div>
+                                    <strong className="block text-nomichi-ink/45">Booking Confirmation</strong>
+                                    <span className="text-nomichi-ink/30 text-[11px] block mt-0.5">Once finalized, your adventure is confirmed!</span>
+                                  </div>
+                                </div>
+                              </>
+                            )}
+
+                            {currentStatusIdx === 2 && (
+                              <>
+                                <div className="flex gap-3 items-start text-xs leading-relaxed font-semibold">
+                                  <div className="w-5.5 h-5.5 rounded-full bg-emerald-50 text-emerald-600 border border-emerald-100 flex items-center justify-center shrink-0">
+                                    <Check className="w-3.5 h-3.5 stroke-[2.5px]" />
+                                  </div>
+                                  <div>
+                                    <strong className="block text-nomichi-ink">Vibe Check</strong>
+                                    <span className="text-nomichi-ink/50 text-[11px] block mt-0.5">We'll connect to understand your feedback.</span>
+                                  </div>
+                                </div>
+                                <div className="flex gap-3 items-start text-xs leading-relaxed font-semibold">
+                                  <div className="w-5.5 h-5.5 rounded-full bg-zinc-100 text-zinc-400 flex items-center justify-center shrink-0">
+                                    <span className="w-1.5 h-1.5 rounded-full bg-zinc-400" />
+                                  </div>
+                                  <div>
+                                    <strong className="block text-nomichi-ink/45">Finalise & Confirm</strong>
+                                    <span className="text-nomichi-ink/30 text-[11px] block mt-0.5">We'll make final adjustments if needed.</span>
+                                  </div>
+                                </div>
+                                <div className="flex gap-3 items-start text-xs leading-relaxed font-semibold">
+                                  <div className="w-5.5 h-5.5 rounded-full bg-zinc-100 text-zinc-400 flex items-center justify-center shrink-0">
+                                    <span className="w-1.5 h-1.5 rounded-full bg-zinc-400" />
+                                  </div>
+                                  <div>
+                                    <strong className="block text-nomichi-ink/45">Booking Confirmation</strong>
+                                    <span className="text-nomichi-ink/30 text-[11px] block mt-0.5">Once confirmed, your adventure is locked in!</span>
+                                  </div>
+                                </div>
+                              </>
+                            )}
+
+                            {currentStatusIdx === 3 && (
+                              <>
+                                <div className="flex gap-3 items-start text-xs leading-relaxed font-semibold">
+                                  <div className="w-5.5 h-5.5 rounded-full bg-emerald-50 text-emerald-600 border border-emerald-100 flex items-center justify-center shrink-0">
+                                    <Check className="w-3.5 h-3.5 stroke-[2.5px]" />
+                                  </div>
+                                  <div>
+                                    <strong className="block text-nomichi-ink">Finalise & Confirm</strong>
+                                    <span className="text-nomichi-ink/50 text-[11px] block mt-0.5">We'll make final adjustments if needed.</span>
+                                  </div>
+                                </div>
+                                <div className="flex gap-3 items-start text-xs leading-relaxed font-semibold">
+                                  <div className="w-5.5 h-5.5 rounded-full bg-emerald-50 text-emerald-600 border border-emerald-100 flex items-center justify-center shrink-0">
+                                    <Check className="w-3.5 h-3.5 stroke-[2.5px]" />
+                                  </div>
+                                  <div>
+                                    <strong className="block text-nomichi-ink">Booking Confirmation</strong>
+                                    <span className="text-nomichi-ink/50 text-[11px] block mt-0.5">Once confirmed, your adventure is locked in!</span>
+                                  </div>
+                                </div>
+                                <div className="flex gap-3 items-start text-xs leading-relaxed font-semibold">
+                                  <div className="w-5.5 h-5.5 rounded-full bg-zinc-100 text-zinc-400 flex items-center justify-center shrink-0">
+                                    <span className="w-1.5 h-1.5 rounded-full bg-zinc-400" />
+                                  </div>
+                                  <div>
+                                    <strong className="block text-nomichi-ink/45">Get Ready!</strong>
+                                    <span className="text-nomichi-ink/30 text-[11px] block mt-0.5">We'll share all trip details and documents.</span>
+                                  </div>
+                                </div>
+                              </>
+                            )}
+
+                            {currentStatusIdx === 4 && (
+                              <>
+                                <div className="flex gap-3 items-start text-xs leading-relaxed font-semibold">
+                                  <div className="w-5.5 h-5.5 rounded-full bg-emerald-50 text-emerald-600 border border-emerald-100 flex items-center justify-center shrink-0">
+                                    <Check className="w-3.5 h-3.5 stroke-[2.5px]" />
+                                  </div>
+                                  <div>
+                                    <strong className="block text-nomichi-ink">Get Ready!</strong>
+                                    <span className="text-nomichi-ink/50 text-[11px] block mt-0.5">We'll share all trip details and documents.</span>
+                                  </div>
+                                </div>
+                                <div className="flex gap-3 items-start text-xs leading-relaxed font-semibold">
+                                  <div className="w-5.5 h-5.5 rounded-full bg-emerald-50 text-emerald-600 border border-emerald-100 flex items-center justify-center shrink-0">
+                                    <Check className="w-3.5 h-3.5 stroke-[2.5px]" />
+                                  </div>
+                                  <div>
+                                    <strong className="block text-nomichi-ink">Departure Prep</strong>
+                                    <span className="text-nomichi-ink/50 text-[11px] block mt-0.5">We'll assist you with visa, packing & more.</span>
+                                  </div>
+                                </div>
+                                <div className="flex gap-3 items-start text-xs leading-relaxed font-semibold">
+                                  <div className="w-5.5 h-5.5 rounded-full bg-emerald-50 text-emerald-600 border border-emerald-100 flex items-center justify-center shrink-0">
+                                    <Check className="w-3.5 h-3.5 stroke-[2.5px]" />
+                                  </div>
+                                  <div>
+                                    <strong className="block text-nomichi-ink">Your Journey Begins</strong>
+                                    <span className="text-nomichi-ink/50 text-[11px] block mt-0.5">Sit back and enjoy. We've got you covered!</span>
+                                  </div>
+                                </div>
+                              </>
+                            )}
+                          </div>
                         </div>
 
-                        {/* Quick Actions List */}
-                        <div className="bg-white border border-[#e7e1d5]/50 rounded-[24px] p-6 shadow-sm space-y-4">
+                        {/* Quick Actions (Sidebar bottom) */}
+                        <div className="bg-white border border-[#e7e1d5]/50 rounded-[24px] p-6 shadow-sm space-y-4 text-left">
                           <h3 className="text-sm font-bold text-nomichi-ink border-b border-[#e7e1d5]/30 pb-3">Quick Actions</h3>
                           
-                          <div className="space-y-2.5 text-xs font-semibold text-nomichi-ink/75">
+                          <div className="space-y-2 text-xs font-bold text-nomichi-ink/70">
                             <button 
-                              onClick={() => navigateToView("messages")}
-                              className="w-full text-left flex items-center gap-2 hover:text-[#FF5B26] transition-all p-1 hover:bg-[#FAF8F4] rounded-lg bg-transparent"
+                              onClick={() => window.print()}
+                              className="w-full text-left flex items-center gap-2 hover:text-[#FF5B26] p-2 hover:bg-[#FAF8F4] rounded-xl bg-transparent border-0 cursor-pointer transition-all"
                             >
-                              <MessageSquare className="w-4.5 h-4.5 text-[#FF5B26]/85 shrink-0" />
-                              <span>Message Trip Expert</span>
-                            </button>
-                            
-                            {(() => {
-                              const travelerName = profileData?.full_name || profileForm.fullName || "User";
-                              const tripTitle = trip.title || "your trip";
-                              const userWaText = encodeURIComponent(`Hi, I am ${travelerName}. I have submitted my enquiry for the trip ${tripTitle}.`);
-                              const waHref = assignedExpert?.phone
-                                ? `https://wa.me/${assignedExpert.phone.replace(/[^0-9]/g, '')}?text=${userWaText}`
-                                : "#";
-                              const mailHref = assignedExpert?.email
-                                ? `mailto:${assignedExpert.email}?subject=${encodeURIComponent(`Enquiry for ${tripTitle}`)}&body=${userWaText}`
-                                : "#";
-                              const gmailHref = assignedExpert?.email
-                                ? `https://mail.google.com/mail/?view=cm&fs=1&to=${assignedExpert.email}&su=${encodeURIComponent(`Enquiry for ${tripTitle}`)}&body=${userWaText}`
-                                : "#";
-                              return (
-                                <>
-                                  {assignedExpert?.email && (
-                                    <>
-                                      <a 
-                                        href={mailHref}
-                                        className="flex items-center gap-2 hover:text-[#FF5B26] transition-all p-1 hover:bg-[#FAF8F4] rounded-lg"
-                                      >
-                                        <Mail className="w-4.5 h-4.5 text-[#FF5B26]/85 shrink-0" />
-                                        <span>Email Trip Expert</span>
-                                      </a>
-                                      <a 
-                                        href={gmailHref}
-                                        target="_blank"
-                                        rel="noopener noreferrer"
-                                        className="flex items-center gap-2 hover:text-[#FF5B26] transition-all p-1 hover:bg-[#FAF8F4] rounded-lg"
-                                      >
-                                        <Mail className="w-4.5 h-4.5 text-red-500 shrink-0" />
-                                        <span>Gmail Trip Expert</span>
-                                      </a>
-                                    </>
-                                  )}
-                                  
-                                  {assignedExpert?.phone && (
-                                    <a 
-                                      href={waHref}
-                                      target="_blank"
-                                      rel="noopener noreferrer"
-                                      className="flex items-center gap-2 hover:text-[#FF5B26] transition-all p-1 hover:bg-[#FAF8F4] rounded-lg"
-                                    >
-                                      <svg className="w-4.5 h-4.5 text-[#25D366] fill-current shrink-0" viewBox="0 0 24 24">
-                                        <path d="M.057 24l1.687-6.163c-1.041-1.804-1.588-3.849-1.587-5.946C.06 5.348 5.397.01 12.008.01c3.202.001 6.212 1.246 8.477 3.514 2.266 2.268 3.507 5.28 3.505 8.484-.004 6.657-5.34 11.997-11.953 11.997-2.005-.001-3.973-.504-5.729-1.464L0 24zm6.59-4.846c1.6.95 3.197 1.451 4.782 1.452 5.386 0 9.778-4.387 9.781-9.76.002-2.602-1.01-5.05-2.854-6.897-1.844-1.847-4.29-2.858-6.894-2.859-5.39 0-9.783 4.387-9.786 9.762-.001 1.7.461 3.35 1.339 4.816L1.99 21.053l4.657-1.226zM17.5 14.5c-.28-.14-1.65-.82-1.9-.91-.25-.09-.44-.14-.62.14-.18.28-.7 1-.86 1.18-.16.18-.32.2-.6.06-.28-.14-1.18-.44-2.25-1.4-1.22-1.09-1.62-1.62-1.82-1.9-.2-.28 0-.44.14-.58.13-.13.28-.32.42-.48.14-.16.2-.28.3-.46.1-.18.05-.34-.02-.48-.07-.14-.62-1.5-.85-2.05-.23-.55-.47-.48-.65-.48-.17 0-.37-.02-.57-.02-.2 0-.52.07-.79.37-.27.3-1.04 1.02-1.04 2.48s1.07 2.87 1.22 3.07c.15.2 2.1 3.2 5.08 4.5.7.3 1.26.49 1.69.63.71.22 1.35.19 1.86.11.57-.08 1.65-.68 1.88-1.33.23-.65.23-1.21.16-1.33-.07-.12-.25-.26-.53-.4z" />
-                                      </svg>
-                                      <span>WhatsApp Trip Expert</span>
-                                    </a>
-                                  )}
-                                </>
-                              );
-                            })()}
-                            
-                            <button 
-                              onClick={() => router.push(`/trips/${trip.id}`)}
-                              className="w-full text-left flex items-center gap-2 hover:text-[#FF5B26] transition-all p-1 hover:bg-[#FAF8F4] rounded-lg bg-transparent"
-                            >
-                              <Compass className="w-4.5 h-4.5 text-[#FF5B26]/85 shrink-0" />
-                              <span>View Detailed Itinerary</span>
+                              <Download className="w-4 h-4 text-zinc-400 shrink-0" />
+                              <span>Download Enquiry</span>
                             </button>
                             
                             <button 
                               onClick={startEditingDetails}
-                              className="w-full text-left flex items-center gap-2 hover:text-[#FF5B26] transition-all p-1 hover:bg-[#FAF8F4] rounded-lg bg-transparent"
+                              className="w-full text-left flex items-center gap-2 hover:text-[#FF5B26] p-2 hover:bg-[#FAF8F4] rounded-xl bg-transparent border-0 cursor-pointer transition-all"
                             >
-                              <Edit className="w-4.5 h-4.5 text-[#FF5B26]/85 shrink-0" />
-                              <span>Edit Traveller Details</span>
+                              <Edit className="w-4 h-4 text-zinc-400 shrink-0" />
+                              <span>Edit Preferences</span>
                             </button>
                           </div>
                         </div>
