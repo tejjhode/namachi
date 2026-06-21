@@ -3,6 +3,8 @@ import { isManagerOrAdminRole, normalizeRole } from "@/lib/auth/roles";
 import { redirect } from "next/navigation";
 import { ManagerTasksClient } from "./ManagerTasksClient";
 
+export const dynamic = "force-dynamic";
+
 
 type EntityKind = "Lead" | "Trip" | "Traveler" | "Departure" | "Booking";
 
@@ -41,6 +43,7 @@ export default async function ManagerTasksPage() {
         assignee:profiles!assigned_to(full_name, avatar_url, role),
         creator:profiles!created_by(full_name, avatar_url)
       `)
+      .eq("assigned_to", user.id)
       .order("created_at", { ascending: false }),
     client
       .from("leads")

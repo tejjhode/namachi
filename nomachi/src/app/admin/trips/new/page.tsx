@@ -15,7 +15,9 @@ import {
   GripVertical,
   CheckCircle,
   XCircle,
-  Sparkles
+  Sparkles,
+  Upload,
+  FileText
 } from "lucide-react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
@@ -40,6 +42,7 @@ export default function NewTripPage() {
     description: "",
     accommodation: "",
     imageUrl: "",
+    brochureUrl: "",
     difficulty: "Easy",
     ageGroup: "18-35",
     meals: "Breakfast Only",
@@ -66,6 +69,9 @@ export default function NewTripPage() {
   const [editingFAQIdx, setEditingFAQIdx] = useState<number | null>(null);
 
   const [galleryImages, setGalleryImages] = useState<string[]>([]);
+  const [brochureFileName, setBrochureFileName] = useState("");
+  const [autoSendBrochure, setAutoSendBrochure] = useState(false);
+  const [otherDocs, setOtherDocs] = useState<any[]>([]);
   const [selectedStyles, setSelectedStyles] = useState<string[]>([]);
   const [selectedBestFor, setSelectedBestFor] = useState<string[]>([]);
 
@@ -228,6 +234,41 @@ export default function NewTripPage() {
     });
   };
 
+  // Brochure document uploader
+  const handleBrochureUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    if (file.size > 20 * 1024 * 1024) {
+      setError("Brochure must be under 20 MB.");
+      return;
+    }
+    setBrochureFileName(file.name);
+    const reader = new FileReader();
+    reader.onloadend = () => {
+      setForm((prev: any) => ({ ...prev, brochureUrl: reader.result as string }));
+    };
+    reader.readAsDataURL(file);
+  };
+
+  // Other documents uploader
+  const handleOtherDocUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const files = Array.from(e.target.files || []);
+    files.forEach((file) => {
+      const reader = new FileReader();
+      reader.onloadend = () => {
+        setOtherDocs((prev) => [
+          ...prev,
+          {
+            name: file.name,
+            size: (file.size / (1024 * 1024)).toFixed(2) + " MB",
+            dataUrl: reader.result as string,
+          },
+        ]);
+      };
+      reader.readAsDataURL(file);
+    });
+  };
+
   const handleSubmit = async (e: React.FormEvent, statusOverride?: string) => {
     e.preventDefault();
     setSubmitLoading(true);
@@ -248,6 +289,7 @@ export default function NewTripPage() {
         description: form.description,
         accommodation: form.accommodation,
         image_url: form.imageUrl,
+        brochure_url: form.brochureUrl || null,
         difficulty: form.difficulty,
         age_group: form.ageGroup,
         meals: form.meals,
@@ -706,7 +748,7 @@ export default function NewTripPage() {
           </div>
 
           {/* 5, 6, 7, 8: Repeatables Grid */}
-          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-6">
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-2 gap-6">
             {/* 5. Highlights */}
             <div className="bg-white rounded-3xl border border-[#e7e1d5]/40 shadow-sm p-5 text-left space-y-4 flex flex-col justify-between">
               <div className="space-y-3">
@@ -714,7 +756,7 @@ export default function NewTripPage() {
                 <div className="space-y-1.5 max-h-48 overflow-y-auto pr-1">
                   {highlights.map((h, i) => (
                     <div key={i} className="flex items-center justify-between bg-[#FAF8F4]/60 px-2.5 py-1.5 rounded-xl border border-[#e7e1d5]/40 text-[11px] gap-2 group">
-                      <div className="flex items-center gap-1.5 truncate">
+                      <div className="flex items-center gap-1.5 min-w-0">
                         <GripVertical className="w-3.5 h-3.5 text-nomichi-ink/20 shrink-0 cursor-grab" />
                         <span className="text-emerald-700 font-extrabold shrink-0">✓</span>
                         <span className="font-semibold text-nomichi-ink/85 truncate">{h}</span>
@@ -746,7 +788,7 @@ export default function NewTripPage() {
                 <div className="space-y-1.5 max-h-48 overflow-y-auto pr-1">
                   {inclusions.map((inc, i) => (
                     <div key={i} className="flex items-center justify-between bg-[#FAF8F4]/60 px-2.5 py-1.5 rounded-xl border border-[#e7e1d5]/40 text-[11px] gap-2 group">
-                      <div className="flex items-center gap-1.5 truncate">
+                      <div className="flex items-center gap-1.5 min-w-0">
                         <GripVertical className="w-3.5 h-3.5 text-nomichi-ink/20 shrink-0 cursor-grab" />
                         <span className="text-emerald-700 font-extrabold shrink-0">✓</span>
                         <span className="font-semibold text-nomichi-ink/85 truncate">{inc}</span>
@@ -778,7 +820,7 @@ export default function NewTripPage() {
                 <div className="space-y-1.5 max-h-48 overflow-y-auto pr-1">
                   {exclusions.map((exc, i) => (
                     <div key={i} className="flex items-center justify-between bg-[#FAF8F4]/60 px-2.5 py-1.5 rounded-xl border border-[#e7e1d5]/40 text-[11px] gap-2 group">
-                      <div className="flex items-center gap-1.5 truncate">
+                      <div className="flex items-center gap-1.5 min-w-0">
                         <GripVertical className="w-3.5 h-3.5 text-nomichi-ink/20 shrink-0 cursor-grab" />
                         <span className="text-[#FF5B26] font-extrabold shrink-0">✕</span>
                         <span className="font-semibold text-nomichi-ink/85 truncate">{exc}</span>
@@ -956,40 +998,7 @@ export default function NewTripPage() {
             </div>
           </div>
 
-          {/* 11. Gallery */}
-          <div className="bg-white rounded-3xl border border-[#e7e1d5]/40 shadow-sm p-5 text-left space-y-4">
-            <div className="flex justify-between items-center">
-              <div>
-                <h4 className="text-xs font-extrabold text-nomichi-ink uppercase tracking-wide">11. Additional Gallery Images</h4>
-                <p className="text-[10px] text-nomichi-ink/40 font-semibold mt-0.5">Upload photos that populate the travel gallery.</p>
-              </div>
-              <span className="text-[10px] font-bold text-nomichi-ink/40">{galleryImages.length} / 10 Images</span>
-            </div>
 
-            <div className="flex flex-wrap gap-2.5 items-center">
-              {galleryImages.map((imgUrl, i) => (
-                <div key={i} className="w-16 h-16 rounded-xl bg-[#FAF8F4] overflow-hidden border border-[#e7e1d5]/40 relative group shadow-sm shrink-0">
-                  <img src={imgUrl} className="w-full h-full object-cover" />
-                  <button
-                    type="button"
-                    onClick={() => setGalleryImages(galleryImages.filter((_, idx) => idx !== i))}
-                    className="absolute inset-0 bg-black/40 text-white flex items-center justify-center border-0 cursor-pointer opacity-0 group-hover:opacity-100 transition-opacity"
-                  >
-                    ✕
-                  </button>
-                </div>
-              ))}
-              
-              {galleryImages.length < 10 && (
-                <div>
-                  <input type="file" multiple className="hidden" id="gallery-img-upload" onChange={handleGalleryUpload} accept="image/*" />
-                  <label htmlFor="gallery-img-upload" className="w-16 h-16 border-2 border-dashed border-[#e7e1d5] hover:border-[#FF5B26]/40 hover:bg-[#FAF8F4]/30 rounded-xl flex flex-col items-center justify-center cursor-pointer transition-all gap-1">
-                    <Plus className="w-5 h-5 text-nomichi-ink/30" />
-                  </label>
-                </div>
-              )}
-            </div>
-          </div>
 
         </div>
 
@@ -1030,6 +1039,180 @@ export default function NewTripPage() {
                 </div>
               </div>
             )}
+          </div>
+
+          {/* ── 11. Trip Assets sidebar card ── */}
+          <div className="bg-white rounded-3xl border border-[#e7e1d5]/40 shadow-sm p-5 text-left space-y-5">
+            <h3 className="text-sm font-extrabold text-nomichi-ink tracking-wide border-b border-[#e7e1d5]/20 pb-3">11. Trip Assets</h3>
+
+            {/* Brochure (PDF) */}
+            <div className="space-y-2.5">
+              <p className="text-[10px] font-extrabold text-nomichi-ink/50 uppercase tracking-wider">Brochure (PDF)</p>
+
+              <div className="grid grid-cols-2 gap-3 items-stretch">
+                {/* Drop zone */}
+                <label
+                  htmlFor="brochure-file-upload"
+                  className="border-2 border-dashed border-[#e7e1d5] rounded-2xl p-4 flex flex-col items-center justify-center text-center cursor-pointer hover:border-[#FF5B26]/40 hover:bg-[#FFEFEA]/10 transition-all group min-h-[110px]"
+                  onDragOver={(e) => e.preventDefault()}
+                  onDrop={(e) => {
+                    e.preventDefault();
+                    const file = e.dataTransfer.files?.[0];
+                    if (file) handleBrochureUpload({ target: { files: [file] } } as any);
+                  }}
+                >
+                  <input type="file" className="hidden" id="brochure-file-upload" onChange={handleBrochureUpload} accept="application/pdf" />
+                  <div className="w-8 h-8 rounded-full bg-[#FAF8F4] border border-[#e7e1d5] group-hover:border-[#FF5B26]/30 flex items-center justify-center mb-1.5 transition-all">
+                    <Upload className="w-3.5 h-3.5 text-[#FF5B26]" />
+                  </div>
+                  <span className="text-[10px] font-bold text-nomichi-ink leading-tight">Drag & Drop PDF here</span>
+                  <span className="mt-1.5 px-2.5 py-0.5 bg-white border border-[#e7e1d5] rounded-lg text-[9px] font-bold text-[#FF5B26] shadow-sm">Upload Brochure</span>
+                  <span className="text-[8px] text-nomichi-ink/30 font-semibold mt-1">PDF only • Max 20 MB</span>
+                </label>
+
+                {/* Uploaded file card */}
+                {form.brochureUrl ? (
+                  <div className="bg-[#FAF8F4] border border-[#e7e1d5]/60 rounded-2xl p-3 flex flex-col justify-between min-h-[110px]">
+                    <div className="flex items-start gap-2">
+                      <div className="w-8 h-8 rounded-lg bg-red-50 border border-red-100 flex items-center justify-center shrink-0">
+                        <FileText className="w-4 h-4 text-red-500" />
+                      </div>
+                      <div className="flex-1 min-w-0">
+                        <p className="text-[10px] font-extrabold text-nomichi-ink truncate" title={brochureFileName}>{brochureFileName || "Brochure.pdf"}</p>
+                        <p className="text-[9px] text-nomichi-ink/40 font-semibold mt-0.5">Uploaded</p>
+                      </div>
+                    </div>
+                    <div className="flex items-center gap-1 mt-2 pt-2 border-t border-[#e7e1d5]/40">
+                      <a href={form.brochureUrl} download={brochureFileName || "brochure.pdf"} className="p-1 hover:bg-white rounded-md transition-all text-nomichi-ink/40 hover:text-nomichi-ink" title="Download">
+                        <Upload className="w-3 h-3 rotate-180" />
+                      </a>
+                      <label htmlFor="brochure-file-upload" className="p-1 hover:bg-white rounded-md transition-all text-nomichi-ink/40 hover:text-nomichi-ink cursor-pointer" title="Replace">
+                        <svg xmlns="http://www.w3.org/2000/svg" className="w-3 h-3" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                          <path strokeLinecap="round" strokeLinejoin="round" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
+                        </svg>
+                      </label>
+                      <button type="button" onClick={() => { setForm((p: any) => ({ ...p, brochureUrl: "" })); setBrochureFileName(""); }} className="p-1 hover:bg-rose-50 rounded-md transition-all text-nomichi-ink/30 hover:text-rose-600 ml-auto" title="Remove">
+                        <Trash2 className="w-3 h-3" />
+                      </button>
+                    </div>
+                  </div>
+                ) : (
+                  <div className="bg-[#FAF8F4]/50 border border-[#e7e1d5]/40 rounded-2xl flex items-center justify-center min-h-[110px]">
+                    <p className="text-[9px] text-nomichi-ink/30 font-semibold text-center px-3 leading-relaxed">No brochure uploaded yet</p>
+                  </div>
+                )}
+              </div>
+
+              <div className="text-left space-y-1.5 mt-2">
+                <label className="block text-[9px] font-bold text-nomichi-ink/50 uppercase tracking-wider">Or Paste Document/Brochure URL</label>
+                <input
+                  type="text"
+                  placeholder="https://example.com/brochures/trip-itinerary.pdf"
+                  value={form.brochureUrl && !form.brochureUrl.startsWith("data:") ? form.brochureUrl : ""}
+                  onChange={(e) => {
+                    const val = e.target.value;
+                    setForm((p: any) => ({ ...p, brochureUrl: val }));
+                    if (val) {
+                      try {
+                        const urlObj = new URL(val);
+                        const pathname = urlObj.pathname;
+                        const parts = pathname.split("/");
+                        const filename = parts[parts.length - 1];
+                        setBrochureFileName(filename || "Document Link");
+                      } catch {
+                        setBrochureFileName("Document Link");
+                      }
+                    } else {
+                      setBrochureFileName("");
+                    }
+                  }}
+                  className="w-full bg-[#FAF8F4]/30 border border-[#e7e1d5] px-3.5 py-2 rounded-xl text-xs font-semibold hover:bg-[#FAF8F4]/50 focus:border-[#FF5B26] transition-all outline-none"
+                />
+              </div>
+            </div>
+
+            {/* Other Documents */}
+            <div className="space-y-2.5">
+              <p className="text-[10px] font-extrabold text-nomichi-ink/50 uppercase tracking-wider">Other Documents <span className="font-semibold normal-case text-nomichi-ink/30">(Optional)</span></p>
+
+              {otherDocs.length > 0 && (
+                <div className="space-y-1.5">
+                  {otherDocs.map((doc, idx) => (
+                    <div key={idx} className="flex items-center gap-2.5 bg-[#FAF8F4] border border-[#e7e1d5]/50 rounded-xl px-3 py-2">
+                      <div className="w-7 h-7 rounded-lg bg-red-50 border border-red-100 flex items-center justify-center shrink-0">
+                        <FileText className="w-3.5 h-3.5 text-red-400" />
+                      </div>
+                      <div className="flex-1 min-w-0">
+                        <p className="text-[10px] font-bold text-nomichi-ink truncate" title={doc.name}>{doc.name}</p>
+                        <p className="text-[9px] text-nomichi-ink/40 font-semibold">{doc.size}</p>
+                      </div>
+                      <a href={doc.dataUrl} download={doc.name} className="p-1 hover:bg-white rounded-md transition-all text-nomichi-ink/40 hover:text-nomichi-ink" title="Download">
+                        <Upload className="w-3 h-3 rotate-180" />
+                      </a>
+                      <button type="button" onClick={() => setOtherDocs((prev) => prev.filter((_, i) => i !== idx))} className="p-1 hover:bg-rose-50 rounded-md transition-all text-nomichi-ink/30 hover:text-rose-600" title="Remove">
+                        <Trash2 className="w-3 h-3" />
+                      </button>
+                    </div>
+                  ))}
+                </div>
+              )}
+
+              <label htmlFor="other-docs-upload" className="flex items-center gap-2 px-3.5 py-2 border border-dashed border-[#e7e1d5] hover:border-[#FF5B26]/40 hover:bg-[#FFEFEA]/10 rounded-xl cursor-pointer transition-all w-fit group">
+                <input type="file" id="other-docs-upload" className="hidden" multiple accept="application/pdf,.doc,.docx" onChange={handleOtherDocUpload} />
+                <Plus className="w-3 h-3 text-[#FF5B26]" />
+                <span className="text-[10px] font-bold text-nomichi-ink/60 group-hover:text-nomichi-ink transition-all">Add Document</span>
+              </label>
+            </div>
+
+            {/* Auto-send toggle */}
+            <div className="flex items-center justify-between pt-3.5 border-t border-[#e7e1d5]/20">
+              <div className="pr-3">
+                <p className="text-[10px] font-bold text-nomichi-ink leading-snug">Send brochure automatically after enquiry submission</p>
+                <p className="text-[9px] text-[#00A854] font-semibold mt-0.5">{autoSendBrochure ? "Brochure will be attached to enquiry confirmation email & WhatsApp." : "Toggle on to auto-send."}</p>
+              </div>
+              <button
+                type="button"
+                onClick={() => setAutoSendBrochure((v) => !v)}
+                className={`relative inline-flex h-6 w-11 shrink-0 items-center rounded-full transition-colors border-0 cursor-pointer focus:outline-none ${autoSendBrochure ? "bg-[#00A854]" : "bg-[#e7e1d5]"}`}
+              >
+                <span className={`inline-block h-4 w-4 transform rounded-full bg-white shadow-md transition-transform ${autoSendBrochure ? "translate-x-6" : "translate-x-1"}`} />
+              </button>
+            </div>
+          </div>
+
+          {/* 11. Gallery */}
+          <div className="bg-white rounded-3xl border border-[#e7e1d5]/40 shadow-sm p-5 text-left space-y-4">
+            <div className="flex justify-between items-center">
+              <div>
+                <h4 className="text-xs font-extrabold text-nomichi-ink uppercase tracking-wide">11. Additional Gallery Images</h4>
+                <p className="text-[10px] text-nomichi-ink/40 font-semibold mt-0.5">Upload photos that populate the travel gallery.</p>
+              </div>
+              <span className="text-[10px] font-bold text-nomichi-ink/40">{galleryImages.length} / 10 Images</span>
+            </div>
+
+            <div className="flex flex-wrap gap-2.5 items-center">
+              {galleryImages.map((imgUrl, i) => (
+                <div key={i} className="w-16 h-16 rounded-xl bg-[#FAF8F4] overflow-hidden border border-[#e7e1d5]/40 relative group shadow-sm shrink-0">
+                  <img src={imgUrl} className="w-full h-full object-cover" />
+                  <button
+                    type="button"
+                    onClick={() => setGalleryImages(galleryImages.filter((_, idx) => idx !== i))}
+                    className="absolute inset-0 bg-black/40 text-white flex items-center justify-center border-0 cursor-pointer opacity-0 group-hover:opacity-100 transition-opacity"
+                  >
+                    ✕
+                  </button>
+                </div>
+              ))}
+              
+              {galleryImages.length < 10 && (
+                <div>
+                  <input type="file" multiple className="hidden" id="gallery-img-upload" onChange={handleGalleryUpload} accept="image/*" />
+                  <label htmlFor="gallery-img-upload" className="w-16 h-16 border-2 border-dashed border-[#e7e1d5] hover:border-[#FF5B26]/40 hover:bg-[#FAF8F4]/30 rounded-xl flex flex-col items-center justify-center cursor-pointer transition-all gap-1">
+                    <Plus className="w-5 h-5 text-nomichi-ink/30" />
+                  </label>
+                </div>
+              )}
+            </div>
           </div>
         </div>
 

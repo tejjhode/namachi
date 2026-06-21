@@ -130,16 +130,30 @@ export default function EnquiriesPage() {
         console.warn("Failed to auto-generate tasks for assigned lead:", taskErr);
       }
 
-      // Dispatch "Manager Assigned" notification to traveler
+      // Dispatch notifications to traveler and manager
       try {
-        await notificationService.notifyTraveler(
-          promotingEnquiry.email,
-          "Manager Assigned",
-          "Your enquiry has been assigned to a travel expert.",
-          "Manager Assigned",
-          promotingEnquiry.id,
-          "High"
-        );
+        if (selectedManagerId) {
+          const assignedUser = users.find(u => u.id === selectedManagerId);
+          const assigneeName = assignedUser ? assignedUser.full_name : "A Trip Manager";
+
+          await notificationService.notifyManager(
+            selectedManagerId,
+            "Lead Assigned",
+            `New lead "${promotingEnquiry.name}" has been assigned to you.`,
+            "Lead Assigned",
+            promotingEnquiry.id,
+            "High"
+          );
+
+          await notificationService.notifyTraveler(
+            promotingEnquiry.email,
+            "Manager Assigned",
+            `${assigneeName} has been assigned to assist you.`,
+            "Manager Assigned",
+            promotingEnquiry.id,
+            "High"
+          );
+        }
       } catch (notifErr) {
         console.error("Failed to dispatch manager assignment notification:", notifErr);
       }

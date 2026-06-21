@@ -185,6 +185,8 @@ async function compileHtmlTemplate(params: {
         📍 <strong>Trip:</strong> ${finalTripTitle}<br/>
         📅 <strong>Preferred Month:</strong> ${leadData?.preferred_month || "Not specified"}<br/>
         👥 <strong>Travelers:</strong> ${leadData?.group_size || 1} ${leadData?.group_type ? `(${leadData.group_type})` : ""}<br/>
+        ✨ <strong>Travel Style:</strong> ${leadData?.hope_trip_feels_like || "Not specified"}<br/>
+        📝 <strong>Special Requests / Dietary / Accessibility:</strong> ${leadData?.dietary_and_accessibility || "None"}<br/>
         🆔 <strong>Enquiry ID:</strong> ${enquiryId || "N/A"}<br/>
         📨 <strong>Submitted On:</strong> ${submittedDate}
       </div>
@@ -337,7 +339,8 @@ async function compileHtmlTemplate(params: {
         <strong>Travel Month:</strong> ${leadData?.preferred_month || "Not specified"}<br/>
         <strong>Travelers:</strong> ${leadData?.group_size || 1} ${leadData?.group_type ? `(${leadData.group_type})` : ""}<br/>
         <strong>Budget:</strong> ${leadData?.trips?.price ? `₹${leadData.trips.price}` : "Not specified"}<br/>
-        <strong>Travel Style:</strong> ${leadData?.hope_trip_feels_like || "Not specified"}
+        <strong>Travel Style:</strong> ${leadData?.hope_trip_feels_like || "Not specified"}<br/>
+        <strong>Special Requests / Dietary / Accessibility:</strong> ${leadData?.dietary_and_accessibility || "None"}
       </div>
 
       <div style="background-color: #FAF8F4; border: 1px solid #e7e1d5; padding: 20px; border-radius: 16px; margin: 20px 0; line-height: 1.8; color: #1e1e1e;">

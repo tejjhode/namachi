@@ -906,13 +906,6 @@ export default function ManagerLeadDetailPage({ params }: ManagerLeadDetailPageP
               
               <div className="flex flex-col gap-1.5 shrink-0 w-full lg:w-auto md:min-w-[120px]">
                 <button
-                  onClick={handleMoveToNextStage}
-                  disabled={currentStatusKey === "converted" || currentStatusKey === "lost" || updatingStatus}
-                  className="px-4 py-1.5 bg-[#FF5B26] hover:bg-[#FF5B26]/90 text-white font-bold text-[10px] rounded-lg shadow-2xs transition-all disabled:opacity-50 cursor-pointer border-0 w-full text-center"
-                >
-                  {getNextStageButtonText()}
-                </button>
-                <button
                   onClick={() => handleUpdateStatusDirect("lost")}
                   disabled={currentStatusKey === "lost" || updatingStatus}
                   className="px-4 py-1.5 border border-[#FF5B26] hover:bg-[#FFEFEA] text-[#FF5B26] font-bold text-[10px] rounded-lg transition-all cursor-pointer bg-white w-full text-center"

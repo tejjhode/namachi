@@ -613,6 +613,33 @@ export default function EditTripPage({ params }: EditTripPageProps) {
                 </label>
               </div>
             </div>
+
+            <div className="text-left space-y-1.5 mt-4">
+              <label className="block text-[9px] font-bold text-nomichi-ink/50 uppercase tracking-wider">Or Paste Document/Brochure URL</label>
+              <input
+                type="text"
+                placeholder="https://example.com/brochures/trip-itinerary.pdf"
+                value={form.brochureUrl && !form.brochureUrl.startsWith("data:") ? form.brochureUrl : ""}
+                onChange={(e) => {
+                  const val = e.target.value;
+                  setForm((p: any) => ({ ...p, brochureUrl: val }));
+                  if (val) {
+                    try {
+                      const urlObj = new URL(val);
+                      const pathname = urlObj.pathname;
+                      const parts = pathname.split("/");
+                      const filename = parts[parts.length - 1];
+                      setBrochureFileName(filename || "Document Link");
+                    } catch {
+                      setBrochureFileName("Document Link");
+                    }
+                  } else {
+                    setBrochureFileName("");
+                  }
+                }}
+                className="w-full bg-[#FAF8F4]/30 border border-[#e7e1d5] px-3.5 py-2 rounded-xl text-xs font-semibold hover:bg-[#FAF8F4]/50 focus:border-[#FF5B26] transition-all outline-none"
+              />
+            </div>
           </div>
 
           {/* 3. Trip Overview */}
@@ -860,7 +887,7 @@ export default function EditTripPage({ params }: EditTripPageProps) {
           </div>
 
           {/* 5, 6, 7, 8: Repeatables Grid */}
-          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-6">
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-2 gap-6">
             {/* 5. Highlights */}
             <div className="bg-white rounded-3xl border border-[#e7e1d5]/40 shadow-sm p-5 text-left space-y-4 flex flex-col justify-between">
               <div className="space-y-3">
@@ -868,7 +895,7 @@ export default function EditTripPage({ params }: EditTripPageProps) {
                 <div className="space-y-1.5 max-h-48 overflow-y-auto pr-1">
                   {highlights.map((h, i) => (
                     <div key={i} className="flex items-center justify-between bg-[#FAF8F4]/60 px-2.5 py-1.5 rounded-xl border border-[#e7e1d5]/40 text-[11px] gap-2 group">
-                      <div className="flex items-center gap-1.5 truncate">
+                      <div className="flex items-center gap-1.5 min-w-0">
                         <GripVertical className="w-3.5 h-3.5 text-nomichi-ink/20 shrink-0 cursor-grab" />
                         <span className="text-emerald-700 font-extrabold shrink-0">✓</span>
                         <span className="font-semibold text-nomichi-ink/85 truncate">{h}</span>
@@ -900,7 +927,7 @@ export default function EditTripPage({ params }: EditTripPageProps) {
                 <div className="space-y-1.5 max-h-48 overflow-y-auto pr-1">
                   {inclusions.map((inc, i) => (
                     <div key={i} className="flex items-center justify-between bg-[#FAF8F4]/60 px-2.5 py-1.5 rounded-xl border border-[#e7e1d5]/40 text-[11px] gap-2 group">
-                      <div className="flex items-center gap-1.5 truncate">
+                      <div className="flex items-center gap-1.5 min-w-0">
                         <GripVertical className="w-3.5 h-3.5 text-nomichi-ink/20 shrink-0 cursor-grab" />
                         <span className="text-emerald-700 font-extrabold shrink-0">✓</span>
                         <span className="font-semibold text-nomichi-ink/85 truncate">{inc}</span>
@@ -932,7 +959,7 @@ export default function EditTripPage({ params }: EditTripPageProps) {
                 <div className="space-y-1.5 max-h-48 overflow-y-auto pr-1">
                   {exclusions.map((exc, i) => (
                     <div key={i} className="flex items-center justify-between bg-[#FAF8F4]/60 px-2.5 py-1.5 rounded-xl border border-[#e7e1d5]/40 text-[11px] gap-2 group">
-                      <div className="flex items-center gap-1.5 truncate">
+                      <div className="flex items-center gap-1.5 min-w-0">
                         <GripVertical className="w-3.5 h-3.5 text-nomichi-ink/20 shrink-0 cursor-grab" />
                         <span className="text-[#FF5B26] font-extrabold shrink-0">✕</span>
                         <span className="font-semibold text-nomichi-ink/85 truncate">{exc}</span>

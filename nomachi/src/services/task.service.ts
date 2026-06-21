@@ -341,7 +341,7 @@ export const taskService = {
           await notificationService.notifyTraveler(
             lead.email,
             "Document Required",
-            "Please upload your passport copy.",
+            "Please upload your ID copy.",
             "Document Required",
             lead.id,
             "High"
@@ -399,9 +399,6 @@ export const taskService = {
 
     // 2. Contact Complete -> Share Brochure
     if (isStepComplete(1)) {
-      if (leadStatus === "new") {
-        await supabase.from("leads").update({ status: "contacted" }).eq("id", lead.id);
-      }
       await createWorkflowTask(
         2,
         "Share Brochure",
@@ -435,7 +432,7 @@ export const taskService = {
     }
 
     // 4. Traveller Interested -> Schedule Vibe Check
-    if (["qualified", "vibe check sent", "negotiating", "converted", "confirmed"].includes(leadStatus)) {
+    if (isStepComplete(3) || ["qualified", "vibe check sent", "negotiating", "converted", "confirmed"].includes(leadStatus)) {
       await createWorkflowTask(
         4,
         "Schedule Vibe Check",
@@ -497,14 +494,14 @@ export const taskService = {
     if (["converted", "confirmed"].includes(leadStatus)) {
       await createWorkflowTask(
         7,
-        "Collect Passport",
-        `Request and collect high-quality scanned copy of bio page.`,
+        "Collect ID",
+        `Request and collect high-quality scanned copy of ID.`,
         "document",
         "High",
         2, // 2 Days
         [
-          "Request passport bio page scan",
-          "Verify passport validity is > 6 months",
+          "Request ID front/back copy",
+          "Verify ID validity is correct",
           "Upload copy to traveler profile"
         ]
       );
@@ -623,11 +620,16 @@ export const taskService = {
     return this.getTasks();
   },
 
-  async getTasks(): Promise<DBTask[]> {
-    const { data, error } = await supabase
+  async getTasks(assigneeId?: string): Promise<DBTask[]> {
+    let query = supabase
       .from("tasks")
-      .select("*")
-      .order("created_at", { ascending: false });
+      .select("*");
+
+    if (assigneeId) {
+      query = query.eq("assigned_to", assigneeId);
+    }
+
+    const { data, error } = await query.order("created_at", { ascending: false });
 
     if (error) throw error;
     return (data || []) as DBTask[];
@@ -661,7 +663,19 @@ export const taskService = {
     return data as DBTask;
   },
 
-  async updateTaskStatus(id: string, status: string, options?: { meetingDate?: string }): Promise<DBTask> {
+  async updateTaskStatus(
+    id: string,
+    status: string,
+    options?: {
+      meetingDate?: string;
+      fitScore?: string;
+      vibeNotes?: string;
+      refId?: string;
+      receiptAmt?: string;
+      idDocRef?: string;
+      departureId?: string;
+    }
+  ): Promise<DBTask> {
     const { data, error } = await supabase
       .from("tasks")
       .update({ status, updated_at: new Date().toISOString() })
@@ -677,21 +691,89 @@ export const taskService = {
     try {
       if (task.source_kind === "lead" && task.source_id) {
         if (status === "completed") {
-          if (task.step === 1 || task.step === 2 || task.step === 3) {
+          if (task.step === 4) {
             await supabase
               .from("leads")
               .update({ status: "contacted" })
               .eq("id", task.source_id);
+
+            // Send call scheduled email to user
+            try {
+              const { data: leadData } = await supabase
+                .from("leads")
+                .select("name, email, assigned_to, trip_id, profiles!assigned_to(full_name)")
+                .eq("id", task.source_id)
+                .single();
+
+              if (leadData) {
+                let tripTitle = "your trip";
+                if (leadData.trip_id) {
+                  const { data: tripData } = await supabase
+                    .from("trips")
+                    .select("title")
+                    .eq("id", leadData.trip_id)
+                    .single();
+                  if (tripData?.title) {
+                    tripTitle = tripData.title;
+                  }
+                }
+
+                const meetingDateRaw = options?.meetingDate || new Date().toISOString();
+                const formattedCallTime = new Date(meetingDateRaw).toLocaleString("en-IN", {
+                  day: "2-digit",
+                  month: "short",
+                  year: "numeric",
+                  hour: "2-digit",
+                  minute: "2-digit"
+                });
+
+                const managerName = (leadData.profiles as any)?.full_name || "your manager";
+
+                const emailSubject = `Call Scheduled - Nomichi Travels`;
+                const emailBody = `Hi ${leadData.name},\n\nYou have a scheduled call regarding the trip "${tripTitle}" with ${managerName} on ${formattedCallTime}.\n\nLooking forward to speaking with you!`;
+
+                await notificationService.notifyTraveler(
+                  leadData.email,
+                  emailSubject,
+                  emailBody,
+                  "Scheduled Call",
+                  task.source_id,
+                  "High"
+                );
+              }
+            } catch (err) {
+              console.error("Failed to send scheduled call notification email:", err);
+            }
           } else if (task.step === 5) {
             await supabase
               .from("leads")
               .update({ status: "qualified" })
               .eq("id", task.source_id);
+
+            // Save feedback notes as a lead note
+            if (options?.vibeNotes || options?.fitScore) {
+              const noteText = `Vibe Check Completed:\n- Fit Score: ${options.fitScore}/5\n- Feedback Notes: ${options.vibeNotes || "None"}`;
+              await supabase.from("lead_notes").insert({
+                lead_id: task.source_id,
+                note_text: noteText,
+                created_by: task.assigned_to
+              });
+            }
           } else if (task.step === 6) {
             await supabase
               .from("leads")
               .update({ status: "converted" })
               .eq("id", task.source_id);
+
+            // Save payment details as a lead note
+            if (options?.receiptAmt || options?.refId) {
+              const noteText = `Payment Deposit Confirmed:\n- Amount: ₹${options.receiptAmt}\n- Transaction Ref: ${options.refId}`;
+              await supabase.from("lead_notes").insert({
+                lead_id: task.source_id,
+                note_text: noteText,
+                created_by: task.assigned_to
+              });
+            }
 
             // Trigger Booking and Traveler creation & notifications
             try {
@@ -784,7 +866,54 @@ export const taskService = {
             } catch (err) {
               console.error("Failed to notify/create booking on converted task status change:", err);
             }
+          } else if (task.step === 7) {
+            // Save ID Document number and update traveler profile
+            if (options?.idDocRef) {
+              const noteText = `ID Document Collected:\n- Document Reference: ${options.idDocRef}`;
+              await supabase.from("lead_notes").insert({
+                lead_id: task.source_id,
+                note_text: noteText,
+                created_by: task.assigned_to
+              });
+
+              try {
+                const { data: booking } = await supabase
+                  .from("bookings")
+                  .select("id")
+                  .eq("lead_id", task.source_id)
+                  .maybeSingle();
+
+                if (booking?.id) {
+                  await supabase
+                    .from("travelers")
+                    .update({ passport_number: options.idDocRef })
+                    .eq("booking_id", booking.id);
+                }
+              } catch (travErr) {
+                console.error("Failed to update traveler passport number:", travErr);
+              }
+            }
           } else if (task.step === 9) {
+            // Assign departure to booking
+            if (options?.departureId) {
+              try {
+                const { data: booking } = await supabase
+                  .from("bookings")
+                  .select("id")
+                  .eq("lead_id", task.source_id)
+                  .maybeSingle();
+
+                if (booking?.id) {
+                  await supabase
+                    .from("bookings")
+                    .update({ departure_id: options.departureId })
+                    .eq("id", booking.id);
+                }
+              } catch (bErr) {
+                console.error("Failed to update booking departure ID:", bErr);
+              }
+            }
+
             // Trigger Departure Assigned notification
             try {
               const { data: leadData } = await supabase

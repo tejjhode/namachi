@@ -50,126 +50,20 @@ export const notificationService = {
     priority?: string;
     source_id?: string | null;
   }): Promise<Notification> {
-    const { data, error } = await supabase
-      .from("notifications")
-      .insert([
-        {
-          user_id: payload.user_id,
-          title: payload.title,
-          body: payload.body,
-          type: payload.type,
-          priority: payload.priority || "Medium",
-          source_id: payload.source_id || null,
-          is_read: false,
-        },
-      ])
-      .select()
-      .single();
-    if (error) throw error;
+    const response = await fetch("/api/notifications/create", {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify(payload),
+    });
 
-    // Async simulated delivery trigger
-    try {
-      const { data: profile } = await supabase
-        .from("profiles")
-        .select("email, phone, role")
-        .eq("id", payload.user_id)
-        .maybeSingle();
-
-      if (profile) {
-        const rawRole = profile.role || "user";
-        const role = rawRole.toLowerCase();
-        const titleLower = payload.title.toLowerCase();
-        const typeLower = payload.type.toLowerCase();
-
-        let sendEmailTo = "";
-        let sendWATo = "";
-
-        // 1. Email Delivery Check
-        if (role === "user") {
-          // Traveler bookings/payments, welcome, and enquiry emails
-          const matchesEmail =
-            titleLower.includes("booking confirmed") ||
-            titleLower.includes("payment reminder") ||
-            titleLower.includes("payment received") ||
-            titleLower.includes("payment failure") ||
-            titleLower.includes("refunded") ||
-            titleLower.includes("welcome") ||
-            titleLower.includes("enquiry") ||
-            typeLower.includes("booking") ||
-            typeLower.includes("payment") ||
-            typeLower.includes("welcome") ||
-            typeLower.includes("enquiry");
-          if (matchesEmail && profile.email) {
-            sendEmailTo = profile.email;
-          }
-        } else if (role === "manager" || role === "staff") {
-          // Manager assignments/overdue/lead events
-          const matchesEmail =
-            titleLower.includes("assigned") ||
-            titleLower.includes("overdue") ||
-            titleLower.includes("follow-up") ||
-            titleLower.includes("reminder") ||
-            titleLower.includes("lead") ||
-            typeLower.includes("assign") ||
-            typeLower.includes("overdue") ||
-            typeLower.includes("lead") ||
-            typeLower.includes("task");
-          if (matchesEmail && profile.email) {
-            sendEmailTo = profile.email;
-          }
-        } else if (role === "admin") {
-          // Admin digests/critical alerts
-          const matchesEmail =
-            titleLower.includes("failure") ||
-            titleLower.includes("unassigned") ||
-            titleLower.includes("new enquiry") ||
-            typeLower.includes("failure") ||
-            typeLower.includes("unassigned") ||
-            typeLower.includes("enquiry");
-          if (matchesEmail && profile.email) {
-            sendEmailTo = profile.email;
-          }
-        }
-
-        // 2. WhatsApp Delivery Check (Traveler-facing only)
-        if (role === "user") {
-          const matchesWA =
-            titleLower.includes("booking confirmed") ||
-            titleLower.includes("payment reminder") ||
-            titleLower.includes("departure reminder") ||
-            titleLower.includes("trip starts tomorrow") ||
-            typeLower.includes("booking confirmed") ||
-            typeLower.includes("payment reminder") ||
-            typeLower.includes("departure reminder");
-          if (matchesWA && profile.phone) {
-            sendWATo = profile.phone;
-          }
-        }
-
-        // Trigger delivery endpoint if any matches
-        if (sendEmailTo || sendWATo) {
-          fetch("/api/notifications/deliver", {
-            method: "POST",
-            headers: {
-              "Content-Type": "application/json",
-            },
-            body: JSON.stringify({
-              email: sendEmailTo || undefined,
-              phone: sendWATo || undefined,
-              title: payload.title,
-              body: payload.body,
-              priority: payload.priority || "Medium",
-              type: payload.type,
-              source_id: payload.source_id || undefined,
-            }),
-          }).catch((err) => console.error("Notification delivery dispatch error:", err));
-        }
-      }
-    } catch (err) {
-      console.error("Failed to run channel checks:", err);
+    if (!response.ok) {
+      const errData = await response.json().catch(() => ({}));
+      throw new Error(errData?.error || "Failed to create notification");
     }
 
-    return data;
+    return response.json();
   },
 
   // Role-based triggers helper logic
@@ -237,7 +131,7 @@ export const notificationService = {
       const { data: admins } = await supabase
         .from("profiles")
         .select("id")
-        .eq("role", "ADMIN");
+        .or("role.eq.admin,role.eq.ADMIN");
       if (admins && admins.length > 0) {
         await Promise.all(
           admins.map((admin) =>

@@ -41,6 +41,7 @@ import {
 
 interface TripEnquiryViewProps {
   user: {
+    id: string;
     fullName: string;
     email: string;
     avatarUrl?: string;
@@ -192,6 +193,8 @@ export function TripEnquiryView({ user, leads = [], trip }: TripEnquiryViewProps
         console.warn("Could not auto-assign trip leader:", err);
       }
 
+      const enquiryIdGenerated = `ENQ-${Math.floor(100000 + Math.random() * 900000)}`;
+
       // Insert lead into Supabase
       const { data, error } = await supabase
         .from("leads")
@@ -206,7 +209,9 @@ export function TripEnquiryView({ user, leads = [], trip }: TripEnquiryViewProps
           dietary_and_accessibility: anythingElse.trim(),
           trip_id: trip.id,
           status: "new",
-          assigned_to: assignedToId
+          assigned_to: assignedToId,
+          user_id: user.id,
+          enquiry_id: enquiryIdGenerated
         })
         .select("id")
         .single();

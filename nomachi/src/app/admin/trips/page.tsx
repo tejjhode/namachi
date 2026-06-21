@@ -835,7 +835,7 @@ export default function AllTripsPage() {
                                 Select Team Member
                               </button>
                               {users
-                                .filter((u: any) => u.role === "MANAGER")
+                                .filter((u: any) => u.role?.toUpperCase() === "MANAGER")
                                 .map((user: any) => {
                                   const name = user.full_name || user.email;
                                   return (

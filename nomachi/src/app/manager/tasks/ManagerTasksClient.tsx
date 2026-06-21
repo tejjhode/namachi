@@ -225,6 +225,14 @@ export function ManagerTasksClient({ tasks: initialTasks, leads, trips, departur
     return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}T${pad(d.getHours())}:${pad(d.getMinutes())}`;
   });
 
+  const [fitScore, setFitScore] = useState<string>("5");
+  const [vibeNotes, setVibeNotes] = useState<string>("");
+  const [refId, setRefId] = useState<string>("");
+  const [receiptAmt, setReceiptAmt] = useState<string>("");
+  const [idDocRef, setIdDocRef] = useState<string>("");
+  const [departuresList, setDeparturesList] = useState<any[]>([]);
+  const [selectedDepartureId, setSelectedDepartureId] = useState<string>("");
+
   const pageSize = 8;
 
   // Resolve current user session to set default assignee/creator
@@ -273,6 +281,11 @@ export function ManagerTasksClient({ tasks: initialTasks, leads, trips, departur
         return true;
       })
       .sort((a, b) => {
+        const aCompleted = a.status === "completed" || a.status === "cancelled";
+        const bCompleted = b.status === "completed" || b.status === "cancelled";
+        if (aCompleted !== bCompleted) {
+          return aCompleted ? 1 : -1;
+        }
         if (sortBy === "priority") return priorityRank[a.priority] - priorityRank[b.priority];
         if (sortBy === "status") return statusRank[a.status] - statusRank[b.status];
         return new Date(a.dueDate).getTime() - new Date(b.dueDate).getTime();
@@ -287,6 +300,41 @@ export function ManagerTasksClient({ tasks: initialTasks, leads, trips, departur
   const activeTask = useMemo(() => {
     return filteredTasks.find((t) => t.id === selectedTaskId) || paginatedTasks[0] || filteredTasks[0] || tasks[0];
   }, [filteredTasks, paginatedTasks, selectedTaskId, tasks]);
+
+  useEffect(() => {
+    if (activeTask && activeTask.step === 9 && activeTask.sourceId) {
+      supabase
+        .from("leads")
+        .select("trip_id")
+        .eq("id", activeTask.sourceId)
+        .maybeSingle()
+        .then(({ data: lead }) => {
+          if (lead?.trip_id) {
+            supabase
+              .from("trip_departures")
+              .select("id, start_date")
+              .eq("trip_id", lead.trip_id)
+              .then(({ data: deps }) => {
+                setDeparturesList(deps || []);
+                if (deps && deps.length > 0) {
+                  setSelectedDepartureId(deps[0].id);
+                }
+              });
+          }
+        });
+    }
+  }, [activeTask]);
+
+  const isVerificationValid = useMemo(() => {
+    if (!activeTask) return false;
+    if (activeTask.status === "completed") return true; // already done
+    if (activeTask.step === 4 && !meetingDate) return false;
+    if (activeTask.step === 5 && (!fitScore || !vibeNotes.trim())) return false;
+    if (activeTask.step === 6 && (!refId.trim() || !receiptAmt.trim())) return false;
+    if (activeTask.step === 7 && !idDocRef.trim()) return false;
+    if (activeTask.step === 9 && !selectedDepartureId) return false;
+    return true;
+  }, [activeTask, meetingDate, fitScore, vibeNotes, refId, receiptAmt, idDocRef, selectedDepartureId]);
 
   useEffect(() => {
     setCurrentPage((page) => Math.min(Math.max(1, page), totalPages));
@@ -318,7 +366,7 @@ export function ManagerTasksClient({ tasks: initialTasks, leads, trips, departur
       const updated = await taskService.updateTaskStatus(taskId, newStatus, options);
       
       // Re-fetch all tasks from the database and map them back to TaskItem schema to support live workflow updates
-      const dbTasks = await taskService.getTasks();
+      const dbTasks = await taskService.getTasks(currentUserId || undefined);
       const mapped = dbTasks.map((t: any) => {
         let entityKind: EntityKind = "Lead";
         if (t.source_kind === "trip") entityKind = "Trip";
@@ -567,7 +615,9 @@ export function ManagerTasksClient({ tasks: initialTasks, leads, trips, departur
         step: created.step || 5,
       };
 
-      setTasks((current) => [createdItem, ...current]);
+      if (formData.assignedTo === currentUserId) {
+        setTasks((current) => [createdItem, ...current]);
+      }
       setSelectedTaskId(createdItem.id);
       setTaskCreateOpen(false);
       setFormData((prev) => ({
@@ -785,11 +835,12 @@ export function ManagerTasksClient({ tasks: initialTasks, leads, trips, departur
                     paginatedTasks.map((t) => {
                       const TaskIcon = iconByType[t.type] || ClipboardList;
                       const isSelected = selectedTaskId === t.id;
+                      const isDone = t.status === "completed" || t.status === "cancelled";
                       return (
                         <tr
                           key={t.id}
                           onClick={() => setSelectedTaskId((prev) => (prev === t.id ? "" : t.id))}
-                          className={`cursor-pointer transition-colors ${isSelected ? "bg-[#FFF8F4]/80" : "hover:bg-[#FAF8F4]/50"}`}
+                          className={`cursor-pointer transition-colors ${isSelected ? "bg-[#FFF8F4]/80" : "hover:bg-[#FAF8F4]/50"} ${isDone ? "opacity-60 bg-slate-50/20" : ""}`}
                         >
                           <td className="px-6 py-4 text-center">
                             <input
@@ -804,47 +855,49 @@ export function ManagerTasksClient({ tasks: initialTasks, leads, trips, departur
                           </td>
                           <td className="px-6 py-4 font-semibold text-nomichi-ink max-w-[200px]">
                             <div className="flex items-start gap-3 text-left">
-                              <div className="w-9 h-9 rounded-full bg-[#FFF1EA] text-[#FF5B26] flex items-center justify-center shrink-0 mt-0.5">
+                              <div className={`w-9 h-9 rounded-full flex items-center justify-center shrink-0 mt-0.5 ${isDone ? "bg-slate-100 text-slate-400" : "bg-[#FFF1EA] text-[#FF5B26]"}`}>
                                 <TaskIcon className="w-4 h-4" />
                               </div>
                               <div className="overflow-hidden">
-                                <span className="font-extrabold text-[12px] block truncate">{t.title}</span>
-                                <span className="text-[10px] text-nomichi-ink/40 font-semibold truncate block mt-0.5">{t.description}</span>
+                                <span className={`font-extrabold text-[12px] block truncate ${isDone ? "line-through text-nomichi-ink/30 font-medium" : ""}`}>{t.title}</span>
+                                <span className={`text-[10px] truncate block mt-0.5 ${isDone ? "line-through text-nomichi-ink/20 font-normal" : "text-nomichi-ink/40 font-semibold"}`}>{t.description}</span>
                               </div>
                             </div>
-                          </td>                           <td className="px-6 py-4 font-bold text-nomichi-ink whitespace-nowrap">
+                          </td>
+                          <td className={`px-6 py-4 font-bold whitespace-nowrap ${isDone ? "line-through text-nomichi-ink/30" : "text-nomichi-ink"}`}>
                             <span>{t.relatedTo}</span>
-                            <span className="text-[9px] block text-[#FF5B26] uppercase mt-1 font-black tracking-wide">
+                            <span className={`text-[9px] block uppercase mt-1 font-black tracking-wide ${isDone ? "text-nomichi-ink/20" : "text-[#FF5B26]"}`}>
                               {t.relatedId}
                             </span>
                           </td>
                           <td className="px-6 py-4 whitespace-nowrap">
-                            <span className={`px-2.5 py-1 rounded-full text-[10px] font-black uppercase whitespace-nowrap ${typeMeta[t.type]?.className || ''}`}>
+                            <span className={`px-2.5 py-1 rounded-full text-[10px] font-black uppercase whitespace-nowrap ${isDone ? "bg-slate-100 text-slate-400 border border-slate-200 opacity-60" : (typeMeta[t.type]?.className || '')}`}>
                               {typeMeta[t.type]?.label || t.type}
                             </span>
                           </td>
                           <td className="px-6 py-4 whitespace-nowrap">
                             <span className={`px-2.5 py-1 rounded-full text-[10px] font-black uppercase whitespace-nowrap ${
+                              isDone ? "bg-slate-100 text-slate-400 border border-slate-200 opacity-60" :
                               t.priority === "High" ? "bg-red-50 text-red-700" :
                               t.priority === "Medium" ? "bg-amber-50 text-amber-700" : "bg-emerald-50 text-emerald-700"
                             }`}>
                               {t.priority}
                             </span>
                           </td>
-                          <td className="px-6 py-4 text-left font-semibold text-nomichi-ink/80 whitespace-nowrap">
+                          <td className={`px-6 py-4 text-left font-semibold whitespace-nowrap ${isDone ? "line-through text-nomichi-ink/30" : "text-nomichi-ink/80"}`}>
                             <span>{formatDate(t.dueDate)}</span>
-                            <span className={`text-[10px] block mt-0.5 font-bold ${t.status === 'overdue' ? 'text-rose-600' : 'text-nomichi-ink/45'}`}>
+                            <span className={`text-[10px] block mt-0.5 font-bold ${isDone ? 'text-nomichi-ink/20' : t.status === 'overdue' ? 'text-rose-600' : 'text-nomichi-ink/45'}`}>
                               {daysAwayLabel(t.dueDate, t.status)}
                             </span>
                           </td>
                           <td className="px-6 py-4 whitespace-nowrap">
-                            <span className={`px-2.5 py-1 rounded-full text-[10px] font-black uppercase whitespace-nowrap ${taskStatusMeta[t.status]?.className || ''}`}>
+                            <span className={`px-2.5 py-1 rounded-full text-[10px] font-black uppercase whitespace-nowrap ${isDone ? "bg-slate-100 text-slate-400 border border-slate-200 opacity-60" : (taskStatusMeta[t.status]?.className || '')}`}>
                               {taskStatusMeta[t.status]?.label || t.status}
                             </span>
                           </td>
                           <td className="px-6 py-4 whitespace-nowrap">
                             <div className="flex items-center gap-2.5 text-left whitespace-nowrap">
-                              <div className="w-8 h-8 rounded-full border border-[#e7e1d5]/50 bg-[#FFECE5] flex items-center justify-center font-bold text-[#FF5B26] text-xs shrink-0 overflow-hidden">
+                              <div className={`w-8 h-8 rounded-full border flex items-center justify-center font-bold text-xs shrink-0 overflow-hidden ${isDone ? "border-slate-200 bg-slate-100 text-slate-400" : "border-[#e7e1d5]/50 bg-[#FFECE5] text-[#FF5B26]"}`}>
                                 {t.assignee.avatar ? (
                                   <img src={t.assignee.avatar} alt="Avatar" className="w-full h-full object-cover" />
                                 ) : (
@@ -852,7 +905,7 @@ export function ManagerTasksClient({ tasks: initialTasks, leads, trips, departur
                                 )}
                               </div>
                               <div>
-                                <span className="font-extrabold text-[11px] block">{t.assignee.name}</span>
+                                <span className={`font-extrabold text-[11px] block ${isDone ? "text-nomichi-ink/35 font-medium" : ""}`}>{t.assignee.name}</span>
                                 <span className="text-[9px] text-nomichi-ink/40 font-bold block">{t.assignee.role}</span>
                               </div>
                             </div>
@@ -926,7 +979,7 @@ export function ManagerTasksClient({ tasks: initialTasks, leads, trips, departur
                 <ActiveIcon className="w-5 h-5 text-[#FF5B26]" />
               </div>
               <div className="overflow-hidden max-w-[200px]">
-                <h3 className="font-extrabold text-xs text-nomichi-ink truncate leading-tight">
+                <h3 className={`font-extrabold text-xs text-nomichi-ink truncate leading-tight ${activeTask?.status === "completed" || activeTask?.status === "cancelled" ? "line-through text-nomichi-ink/30" : ""}`}>
                   {activeTask?.title || "Select a task"}
                 </h3>
                 <span className="text-[10px] text-nomichi-ink/40 font-bold block mt-1">
@@ -1097,19 +1150,123 @@ export function ManagerTasksClient({ tasks: initialTasks, leads, trips, departur
               {/* Action Buttons */}
               <div className="pt-4 border-t border-[#e7e1d5]/20 space-y-2.5">
                 {activeTask.step === 4 && (
-                  <div className="mb-2.5 space-y-1.5">
-                    <label className="text-[10px] font-black uppercase text-nomichi-ink/40 tracking-wider block">Meeting Date & Time</label>
+                  <div className="mb-2.5 space-y-1.5 text-left">
+                    <label className="text-[10px] font-black uppercase text-nomichi-ink/40 tracking-wider block">Meeting Date & Time *</label>
                     <input
                       type="datetime-local"
+                      required
                       value={meetingDate}
                       onChange={(e) => setMeetingDate(e.target.value)}
                       className="w-full h-11 px-3.5 border border-[#e7e1d5] rounded-xl focus:outline-none focus:border-[#FF5B26] text-xs font-semibold bg-white"
                     />
                   </div>
                 )}
+                {activeTask.step === 5 && (
+                  <div className="mb-2.5 space-y-2.5 text-left bg-slate-50/50 p-3 rounded-2xl border border-slate-100">
+                    <div className="space-y-1">
+                      <label className="text-[10px] font-black uppercase text-nomichi-ink/40 tracking-wider block">Fit Score (1-5) *</label>
+                      <select
+                        value={fitScore}
+                        onChange={(e) => setFitScore(e.target.value)}
+                        className="w-full h-10 px-2 border border-[#e7e1d5] rounded-xl bg-white text-xs font-semibold"
+                      >
+                        <option value="5">5 - Excellent Fit</option>
+                        <option value="4">4 - Good Fit</option>
+                        <option value="3">3 - Average Fit</option>
+                        <option value="2">2 - Poor Fit</option>
+                        <option value="1">1 - Not a Fit</option>
+                      </select>
+                    </div>
+                    <div className="space-y-1">
+                      <label className="text-[10px] font-black uppercase text-nomichi-ink/40 tracking-wider block">Vibe Check Notes *</label>
+                      <textarea
+                        rows={2}
+                        required
+                        value={vibeNotes}
+                        onChange={(e) => setVibeNotes(e.target.value)}
+                        placeholder="Feedback notes..."
+                        className="w-full p-2 border border-[#e7e1d5] rounded-xl bg-white text-xs font-semibold resize-none"
+                      />
+                    </div>
+                  </div>
+                )}
+                {activeTask.step === 6 && (
+                  <div className="mb-2.5 space-y-2.5 text-left bg-slate-50/50 p-3 rounded-2xl border border-slate-100">
+                    <div className="space-y-1">
+                      <label className="text-[10px] font-black uppercase text-nomichi-ink/40 tracking-wider block">Advance Amount (INR) *</label>
+                      <input
+                        type="number"
+                        required
+                        placeholder="e.g. 5000"
+                        value={receiptAmt}
+                        onChange={(e) => setReceiptAmt(e.target.value)}
+                        className="w-full h-10 px-3 border border-[#e7e1d5] rounded-xl bg-white text-xs font-semibold"
+                      />
+                    </div>
+                    <div className="space-y-1">
+                      <label className="text-[10px] font-black uppercase text-nomichi-ink/40 tracking-wider block">Transaction Ref ID *</label>
+                      <input
+                        type="text"
+                        required
+                        placeholder="e.g. TXN12345"
+                        value={refId}
+                        onChange={(e) => setRefId(e.target.value)}
+                        className="w-full h-10 px-3 border border-[#e7e1d5] rounded-xl bg-white text-xs font-semibold"
+                      />
+                    </div>
+                  </div>
+                )}
+                {activeTask.step === 7 && (
+                  <div className="mb-2.5 space-y-1.5 text-left bg-slate-50/50 p-3 rounded-2xl border border-slate-100">
+                    <label className="text-[10px] font-black uppercase text-nomichi-ink/40 tracking-wider block">ID Document Number *</label>
+                    <input
+                      type="text"
+                      required
+                      placeholder="e.g. Passport/Aadhaar number"
+                      value={idDocRef}
+                      onChange={(e) => setIdDocRef(e.target.value)}
+                      className="w-full h-10 px-3 border border-[#e7e1d5] rounded-xl bg-white text-xs font-semibold"
+                    />
+                  </div>
+                )}
+                {activeTask.step === 9 && (
+                  <div className="mb-2.5 space-y-1.5 text-left bg-slate-50/50 p-3 rounded-2xl border border-slate-100">
+                    <label className="text-[10px] font-black uppercase text-nomichi-ink/40 tracking-wider block">Select Departure *</label>
+                    {departuresList.length > 0 ? (
+                      <select
+                        value={selectedDepartureId}
+                        onChange={(e) => setSelectedDepartureId(e.target.value)}
+                        className="w-full h-10 px-2 border border-[#e7e1d5] rounded-xl bg-white text-xs font-semibold"
+                      >
+                        {departuresList.map((d) => (
+                          <option key={d.id} value={d.id}>
+                            Starts {new Date(d.start_date).toLocaleDateString("en-IN", { day: '2-digit', month: 'short' })}
+                          </option>
+                        ))}
+                      </select>
+                    ) : (
+                      <p className="text-[9px] text-rose-600 font-bold">No active departures found for this trip.</p>
+                    )}
+                  </div>
+                )}
                 <button
-                  onClick={() => handleUpdateStatus(activeTask.id, "completed", activeTask.step === 4 ? { meetingDate } : undefined)}
-                  className="w-full py-3 bg-[#16A34A] hover:bg-[#16A34A]/90 text-white font-bold rounded-xl flex items-center justify-center gap-2 cursor-pointer transition-all shadow-sm border-0"
+                  onClick={() => {
+                    const opts: any = {};
+                    if (activeTask.step === 4) opts.meetingDate = meetingDate;
+                    if (activeTask.step === 5) {
+                      opts.fitScore = fitScore;
+                      opts.vibeNotes = vibeNotes;
+                    }
+                    if (activeTask.step === 6) {
+                      opts.refId = refId;
+                      opts.receiptAmt = receiptAmt;
+                    }
+                    if (activeTask.step === 7) opts.idDocRef = idDocRef;
+                    if (activeTask.step === 9) opts.departureId = selectedDepartureId;
+                    handleUpdateStatus(activeTask.id, "completed", opts);
+                  }}
+                  disabled={!isVerificationValid}
+                  className="w-full py-3 bg-[#16A34A] hover:bg-[#16A34A]/90 text-white font-bold rounded-xl flex items-center justify-center gap-2 cursor-pointer transition-all shadow-sm border-0 disabled:opacity-40 disabled:cursor-not-allowed"
                 >
                   <CheckCircle2 className="w-4 h-4" />
                   {(() => {
@@ -1120,7 +1277,7 @@ export function ManagerTasksClient({ tasks: initialTasks, leads, trips, departur
                       case 4: return "Schedule Call";
                       case 5: return "✓ Vibe Check Passed";
                       case 6: return "✓ Payment Received";
-                      case 7: return "✓ Passport Collected";
+                      case 7: return "✓ ID Collected";
                       case 8: return "✓ Emergency Contact Collected";
                       case 9: return "✓ Assign Departure";
                       case 10: return "✓ Itinerary Sent";

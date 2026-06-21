@@ -5,6 +5,7 @@ import { useUsers } from "@/hooks/useUsers";
 import { tripService } from "@/services/trip.service";
 import { leadService } from "@/services/lead.service";
 import { taskService } from "@/services/task.service";
+import { notificationService } from "@/services/notification.service";
 import { Trip, Lead, LeadNote } from "@/types/admin.types";
 import {
   Loader2,
@@ -155,6 +156,29 @@ export default function LeadsPage() {
           });
         } catch (taskErr) {
           console.warn("Failed to auto-generate tasks for assigned lead:", taskErr);
+        }
+
+        // Dispatch notifications to traveler and manager
+        try {
+          await notificationService.notifyManager(
+            profileId,
+            "Lead Assigned",
+            `New lead "${selectedLead.name}" has been assigned to you.`,
+            "Lead Assigned",
+            selectedLead.id,
+            "High"
+          );
+
+          await notificationService.notifyTraveler(
+            selectedLead.email,
+            "Manager Assigned",
+            `${assigneeName} has been assigned to assist you.`,
+            "Manager Assigned",
+            selectedLead.id,
+            "High"
+          );
+        } catch (notifErr) {
+          console.error("Failed to dispatch manager assignment notifications:", notifErr);
         }
       }
       
@@ -429,7 +453,7 @@ export default function LeadsPage() {
                 className="w-full appearance-none bg-white border border-[#e7e1d5] pl-3.5 pr-8 py-2.5 rounded-xl text-xs font-semibold text-nomichi-ink focus:outline-none focus:border-[#FF5B26] cursor-pointer truncate"
               >
                 <option value="all">Assigned To</option>
-                {users.filter(u => u.role === "MANAGER").map((u) => (
+                {users.filter(u => u.role?.toUpperCase() === "MANAGER").map((u) => (
                   <option key={u.id} value={u.id}>{u.full_name}</option>
                 ))}
               </select>
@@ -895,7 +919,7 @@ export default function LeadsPage() {
                                   <span>Unassigned</span>
                                 </button>
 
-                                {users.filter(u => u.role === "MANAGER").map((u) => (
+                                {users.filter(u => u.role?.toUpperCase() === "MANAGER").map((u) => (
                                   <button
                                     key={u.id}
                                     type="button"
