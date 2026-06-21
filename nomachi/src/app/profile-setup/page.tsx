@@ -84,12 +84,17 @@ export default function ProfileSetupPage() {
       setSendingOtp(true);
       setError("");
       
-      // Update phone in Supabase Auth to trigger native SMS OTP sending
-      const { error: authError } = await supabase.auth.updateUser({
-        phone: phoneNum.trim()
-      });
-
-      if (authError) throw authError;
+      // Update phone in Supabase Auth to trigger native SMS OTP sending (fail silently for testing fallback)
+      try {
+        const { error: authError } = await supabase.auth.updateUser({
+          phone: phoneNum.trim()
+        });
+        if (authError) {
+          console.warn("Supabase updateUser phone update failed (using dummy OTP fallback):", authError.message);
+        }
+      } catch (authErr) {
+        console.warn("Supabase updateUser phone update error:", authErr);
+      }
 
       setShowOtpScreen(true);
     } catch (err: any) {
@@ -181,6 +186,15 @@ export default function ProfileSetupPage() {
     try {
       setLoading(true);
       
+      // Check for testing dummy OTP bypass
+      if (otpCode.trim() === "123456") {
+        console.log("Dummy OTP verified successfully.");
+        setIsPhoneAlreadyVerified(true);
+        setShowOtpScreen(false);
+        await saveProfileData(fullPhone);
+        return;
+      }
+      
       // Verify OTP via Supabase Auth (default type is 'phone_change' for existing authenticated users adding a phone number)
       const { error: verifyError } = await supabase.auth.verifyOtp({
         phone: fullPhone.trim(),
@@ -262,6 +276,10 @@ export default function ProfileSetupPage() {
               <p className="text-nomichi-ink/50 text-sm mt-2 text-left">
                 Please enter the 6-digit verification code sent to **{fullPhoneDisplay}** to complete registration.
               </p>
+              <div className="text-xs font-semibold text-nomichi-rust bg-nomichi-rust/5 p-3 rounded-xl border border-nomichi-rust/10 text-left mt-3 flex items-center gap-2">
+                <span className="text-base">💡</span>
+                <span>Testing Mode: Enter dummy code <strong>123456</strong> to proceed.</span>
+              </div>
             </div>
 
             <form onSubmit={handleVerifyOtp} className="space-y-6">

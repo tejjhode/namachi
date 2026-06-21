@@ -122,6 +122,19 @@ async function compileHtmlTemplate(params: {
           travelerName = lead.name;
           enquiryId = lead.enquiry_id || "";
           
+          // Fetch gender and nationality from the user profile if available
+          if (lead.user_id) {
+            const { data: profile } = await supabaseAdmin
+              .from("profiles")
+              .select("gender, nationality")
+              .eq("id", lead.user_id)
+              .maybeSingle();
+            if (profile) {
+              leadData.gender = profile.gender || "Not specified";
+              leadData.nationality = profile.nationality || "Indian";
+            }
+          }
+
           if (lead.trips) {
             tripTitle = lead.trips.title;
             brochureUrl = lead.trips.brochure_url || "";
@@ -157,24 +170,51 @@ async function compileHtmlTemplate(params: {
 
   if (type === "Enquiry Submitted") {
     const finalTripTitle = tripTitle || "your selected trip";
+    const submittedDate = leadData?.created_at 
+      ? new Date(leadData.created_at).toLocaleDateString("en-IN", { day: 'numeric', month: 'short', year: 'numeric' })
+      : new Date().toLocaleDateString("en-IN", { day: 'numeric', month: 'short', year: 'numeric' });
+
     bodyContent = `
       <p>Hi ${firstName},</p>
-      <p>Thank you for showing interest in our <strong>${finalTripTitle}</strong> experience.</p>
+      <p>Thank you for your interest in <strong>${finalTripTitle}</strong>.</p>
       <p>We’re excited that you’re considering traveling with Nomichi.</p>
-      <p>Your enquiry has been successfully received and is now being reviewed by our travel specialists.</p>
-      <p>Over the next few hours, one of our trip experts will carefully review your request and reach out to understand:</p>
-      <ul style="padding-left: 20px; line-height: 1.6; margin: 15px 0;">
-        <li>Your travel preferences</li>
-        <li>Group size and expectations</li>
-        <li>Preferred travel dates</li>
-        <li>Any special requirements</li>
-      </ul>
-      <div style="background-color: #FAF8F4; border: 1px solid #e7e1d5; padding: 18px; border-radius: 16px; margin: 25px 0; font-size: 13px; line-height: 1.6; color: #1e1e1e;">
-        <strong>Trip:</strong> ${finalTripTitle}<br/>
-        <strong>Enquiry ID:</strong> ${enquiryId || "ENQ-" + Math.floor(1000 + Math.random() * 9000)}
+      <p>Your enquiry has been successfully received and is now being reviewed by our travel team.</p>
+
+      <div style="background-color: #FAF8F4; border: 1px solid #e7e1d5; padding: 20px; border-radius: 16px; margin: 25px 0; line-height: 1.8; color: #1e1e1e;">
+        <h4 style="margin: 0 0 10px 0; font-size: 14px; font-weight: 800; color: #b04b1e; text-transform: uppercase; letter-spacing: 0.05em;">Your Enquiry</h4>
+        📍 <strong>Trip:</strong> ${finalTripTitle}<br/>
+        📅 <strong>Preferred Month:</strong> ${leadData?.preferred_month || "Not specified"}<br/>
+        👥 <strong>Travelers:</strong> ${leadData?.group_size || 1} ${leadData?.group_type ? `(${leadData.group_type})` : ""}<br/>
+        🆔 <strong>Enquiry ID:</strong> ${enquiryId || "N/A"}<br/>
+        📨 <strong>Submitted On:</strong> ${submittedDate}
       </div>
-      <p>At Nomichi, we believe travel is more than visiting destinations. It’s about meaningful experiences, authentic connections, and unforgettable stories.</p>
-      <p>We’ll be in touch shortly.</p>
+
+      <h4 style="margin-top: 25px; margin-bottom: 10px; font-size: 14px; font-weight: 800; color: #1e1e1e;">What Happens Next?</h4>
+      <p>Our team will:</p>
+      <ul style="padding-left: 20px; line-height: 1.6; margin: 15px 0;">
+        <li>✅ Review your enquiry</li>
+        <li>✅ Understand your travel preferences</li>
+        <li>✅ Share trip details and pricing</li>
+        <li>✅ Help you plan the perfect experience</li>
+      </ul>
+      <p>A Nomichi Trip Expert will contact you shortly via phone, WhatsApp, or email.</p>
+
+      <h4 style="margin-top: 25px; margin-bottom: 10px; font-size: 14px; font-weight: 800; color: #1e1e1e;">Why Travel With Nomichi?</h4>
+      <ul style="list-style-type: none; padding-left: 0; line-height: 1.8; margin: 15px 0;">
+        <li>🏔️ <strong>Curated small-group experiences</strong></li>
+        <li>🤝 <strong>Like-minded travel communities</strong></li>
+        <li>✨ <strong>Unique destinations and stories</strong></li>
+        <li>🧭 <strong>Personalized travel guidance</strong></li>
+      </ul>
+
+      <h4 style="font-size: 13px; font-weight: 800; color: #1e1e1e; margin-top: 25px; margin-bottom: 15px; text-align: center;">Ready to Explore More?</h4>
+      <div style="text-align: center; margin: 20px 0;">
+        <a href="${origin || 'https://nomichii.vercel.app'}/view?=explore" style="background-color: #FF5B26; color: #ffffff; padding: 14px 28px; border-radius: 14px; font-weight: bold; text-decoration: none; display: inline-block; font-size: 13px; box-shadow: 0 4px 10px rgba(255,91,38,0.25);">View Trip Details</a>
+      </div>
+
+      <p style="font-style: italic; color: #555555; margin-top: 25px; border-top: 1px dashed #e7e1d5; padding-top: 15px;">
+        Adventure begins with a single step. We’re excited to help you create unforgettable memories.
+      </p>
     `;
   } else if (type === "Welcome to Nomichi") {
     bodyContent = `
@@ -273,6 +313,71 @@ async function compileHtmlTemplate(params: {
       <p>If you have any questions, simply reply to this email or connect with your Nomichi Trip Expert.</p>
       <p>Adventure awaits.</p>
     `;
+  } else if (type === "New Enquiry") {
+    const finalTripTitle = tripTitle || leadData?.trip_interest || "Selected Trip";
+    const submittedAt = leadData?.created_at 
+      ? new Date(leadData.created_at).toLocaleString("en-IN", { timeZone: "Asia/Kolkata" })
+      : new Date().toLocaleString("en-IN", { timeZone: "Asia/Kolkata" });
+
+    bodyContent = `
+      <p>A new enquiry has been submitted.</p>
+
+      <div style="background-color: #FAF8F4; border: 1px solid #e7e1d5; padding: 20px; border-radius: 16px; margin: 20px 0; line-height: 1.8; color: #1e1e1e;">
+        <h4 style="margin: 0 0 10px 0; font-size: 14px; font-weight: 800; color: #b04b1e; text-transform: uppercase; letter-spacing: 0.05em;">Traveler Information</h4>
+        <strong>Name:</strong> ${leadData?.name || "N/A"}<br/>
+        <strong>Email:</strong> ${leadData?.email || "N/A"}<br/>
+        <strong>Phone:</strong> ${leadData?.phone || "N/A"}<br/>
+        <strong>Gender:</strong> ${leadData?.gender || "Not specified"}<br/>
+        <strong>Nationality:</strong> ${leadData?.nationality || "Indian"}
+      </div>
+
+      <div style="background-color: #FAF8F4; border: 1px solid #e7e1d5; padding: 20px; border-radius: 16px; margin: 20px 0; line-height: 1.8; color: #1e1e1e;">
+        <h4 style="margin: 0 0 10px 0; font-size: 14px; font-weight: 800; color: #b04b1e; text-transform: uppercase; letter-spacing: 0.05em;">Trip Information</h4>
+        <strong>Trip:</strong> ${finalTripTitle}<br/>
+        <strong>Travel Month:</strong> ${leadData?.preferred_month || "Not specified"}<br/>
+        <strong>Travelers:</strong> ${leadData?.group_size || 1} ${leadData?.group_type ? `(${leadData.group_type})` : ""}<br/>
+        <strong>Budget:</strong> ${leadData?.trips?.price ? `₹${leadData.trips.price}` : "Not specified"}<br/>
+        <strong>Travel Style:</strong> ${leadData?.hope_trip_feels_like || "Not specified"}
+      </div>
+
+      <div style="background-color: #FAF8F4; border: 1px solid #e7e1d5; padding: 20px; border-radius: 16px; margin: 20px 0; line-height: 1.8; color: #1e1e1e;">
+        <h4 style="margin: 0 0 10px 0; font-size: 14px; font-weight: 800; color: #b04b1e; text-transform: uppercase; letter-spacing: 0.05em;">Source Information</h4>
+        <strong>Source:</strong> Website<br/>
+        <strong>Enquiry ID:</strong> ${enquiryId || "N/A"}<br/>
+        <strong>Submitted At:</strong> ${submittedAt}
+      </div>
+
+      <div style="margin-top: 30px; text-align: center; border-top: 1px solid #e7e1d5; padding-top: 20px;">
+        <h4 style="margin: 0 0 15px 0; font-size: 14px; font-weight: 800; color: #1e1e1e;">Action Required</h4>
+        <p style="margin-bottom: 20px;">Assign this enquiry to a manager.</p>
+        
+        <a href="${origin || 'https://nomichii.vercel.app'}/admin/enquiries" style="background-color: #1e1e1e; color: #ffffff; padding: 12px 24px; border-radius: 12px; font-weight: bold; text-decoration: none; display: inline-block; font-size: 13px; margin-right: 10px;">Open Admin Dashboard</a>
+        <a href="${origin || 'https://nomichii.vercel.app'}/admin/enquiries" style="background-color: #FF5B26; color: #ffffff; padding: 12px 24px; border-radius: 12px; font-weight: bold; text-decoration: none; display: inline-block; font-size: 13px;">Assign Manager &rarr;</a>
+      </div>
+    `;
+  } else if (type === "Lead Assigned") {
+    const finalTripTitle = tripTitle || leadData?.trip_interest || "Selected Trip";
+    bodyContent = `
+      <p>A new lead has been assigned to you.</p>
+
+      <div style="background-color: #FAF8F4; border: 1px solid #e7e1d5; padding: 20px; border-radius: 16px; margin: 20px 0; line-height: 1.8; color: #1e1e1e;">
+        <strong>Lead:</strong> ${leadData?.name || "N/A"}<br/>
+        <strong>Trip:</strong> ${finalTripTitle}<br/>
+        <strong>Phone:</strong> ${leadData?.phone || "N/A"}<br/>
+        <strong>Priority:</strong> High
+      </div>
+
+      <h4 style="margin-top: 25px; margin-bottom: 10px; font-size: 14px; font-weight: 800; color: #1e1e1e;">Required Actions:</h4>
+      <ol style="padding-left: 20px; line-height: 1.6; margin: 15px 0; list-style-type: none;">
+        <li>1. Contact traveler</li>
+        <li>2. Share brochure</li>
+        <li>3. Schedule follow-up</li>
+      </ol>
+
+      <div style="text-align: center; margin: 25px 0;">
+        <a href="${origin || 'https://nomichii.vercel.app'}/manager/leads" style="background-color: #FF5B26; color: #ffffff; padding: 12px 24px; border-radius: 12px; font-weight: bold; text-decoration: none; display: inline-block; font-size: 13px; box-shadow: 0 4px 10px rgba(255,91,38,0.25);">View Lead &rarr;</a>
+      </div>
+    `;
   } else {
     bodyContent = `
       <p>Hi ${firstName},</p>
@@ -365,7 +470,9 @@ async function compileHtmlTemplate(params: {
 <body>
   <!-- Preheader Text for Email Client Preview -->
   <div style="display: none; max-height: 0px; overflow: hidden; opacity: 0; font-size: 1px; color: #ffffff; line-height: 1px;">
-    ${type === "Welcome to Nomichi" ? "Your profile is ready. Adventure, connection, and unforgettable experiences await." : title}
+    ${type === "Welcome to Nomichi" ? "Your profile is ready. Adventure, connection, and unforgettable experiences await." : 
+      type === "Enquiry Submitted" ? "Your Nomichi journey is one step closer." :
+      type === "New Enquiry" ? "A new enquiry has been submitted." : title}
   </div>
   <div class="wrapper">
     <div class="container">

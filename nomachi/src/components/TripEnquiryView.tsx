@@ -221,28 +221,28 @@ export function TripEnquiryView({ user, leads = [], trip }: TripEnquiryViewProps
       try {
         await notificationService.notifyTraveler(
           user.email,
-          "Enquiry Submitted",
+          "We've received your enquiry 🌍",
           "Your enquiry has been received.",
           "Enquiry Submitted",
-          null,
+          data?.id || null,
           "Medium"
         );
 
         await notificationService.notifyAdmins(
-          "New Enquiry Submitted",
+          `🚨 New Enquiry Received – ${trip.title}`,
           `${fullName} submitted an enquiry for "${trip.title}".`,
           "New Enquiry",
-          null,
+          data?.id || null,
           "Medium"
         );
 
         if (assignedToId) {
           await notificationService.notifyManager(
             assignedToId,
-            "Lead Assigned",
+            `New Lead Assigned – ${fullName}`,
             `New lead "${fullName}" for "${trip.title}" has been assigned to you.`,
             "Lead Assigned",
-            null,
+            data?.id || null,
             "Medium"
           );
 
@@ -251,7 +251,7 @@ export function TripEnquiryView({ user, leads = [], trip }: TripEnquiryViewProps
             "Manager Assigned",
             `${assignedLeaderName} has been assigned to assist you.`,
             "Manager Assigned",
-            null,
+            data?.id || null,
             "Medium"
           );
         }

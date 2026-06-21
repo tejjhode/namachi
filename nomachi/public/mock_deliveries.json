@@ -1,5 +1,73 @@
 [
   {
+    "id": "email_m9xc8z3xt",
+    "timestamp": "2026-06-21T06:44:32.520Z",
+    "recipient": "tejjhode@gmail.com",
+    "channel": "Email",
+    "type": "Welcome to Nomichi",
+    "title": "Welcome to Nomichi 🌍 Your Journey Begins Here",
+    "body": "Your profile is ready. Adventure, connection, and unforgettable experiences await.",
+    "priority": "High",
+    "status": "Success",
+    "details": {
+      "smtp_server": "smtp.resend.com",
+      "port": 587,
+      "messageId": "<ac0a22a6-bce0-0808-66ff-4de99927ec05@edinsured.in>",
+      "live": true
+    }
+  },
+  {
+    "id": "email_pwlzfz8nj",
+    "timestamp": "2026-06-21T06:44:32.488Z",
+    "recipient": "tejjhode@gmail.com",
+    "channel": "Email",
+    "type": "Welcome to Nomichi",
+    "title": "Welcome to Nomichi 🌍 Your Journey Begins Here",
+    "body": "Your profile is ready. Adventure, connection, and unforgettable experiences await.",
+    "priority": "High",
+    "status": "Success",
+    "details": {
+      "smtp_server": "smtp.resend.com",
+      "port": 587,
+      "messageId": "<49f20b8f-2186-0fb2-2461-5a7c8ab1d144@edinsured.in>",
+      "live": true
+    }
+  },
+  {
+    "id": "email_uctn3j2yr",
+    "timestamp": "2026-06-21T06:23:13.407Z",
+    "recipient": "smitajhode@gmail.com",
+    "channel": "Email",
+    "type": "New Enquiry",
+    "title": "🚨 New Enquiry Received – Spiti Valley Adventure Expedition",
+    "body": "A new enquiry has been submitted.",
+    "priority": "High",
+    "status": "Success",
+    "details": {
+      "smtp_server": "smtp.resend.com",
+      "port": 587,
+      "messageId": "<5ca07bed-758c-b379-791b-d798b838ea68@edinsured.in>",
+      "live": true
+    }
+  },
+  {
+    "id": "email_0kr1k9084",
+    "timestamp": "2026-06-21T06:23:06.073Z",
+    "recipient": "tejaswajhode@gmail.com",
+    "channel": "Email",
+    "type": "Enquiry Submitted",
+    "title": "We've received your enquiry 🌍",
+    "body": "Your enquiry has been successfully received.",
+    "priority": "High",
+    "status": "Success",
+    "details": {
+      "smtp_server": "smtp.resend.com",
+      "port": 587,
+      "messageId": "<1b9a55f1-86b1-7629-8d88-d40d905756b6@edinsured.in>",
+      "live": true
+    }
+  },
+  {
     "id": "email_b96b8ihxv",
     "timestamp": "2026-06-21T06:11:39.762Z",
     "recipient": "tejjhode@gmail.com",

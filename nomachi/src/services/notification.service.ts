@@ -86,7 +86,7 @@ export const notificationService = {
 
         // 1. Email Delivery Check
         if (role === "user") {
-          // Traveler bookings/payments and welcome emails
+          // Traveler bookings/payments, welcome, and enquiry emails
           const matchesEmail =
             titleLower.includes("booking confirmed") ||
             titleLower.includes("payment reminder") ||
@@ -94,21 +94,25 @@ export const notificationService = {
             titleLower.includes("payment failure") ||
             titleLower.includes("refunded") ||
             titleLower.includes("welcome") ||
+            titleLower.includes("enquiry") ||
             typeLower.includes("booking") ||
             typeLower.includes("payment") ||
-            typeLower.includes("welcome");
+            typeLower.includes("welcome") ||
+            typeLower.includes("enquiry");
           if (matchesEmail && profile.email) {
             sendEmailTo = profile.email;
           }
         } else if (role === "manager" || role === "staff") {
-          // Manager assignments/overdue
+          // Manager assignments/overdue/lead events
           const matchesEmail =
             titleLower.includes("assigned") ||
             titleLower.includes("overdue") ||
             titleLower.includes("follow-up") ||
             titleLower.includes("reminder") ||
+            titleLower.includes("lead") ||
             typeLower.includes("assign") ||
             typeLower.includes("overdue") ||
+            typeLower.includes("lead") ||
             typeLower.includes("task");
           if (matchesEmail && profile.email) {
             sendEmailTo = profile.email;
