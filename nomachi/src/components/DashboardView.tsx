@@ -126,9 +126,6 @@ function formatFriendlyName(fullName: string): string {
   if (lower.includes("tejswa")) return "Tejswa";
   
   const titleCasedWords = words.map(w => w.charAt(0).toUpperCase() + w.slice(1).toLowerCase());
-  if (titleCasedWords.length > 1 && titleCasedWords[1].length > 2) {
-    return titleCasedWords[1];
-  }
   return titleCasedWords[0];
 }
 
@@ -140,19 +137,7 @@ function formatFullName(fullName: string): string {
   
   const words = clean.split(/\s+/);
   const titleCasedWords = words.map(w => w.charAt(0).toUpperCase() + w.slice(1).toLowerCase());
-  
-  if (titleCasedWords.length >= 2) {
-    const w0 = titleCasedWords[0];
-    const w1 = titleCasedWords[1];
-    if (w0.toLowerCase().includes("tejaswa") || w0.toLowerCase().includes("tejswa")) {
-      return `${w0} ${w1}`;
-    }
-    if (w1.toLowerCase().includes("tejaswa") || w1.toLowerCase().includes("tejswa")) {
-      return `${w1} ${w0}`;
-    }
-    return `${w1} ${w0}`;
-  }
-  return clean.charAt(0).toUpperCase() + clean.slice(1).toLowerCase();
+  return titleCasedWords.join(" ");
 }
 
 function getGroupThreadKey(lead: any): string {
@@ -2137,8 +2122,8 @@ export function DashboardView({ user, leads = [], trips = [], initialChatMessage
               </button>
 
               {notificationsOpen && (
-                <div className="absolute right-0 mt-2.5 w-80 bg-white rounded-3xl border border-[#e7e1d5]/60 shadow-xl overflow-hidden z-50 animate-in fade-in slide-in-from-top-3 duration-200">
-                  <div className="p-4.5 border-b border-[#e7e1d5]/30 flex items-center justify-between bg-[#FAF8F4]/30">
+                <div className="absolute right-[-16px] sm:right-0 mt-2.5 w-[calc(100vw-32px)] sm:w-96 bg-white rounded-3xl border border-[#e7e1d5]/60 shadow-xl overflow-hidden z-50 animate-in fade-in slide-in-from-top-3 duration-200">
+                  <div className="px-5 py-4 border-b border-[#e7e1d5]/30 flex items-center justify-between bg-[#FAF8F4]/30">
                     <span className="text-xs font-black uppercase tracking-wide text-nomichi-ink/50">
                       Notifications
                     </span>
@@ -2151,7 +2136,7 @@ export function DashboardView({ user, leads = [], trips = [], initialChatMessage
                       </button>
                     )}
                   </div>
-                  <div className="max-h-72 overflow-y-auto divide-y divide-[#e7e1d5]/20">
+                  <div className="max-h-72 overflow-y-auto divide-y divide-[#e7e1d5]/20 scrollbar-premium">
                     {notifications.length === 0 ? (
                       <div className="p-8 text-center text-xs text-nomichi-ink/40 font-semibold">
                         No notifications yet.
@@ -2171,9 +2156,9 @@ export function DashboardView({ user, leads = [], trips = [], initialChatMessage
                             n.priority === "Medium" ? "bg-blue-500" : "bg-slate-400"
                           }`} />
                           <div className="space-y-0.5 min-w-0 flex-1">
-                            <div className="text-xs font-bold text-nomichi-ink flex items-center justify-between gap-2">
-                              <span className="truncate">{n.title}</span>
-                              <span className="text-[9px] text-nomichi-ink/40 font-bold shrink-0">
+                            <div className="text-xs font-bold text-nomichi-ink flex items-start justify-between gap-2">
+                              <span className="break-words flex-1 leading-snug">{n.title}</span>
+                              <span className="text-[9px] text-nomichi-ink/40 font-bold shrink-0 mt-0.5">
                                 {new Date(n.created_at).toLocaleTimeString("en-IN", {
                                   hour: "2-digit",
                                   minute: "2-digit"
@@ -2563,7 +2548,7 @@ export function DashboardView({ user, leads = [], trips = [], initialChatMessage
                       {/* Slider Scroll Right Chevron */}
                       <button 
                         onClick={scrollSlider}
-                        className="absolute right-2 top-1/2 -translate-y-1/2 z-10 w-9 h-9 rounded-full bg-white shadow-lg border border-[#e7e1d5]/50 flex items-center justify-center hover:bg-[#FAF8F4] transition-all cursor-pointer text-nomichi-rust hidden sm:flex hover:scale-105"
+                        className="absolute right-2 top-1/2 -translate-y-1/2 z-10 w-9 h-9 rounded-full bg-white shadow-lg border border-[#e7e1d5]/50 [display:none] items-center justify-center hover:bg-[#FAF8F4] transition-all cursor-pointer text-nomichi-rust sm:[display:flex] hover:scale-105"
                         aria-label="Scroll right"
                       >
                         <ChevronDown className="w-4 h-4 -rotate-90 stroke-[2.5px]" />

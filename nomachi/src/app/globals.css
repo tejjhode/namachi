@@ -22,3 +22,20 @@ h1, h2, h3, h4, .font-display {
   -ms-overflow-style: none;  /* IE and Edge */
   scrollbar-width: none;  /* Firefox */
 }
+
+/* Sleek custom scrollbar */
+.scrollbar-premium::-webkit-scrollbar {
+  width: 5px;
+  height: 5px;
+}
+.scrollbar-premium::-webkit-scrollbar-track {
+  background: transparent;
+}
+.scrollbar-premium::-webkit-scrollbar-thumb {
+  background: #e7e1d5;
+  border-radius: 9999px;
+}
+.scrollbar-premium::-webkit-scrollbar-thumb:hover {
+  background: #d1b788;
+}
+

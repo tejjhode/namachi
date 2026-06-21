@@ -44,10 +44,19 @@ export default async function TripEnquiryPage({ params }: PageProps) {
     userLeads = leads;
   }
 
+  // Fetch user's profile details from profiles table
+  const { data: profile } = await supabaseServer
+    .from("profiles")
+    .select("full_name, avatar_url, phone")
+    .eq("id", user.id)
+    .maybeSingle();
+
   const userData = {
-    fullName: user.user_metadata?.full_name || user.email?.split("@")[0] || "User",
-    avatarUrl: user.user_metadata?.avatar_url,
-    email: user.email || ""
+    id: user.id,
+    fullName: profile?.full_name || user.user_metadata?.full_name || user.email?.split("@")[0] || "User",
+    avatarUrl: profile?.avatar_url || user.user_metadata?.avatar_url,
+    email: user.email || "",
+    phone: profile?.phone || ""
   };
 
   return (

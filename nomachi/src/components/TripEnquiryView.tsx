@@ -44,6 +44,7 @@ interface TripEnquiryViewProps {
     fullName: string;
     email: string;
     avatarUrl?: string;
+    phone?: string;
   };
   leads?: any[];
   trip: any;
@@ -61,9 +62,6 @@ function formatFriendlyName(fullName: string): string {
   if (lower.includes("tejswa")) return "Tejswa";
   
   const titleCasedWords = words.map(w => w.charAt(0).toUpperCase() + w.slice(1).toLowerCase());
-  if (titleCasedWords.length > 1 && titleCasedWords[1].length > 2) {
-    return titleCasedWords[1];
-  }
   return titleCasedWords[0];
 }
 
@@ -74,19 +72,7 @@ function formatFullName(fullName: string): string {
   
   const words = clean.split(/\s+/);
   const titleCasedWords = words.map(w => w.charAt(0).toUpperCase() + w.slice(1).toLowerCase());
-  
-  if (titleCasedWords.length >= 2) {
-    const w0 = titleCasedWords[0];
-    const w1 = titleCasedWords[1];
-    if (w0.toLowerCase().includes("tejaswa") || w0.toLowerCase().includes("tejswa")) {
-      return `${w0} ${w1}`;
-    }
-    if (w1.toLowerCase().includes("tejaswa") || w1.toLowerCase().includes("tejswa")) {
-      return `${w1} ${w0}`;
-    }
-    return `${w1} ${w0}`;
-  }
-  return clean.charAt(0).toUpperCase() + clean.slice(1).toLowerCase();
+  return titleCasedWords.join(" ");
 }
 
 export function TripEnquiryView({ user, leads = [], trip }: TripEnquiryViewProps) {
@@ -95,10 +81,28 @@ export function TripEnquiryView({ user, leads = [], trip }: TripEnquiryViewProps
   
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
   
+  // Parse phone number if present
+  let initialPhoneCode = "+91";
+  let initialPhoneNumber = "";
+  if (user.phone) {
+    const cleanPhone = user.phone.trim();
+    if (cleanPhone.startsWith("+")) {
+      if (cleanPhone.startsWith("+91")) {
+        initialPhoneCode = "+91";
+        initialPhoneNumber = cleanPhone.slice(3).replace(/[\s-]/g, "");
+      } else {
+        initialPhoneCode = cleanPhone.slice(0, 3);
+        initialPhoneNumber = cleanPhone.slice(3).replace(/[\s-]/g, "");
+      }
+    } else {
+      initialPhoneNumber = cleanPhone.replace(/[\s-]/g, "");
+    }
+  }
+
   // Form states
   const [fullName, setFullName] = useState(formatFullName(user.fullName));
-  const [phoneCode, setPhoneCode] = useState("+91");
-  const [phoneNumber, setPhoneNumber] = useState("");
+  const [phoneCode, setPhoneCode] = useState(initialPhoneCode);
+  const [phoneNumber, setPhoneNumber] = useState(initialPhoneNumber);
   const [groupType, setGroupType] = useState("");
   const [preferredMonth, setPreferredMonth] = useState("");
   const [numberOfPeople, setNumberOfPeople] = useState("");

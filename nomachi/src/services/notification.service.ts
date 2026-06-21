@@ -239,16 +239,18 @@ export const notificationService = {
         .select("id")
         .eq("role", "ADMIN");
       if (admins && admins.length > 0) {
-        const inserts = admins.map((admin) => ({
-          user_id: admin.id,
-          title,
-          body,
-          type,
-          priority,
-          source_id: sourceId || null,
-          is_read: false,
-        }));
-        await supabase.from("notifications").insert(inserts);
+        await Promise.all(
+          admins.map((admin) =>
+            this.createNotification({
+              user_id: admin.id,
+              title,
+              body,
+              type,
+              priority,
+              source_id: sourceId,
+            })
+          )
+        );
       }
     } catch (err) {
       console.error("Failed to notify admins:", err);

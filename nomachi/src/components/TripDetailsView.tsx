@@ -93,6 +93,8 @@ export function TripDetailsView({ user, leads = [], trip }: TripDetailsViewProps
   
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
   const [activeTab, setActiveTab] = useState<"overview" | "itinerary" | "inclusions" | "exclusions" | "accommodation" | "faqs" | "reviews">("overview");
+  const [activeImageIndex, setActiveImageIndex] = useState(0);
+  const [galleryOpen, setGalleryOpen] = useState(false);
   
   // Wishlist state
   const [wishlisted, setWishlisted] = useState(false);
@@ -255,12 +257,27 @@ export function TripDetailsView({ user, leads = [], trip }: TripDetailsViewProps
     }
   });
 
-  // Trip Gallery Images fallbacks
-  const galleryImages = trip.images && trip.images.length >= 3 ? trip.images : [
-    trip.image_url || "https://images.unsplash.com/photo-1493976040374-85c8e12f0c0e?auto=format&fit=crop&w=600&q=80",
-    "https://images.unsplash.com/photo-1540959733332-eab4deceeaf7?auto=format&fit=crop&w=600&q=80",
-    "https://images.unsplash.com/photo-1503899036084-c55cdd92da26?auto=format&fit=crop&w=600&q=80"
+  const fallbackGalleryImages = [
+    trip.image_url || "https://images.unsplash.com/photo-1493976040374-85c8e12f0c0e?auto=format&fit=crop&w=800&q=80",
+    "https://images.unsplash.com/photo-1540959733332-eab4deceeaf7?auto=format&fit=crop&w=800&q=80",
+    "https://images.unsplash.com/photo-1503899036084-c55cdd92da26?auto=format&fit=crop&w=800&q=80",
   ];
+
+  const galleryImages = Array.from(
+    new Set(
+      [trip.image_url, ...(Array.isArray(trip.images) ? trip.images : [])]
+        .filter((img): img is string => typeof img === "string" && img.trim().length > 0)
+    )
+  );
+
+  const resolvedGalleryImages = galleryImages.length > 0 ? galleryImages : fallbackGalleryImages;
+  const selectedImage = resolvedGalleryImages[Math.min(activeImageIndex, resolvedGalleryImages.length - 1)] || fallbackGalleryImages[0];
+  const visibleThumbnails = resolvedGalleryImages.slice(1, 4);
+  const remainingImageCount = Math.max(resolvedGalleryImages.length - 4, 0);
+
+  useEffect(() => {
+    setActiveImageIndex(0);
+  }, [trip.id, trip.image_url, trip.images]);
 
   // Itinerary fallback template if null
   const itineraryDays = trip.itinerary || [
@@ -603,38 +620,107 @@ export function TripDetailsView({ user, leads = [], trip }: TripDetailsViewProps
               {/* Gallery Image Grid */}
               <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
                 {/* Main Large Image */}
-                <div className="md:col-span-3 h-80 md:h-[368px] relative rounded-[24px] overflow-hidden shadow-sm group">
+                <button
+                  type="button"
+                  onClick={() => setGalleryOpen(true)}
+                  className="md:col-span-3 h-80 md:h-[368px] relative rounded-[24px] overflow-hidden shadow-sm group text-left"
+                >
                   <img 
-                    src={trip.image_url || "https://images.unsplash.com/photo-1493976040374-85c8e12f0c0e?auto=format&fit=crop&w=800&q=80"} 
+                    src={selectedImage}
                     alt={trip.title} 
                     className="w-full h-full object-cover group-hover:scale-[1.01] transition-transform duration-500"
                   />
                   <span className="absolute top-4 left-4 bg-[#1C1B1A]/85 text-[#FAF8F4] text-[10px] font-bold tracking-wider uppercase px-3 py-1.5 rounded-lg backdrop-blur-sm shadow-sm">
                     ★ Bestseller
                   </span>
-                </div>
+                </button>
                 {/* 3 Secondary Stacked Images */}
                 <div className="md:col-span-1 flex flex-row md:flex-col gap-4 h-24 md:h-[368px]">
-                  {galleryImages.map((imgUrl: string, idx: number) => {
-                    const isLast = idx === 2;
+                  {visibleThumbnails.map((imgUrl: string, idx: number) => {
+                    const actualIndex = idx + 1;
+                    const showRemainingOverlay = idx === visibleThumbnails.length - 1 && remainingImageCount > 0;
                     return (
-                      <div key={idx} className="relative rounded-[18px] overflow-hidden flex-1 h-full shadow-sm group cursor-pointer">
+                      <button
+                        key={`${imgUrl}-${idx}`}
+                        type="button"
+                        onClick={() => {
+                          setActiveImageIndex(actualIndex);
+                          if (showRemainingOverlay) {
+                            setGalleryOpen(true);
+                          }
+                        }}
+                        className={`relative rounded-[18px] overflow-hidden flex-1 h-full shadow-sm group cursor-pointer text-left ${
+                          actualIndex === activeImageIndex ? "ring-2 ring-[#FF5B26] ring-offset-2 ring-offset-[#FAF8F4]" : ""
+                        }`}
+                      >
                         <img 
                           src={imgUrl} 
-                          alt={`Gallery image ${idx}`} 
+                          alt={`${trip.title} gallery image ${actualIndex + 1}`}
                           className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-500"
                         />
-                        {isLast && (
+                        {showRemainingOverlay && (
                           <div className="absolute inset-0 bg-[#1C1B1A]/60 flex flex-col items-center justify-center text-nomichi-white">
-                            <span className="text-base font-extrabold">+12</span>
+                            <span className="text-base font-extrabold">+{remainingImageCount}</span>
                             <span className="text-[10px] font-bold uppercase tracking-wider">More</span>
                           </div>
                         )}
-                      </div>
+                      </button>
                     );
                   })}
                 </div>
               </div>
+
+              {galleryOpen && (
+                <div className="fixed inset-0 z-50 bg-[#1C1B1A]/85 backdrop-blur-sm p-4 md:p-8">
+                  <div className="mx-auto flex h-full max-w-6xl flex-col gap-4">
+                    <div className="flex items-center justify-between">
+                      <div className="text-nomichi-white">
+                        <p className="text-sm font-bold">{trip.title}</p>
+                        <p className="text-xs font-semibold text-nomichi-white/70">
+                          {activeImageIndex + 1} / {resolvedGalleryImages.length}
+                        </p>
+                      </div>
+                      <button
+                        type="button"
+                        onClick={() => setGalleryOpen(false)}
+                        className="rounded-full bg-white/10 p-2 text-nomichi-white transition hover:bg-white/20"
+                        aria-label="Close gallery"
+                      >
+                        <X className="h-5 w-5" />
+                      </button>
+                    </div>
+
+                    <div className="min-h-0 flex-1 overflow-hidden rounded-[28px] bg-black/20">
+                      <img
+                        src={selectedImage}
+                        alt={trip.title}
+                        className="h-full w-full object-contain"
+                      />
+                    </div>
+
+                    <div className="grid grid-cols-3 gap-3 overflow-x-auto md:grid-cols-6">
+                      {resolvedGalleryImages.map((imgUrl: string, idx: number) => (
+                        <button
+                          key={`${imgUrl}-${idx}-modal`}
+                          type="button"
+                          onClick={() => setActiveImageIndex(idx)}
+                          className={`relative h-24 overflow-hidden rounded-2xl border transition ${
+                            idx === activeImageIndex
+                              ? "border-[#FF5B26] ring-2 ring-[#FF5B26]/40"
+                              : "border-white/10 hover:border-white/40"
+                          }`}
+                        >
+                          <img
+                            src={imgUrl}
+                            alt={`${trip.title} gallery thumbnail ${idx + 1}`}
+                            className="h-full w-full object-cover"
+                          />
+                        </button>
+                      ))}
+                    </div>
+                  </div>
+                </div>
+              )}
 
               {/* Tabs Section */}
               <div className="bg-nomichi-white rounded-[24px] border border-[#e7e1d5]/45 shadow-sm overflow-hidden">

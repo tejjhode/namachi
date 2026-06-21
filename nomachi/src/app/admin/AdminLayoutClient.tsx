@@ -413,7 +413,7 @@ export function AdminLayoutClient({ children, user }: AdminLayoutClientProps) {
                 onClick={() => setNotificationsOpen(!notificationsOpen)}
                 className="w-10 h-10 rounded-full border border-[#e7e1d5]/50 hover:bg-[#FAF8F4] flex items-center justify-center text-nomichi-ink/60 transition-all relative cursor-pointer bg-white"
               >
-                <Bell className="w-4.5 h-4.5" />
+                <Bell className="w-5 h-5" />
                 {unreadCount > 0 && (
                   <span className="absolute top-1 right-1 w-4 h-4 rounded-full bg-[#FF5B26] text-white text-[9px] font-black flex items-center justify-center animate-pulse">
                     {unreadCount}
@@ -422,8 +422,8 @@ export function AdminLayoutClient({ children, user }: AdminLayoutClientProps) {
               </button>
 
               {notificationsOpen && (
-                <div className="absolute right-0 mt-2.5 w-80 bg-white rounded-3xl border border-[#e7e1d5]/60 shadow-xl overflow-hidden z-50 animate-in fade-in slide-in-from-top-3 duration-200">
-                  <div className="p-4.5 border-b border-[#e7e1d5]/30 flex items-center justify-between bg-[#FAF8F4]/30">
+                <div className="absolute right-[-16px] sm:right-0 mt-2.5 w-[calc(100vw-32px)] sm:w-96 bg-white rounded-3xl border border-[#e7e1d5]/60 shadow-xl overflow-hidden z-50 animate-in fade-in slide-in-from-top-3 duration-200">
+                  <div className="px-5 py-4 border-b border-[#e7e1d5]/30 flex items-center justify-between bg-[#FAF8F4]/30">
                     <span className="text-xs font-black uppercase tracking-wide text-nomichi-ink/50">
                       Notifications
                     </span>
@@ -436,7 +436,7 @@ export function AdminLayoutClient({ children, user }: AdminLayoutClientProps) {
                       </button>
                     )}
                   </div>
-                  <div className="max-h-72 overflow-y-auto divide-y divide-[#e7e1d5]/20">
+                  <div className="max-h-72 overflow-y-auto divide-y divide-[#e7e1d5]/20 scrollbar-premium">
                     {notifications.length === 0 ? (
                       <div className="p-8 text-center text-xs text-nomichi-ink/40 font-semibold">
                         No notifications yet.
@@ -456,9 +456,9 @@ export function AdminLayoutClient({ children, user }: AdminLayoutClientProps) {
                             n.priority === "Medium" ? "bg-blue-500" : "bg-slate-400"
                           }`} />
                           <div className="space-y-0.5 min-w-0 flex-1">
-                            <div className="text-xs font-bold text-nomichi-ink flex items-center justify-between gap-2">
-                              <span className="truncate">{n.title}</span>
-                              <span className="text-[9px] text-nomichi-ink/40 font-bold shrink-0">
+                            <div className="text-xs font-bold text-nomichi-ink flex items-start justify-between gap-2">
+                              <span className="break-words flex-1 leading-snug">{n.title}</span>
+                              <span className="text-[9px] text-nomichi-ink/40 font-bold shrink-0 mt-0.5">
                                 {new Date(n.created_at).toLocaleTimeString("en-IN", {
                                   hour: "2-digit",
                                   minute: "2-digit"

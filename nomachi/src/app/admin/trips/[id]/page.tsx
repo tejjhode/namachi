@@ -15,7 +15,9 @@ import {
   GripVertical,
   CheckCircle,
   XCircle,
-  Sparkles
+  Sparkles,
+  Upload,
+  FileText
 } from "lucide-react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
@@ -47,11 +49,14 @@ export default function EditTripPage({ params }: EditTripPageProps) {
     description: "",
     accommodation: "",
     imageUrl: "",
+    brochureUrl: "",
     difficulty: "Easy",
     ageGroup: "18-35",
     meals: "Breakfast Only",
     groupSize: "8-12",
   });
+
+  const [brochureFileName, setBrochureFileName] = useState("");
 
   const [highlights, setHighlights] = useState<string[]>([]);
   const [newHighlight, setNewHighlight] = useState("");
@@ -97,6 +102,7 @@ export default function EditTripPage({ params }: EditTripPageProps) {
         description: trip.description || "",
         accommodation: trip.accommodation || "",
         imageUrl: trip.image_url || "",
+        brochureUrl: trip.brochure_url || "",
         difficulty: trip.difficulty || "Easy",
         ageGroup: trip.age_group || "18-35",
         meals: trip.meals || "Breakfast Only",
@@ -111,6 +117,7 @@ export default function EditTripPage({ params }: EditTripPageProps) {
       setGalleryImages(trip.images || []);
       setSelectedStyles(trip.trip_style ? trip.trip_style.split(",").map((s) => s.trim()) : []);
       setSelectedBestFor(trip.best_for ? trip.best_for.split(",").map((s) => s.trim()) : []);
+      setBrochureFileName(trip.brochure_url ? "uploaded_brochure.pdf" : "");
     }
   }, [trip]);
 
@@ -255,6 +262,26 @@ export default function EditTripPage({ params }: EditTripPageProps) {
     reader.readAsDataURL(file);
   };
 
+  // Brochure upload reader
+  const handleBrochureUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    if (file.type !== "application/pdf") {
+      alert("Please select a PDF file.");
+      return;
+    }
+    if (file.size > 20 * 1024 * 1024) {
+      alert("Brochure must be under 20 MB.");
+      return;
+    }
+    setBrochureFileName(file.name);
+    const reader = new FileReader();
+    reader.onloadend = () => {
+      setForm((prev: any) => ({ ...prev, brochureUrl: reader.result as string }));
+    };
+    reader.readAsDataURL(file);
+  };
+
   // Gallery images reader
   const handleGalleryUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
     const files = Array.from(e.target.files || []);
@@ -286,6 +313,7 @@ export default function EditTripPage({ params }: EditTripPageProps) {
         description: form.description,
         accommodation: form.accommodation,
         image_url: form.imageUrl,
+        brochure_url: form.brochureUrl || null,
         difficulty: form.difficulty,
         age_group: form.ageGroup,
         meals: form.meals,
@@ -504,6 +532,83 @@ export default function EditTripPage({ params }: EditTripPageProps) {
                 <span className="text-xs font-bold text-nomichi-ink">Upload Image</span>
                 <span className="text-[10px] text-nomichi-ink/40 font-semibold mt-1 mb-3">JPG, PNG or WebP, Recommended size 16:9.</span>
                 <label htmlFor="cover-file-upload" className="px-3 py-1.5 bg-white border border-[#e7e1d5] hover:bg-[#FAF8F4] text-nomichi-ink font-bold text-[10px] rounded-lg shadow-sm cursor-pointer transition-all">
+                  Browse Files
+                </label>
+              </div>
+            </div>
+          </div>
+          {/* 2b. Trip Brochure */}
+          <div className="bg-white rounded-3xl border border-[#e7e1d5]/40 shadow-sm p-6 text-left space-y-4">
+            <div className="flex justify-between items-center border-b border-[#e7e1d5]/20 pb-3">
+              <div>
+                <h3 className="text-sm font-extrabold text-nomichi-ink tracking-wide">2b. Trip Brochure (Optional)</h3>
+                <p className="text-[10px] text-nomichi-ink/40 font-semibold mt-0.5">Upload a PDF brochure detailing the itinerary, packing list, and trip details.</p>
+              </div>
+            </div>
+
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-6 items-center">
+              <div className="w-full h-40 rounded-2xl border border-[#e7e1d5]/50 bg-[#FAF8F4] p-4 flex flex-col justify-between shadow-inner">
+                {form.brochureUrl ? (
+                  <div className="flex flex-col justify-between h-full">
+                     <div className="flex items-start gap-3">
+                       <div className="w-10 h-10 rounded-xl bg-red-50 border border-red-100 flex items-center justify-center shrink-0 shadow-sm">
+                         <FileText className="w-5 h-5 text-red-500" />
+                       </div>
+                       <div className="flex-1 min-w-0">
+                         <p className="text-xs font-bold text-nomichi-ink truncate">
+                           {brochureFileName || "Uploaded_Brochure.pdf"}
+                         </p>
+                         <p className="text-[10px] text-emerald-600 font-bold mt-0.5 flex items-center gap-1">
+                           <CheckCircle className="w-3 h-3" /> Successfully Attached
+                         </p>
+                       </div>
+                     </div>
+                     
+                     <div className="flex items-center gap-2 pt-3 border-t border-[#e7e1d5]/40">
+                       <a
+                         href={form.brochureUrl}
+                         download={brochureFileName || "brochure.pdf"}
+                         className="px-2.5 py-1.5 bg-white border border-[#e7e1d5] hover:bg-[#FAF8F4] text-nomichi-ink/70 hover:text-nomichi-ink font-bold text-[10px] rounded-lg shadow-sm transition-all flex items-center gap-1.5"
+                       >
+                         <Upload className="w-3 h-3 rotate-180 text-[#FF5B26]" /> Download
+                       </a>
+                       <button
+                         type="button"
+                         onClick={() => {
+                           setForm((p: any) => ({ ...p, brochureUrl: "" }));
+                           setBrochureFileName("");
+                         }}
+                         className="px-2.5 py-1.5 bg-white border border-rose-100 hover:bg-rose-50 text-rose-500 hover:text-rose-700 font-bold text-[10px] rounded-lg shadow-sm transition-all flex items-center gap-1.5 ml-auto"
+                       >
+                         <Trash2 className="w-3 h-3" /> Remove
+                       </button>
+                     </div>
+                  </div>
+                ) : (
+                  <div className="flex flex-col items-center justify-center h-full text-center text-nomichi-ink/30 space-y-1">
+                    <FileText className="w-8 h-8 opacity-40" />
+                    <span className="text-xs font-semibold">No brochure uploaded</span>
+                  </div>
+                )}
+              </div>
+
+              <div className="border border-dashed border-[#e7e1d5] bg-[#FAF8F4]/20 rounded-2xl p-6 flex flex-col items-center justify-center text-center h-40">
+                <input
+                  type="file"
+                  className="hidden"
+                  id="brochure-file-upload"
+                  onChange={handleBrochureUpload}
+                  accept="application/pdf"
+                />
+                <div className="w-10 h-10 rounded-full bg-white border border-[#e7e1d5] flex items-center justify-center text-nomichi-ink/40 shadow-sm mb-2">
+                  <Upload className="w-4 h-4 text-[#FF5B26]" />
+                </div>
+                <span className="text-xs font-bold text-nomichi-ink">Upload Brochure PDF</span>
+                <span className="text-[10px] text-nomichi-ink/40 font-semibold mt-1 mb-3">PDF format only. Max file size 20MB.</span>
+                <label
+                  htmlFor="brochure-file-upload"
+                  className="px-3 py-1.5 bg-white border border-[#e7e1d5] hover:bg-[#FAF8F4] text-nomichi-ink font-bold text-[10px] rounded-lg shadow-sm cursor-pointer transition-all"
+                >
                   Browse Files
                 </label>
               </div>

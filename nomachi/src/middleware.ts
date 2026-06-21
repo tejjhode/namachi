@@ -1,12 +1,9 @@
-import { createServerClient, type CookieOptions } from "@supabase/ssr";
+import { createServerClient } from "@supabase/ssr";
 import { NextResponse, type NextRequest } from "next/server";
 
 export async function middleware(request: NextRequest) {
-  // Create an unmodified response by default
   let response = NextResponse.next({
-    request: {
-      headers: request.headers,
-    },
+    request,
   });
 
   const supabase = createServerClient(
@@ -14,22 +11,21 @@ export async function middleware(request: NextRequest) {
     process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!,
     {
       cookies: {
-        get(name: string) {
-          return request.cookies.get(name)?.value;
+        getAll() {
+          return request.cookies.getAll();
         },
-        set(name: string, value: string, options: CookieOptions) {
-          request.cookies.set({ name, value, ...options });
-          response = NextResponse.next({
-            request: { headers: request.headers },
+        setAll(cookiesToSet) {
+          cookiesToSet.forEach(({ name, value }) => {
+            request.cookies.set(name, value);
           });
-          response.cookies.set({ name, value, ...options });
-        },
-        remove(name: string, options: CookieOptions) {
-          request.cookies.set({ name, value: "", ...options });
+
           response = NextResponse.next({
-            request: { headers: request.headers },
+            request,
           });
-          response.cookies.set({ name, value: "", ...options });
+
+          cookiesToSet.forEach(({ name, value, options }) => {
+            response.cookies.set(name, value, options);
+          });
         },
       },
     }
@@ -54,13 +50,21 @@ export async function middleware(request: NextRequest) {
     const redirectUrl = new URL("/login", request.url);
     redirectUrl.searchParams.set("next", pathname);
     redirectUrl.searchParams.set("error", "Please log in to access this page");
-    return NextResponse.redirect(redirectUrl);
+    const redirectResponse = NextResponse.redirect(redirectUrl);
+    response.cookies.getAll().forEach((cookie) => {
+      redirectResponse.cookies.set(cookie);
+    });
+    return redirectResponse;
   }
 
   // If the user is ALREADY logged in and tries to access login/signup, redirect to dashboard
   if (isAuthRoute && user) {
     const redirectUrl = new URL("/dashboard", request.url);
-    return NextResponse.redirect(redirectUrl);
+    const redirectResponse = NextResponse.redirect(redirectUrl);
+    response.cookies.getAll().forEach((cookie) => {
+      redirectResponse.cookies.set(cookie);
+    });
+    return redirectResponse;
   }
 
   // Mandatory Profile Setup check for logged-in travelers (USER role)
@@ -90,7 +94,11 @@ export async function middleware(request: NextRequest) {
 
           if (isProfileIncomplete) {
             const redirectUrl = new URL("/profile-setup", request.url);
-            return NextResponse.redirect(redirectUrl);
+            const redirectResponse = NextResponse.redirect(redirectUrl);
+            response.cookies.getAll().forEach((cookie) => {
+              redirectResponse.cookies.set(cookie);
+            });
+            return redirectResponse;
           }
         }
       } catch (err) {
