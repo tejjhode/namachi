@@ -86,15 +86,17 @@ export const notificationService = {
 
         // 1. Email Delivery Check
         if (role === "user") {
-          // Traveler bookings/payments
+          // Traveler bookings/payments and welcome emails
           const matchesEmail =
             titleLower.includes("booking confirmed") ||
             titleLower.includes("payment reminder") ||
             titleLower.includes("payment received") ||
             titleLower.includes("payment failure") ||
             titleLower.includes("refunded") ||
+            titleLower.includes("welcome") ||
             typeLower.includes("booking") ||
-            typeLower.includes("payment");
+            typeLower.includes("payment") ||
+            typeLower.includes("welcome");
           if (matchesEmail && profile.email) {
             sendEmailTo = profile.email;
           }

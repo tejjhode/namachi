@@ -4,6 +4,7 @@ import { useState, useEffect } from "react";
 import { useRouter } from "next/navigation";
 import { createClient } from "@/lib/supabase/client";
 import { Phone, User, Calendar, Globe, Loader2, LogOut, ChevronDown } from "lucide-react";
+import { notificationService } from "@/services/notification.service";
 
 const supabase = createClient();
 
@@ -134,6 +135,28 @@ export default function ProfileSetupPage() {
         .eq("id", user.id);
 
       if (updateError) throw updateError;
+
+      // Send Welcome Notification after completing the profile setup with OTP
+      try {
+        const { data: profile } = await supabase
+          .from("profiles")
+          .select("full_name, email")
+          .eq("id", user.id)
+          .maybeSingle();
+
+        if (profile?.email) {
+          await notificationService.notifyTraveler(
+            profile.email,
+            "Welcome to Nomichi 🌍 Your Journey Begins Here",
+            "Your profile is ready. Adventure, connection, and unforgettable experiences await.",
+            "Welcome to Nomichi",
+            user.id,
+            "High"
+          );
+        }
+      } catch (notifErr) {
+        console.error("Welcome notification trigger failed:", notifErr);
+      }
 
       router.refresh();
       router.push("/");

@@ -65,21 +65,7 @@ export default function SignupPage() {
       });
       if (error) throw error;
 
-      // Send Welcome Notification
-      if (data?.user) {
-        try {
-          await notificationService.notifyTraveler(
-            email,
-            "Welcome to Nomichi",
-            "Your Nomichi account has been successfully created.",
-            "Welcome to Nomichi",
-            data.user.id,
-            "High"
-          );
-        } catch (notifErr) {
-          console.error("Welcome notification trigger failed:", notifErr);
-        }
-      }
+
 
       setSuccess(true);
     } catch (err: any) {

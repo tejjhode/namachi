@@ -1,5 +1,107 @@
 [
   {
+    "id": "email_b96b8ihxv",
+    "timestamp": "2026-06-21T06:11:39.762Z",
+    "recipient": "tejjhode@gmail.com",
+    "channel": "Email",
+    "type": "Welcome to Nomichi",
+    "title": "Welcome to Nomichi 🌍 Your Journey Begins Here",
+    "body": "Your profile is ready. Adventure, connection, and unforgettable experiences await.",
+    "priority": "High",
+    "status": "Success",
+    "details": {
+      "smtp_server": "smtp.resend.com",
+      "port": 587,
+      "messageId": "<bd70a8fb-ffdf-9743-968c-4e331171e9ac@edinsured.in>",
+      "live": true
+    }
+  },
+  {
+    "id": "email_di5ahx6v2",
+    "timestamp": "2026-06-21T06:07:51.390Z",
+    "recipient": "smitajhode@gmail.com",
+    "channel": "Email",
+    "type": "Welcome to Nomichi",
+    "title": "Welcome to Nomichi 🌍 Your Journey Begins Here",
+    "body": "Your profile is ready. Adventure, connection, and unforgettable experiences await.",
+    "priority": "High",
+    "status": "Success",
+    "details": {
+      "smtp_server": "smtp.resend.com",
+      "port": 587,
+      "messageId": "<3bf03205-49b7-356c-994f-4dcac86d9365@edinsured.in>",
+      "live": true
+    }
+  },
+  {
+    "id": "email_ty5ps9n4a",
+    "timestamp": "2026-06-21T06:02:23.768Z",
+    "recipient": "smitajhode@gmail.com",
+    "channel": "Email",
+    "type": "Welcome to Nomichi",
+    "title": "Welcome to Nomichi 🌍 Your Journey Begins Here",
+    "body": "Your profile is ready. Adventure, connection, and unforgettable experiences await.",
+    "priority": "High",
+    "status": "Success",
+    "details": {
+      "smtp_server": "smtp.resend.com",
+      "port": 587,
+      "messageId": "<097588f6-3278-b00d-4951-cd26a3045fba@edinsured.in>",
+      "live": true
+    }
+  },
+  {
+    "id": "email_jxd3ldh89",
+    "timestamp": "2026-06-20T20:44:14.270Z",
+    "recipient": "tejaswajhode@gmail.com",
+    "channel": "Email",
+    "type": "General Alert",
+    "title": "New Lead Assigned",
+    "body": "Hi Tejaswa, you have been assigned to follow up on Smita Jhode's enquiry for KANHA TIGER SAFARI & WILDERNESS.",
+    "priority": "High",
+    "status": "Success",
+    "details": {
+      "smtp_server": "smtp.resend.com",
+      "port": 587,
+      "messageId": "<ceab6d8f-fe3e-8242-dad7-16997552abee@edinsured.in>",
+      "live": true
+    }
+  },
+  {
+    "id": "email_fxislv5qk",
+    "timestamp": "2026-06-20T20:44:07.133Z",
+    "recipient": "tejaswajhode@gmail.com",
+    "channel": "Email",
+    "type": "General Alert",
+    "title": "new enquiry",
+    "body": "A new enquiry has been submitted by Smita Jhode for KANHA TIGER SAFARI & WILDERNESS.",
+    "priority": "Medium",
+    "status": "Success",
+    "details": {
+      "smtp_server": "smtp.resend.com",
+      "port": 587,
+      "messageId": "<a6334c52-2a2f-6793-9d26-5d6edca27548@edinsured.in>",
+      "live": true
+    }
+  },
+  {
+    "id": "email_5wkd39i9n",
+    "timestamp": "2026-06-20T20:44:01.004Z",
+    "recipient": "smitajhode@gmail.com",
+    "channel": "Email",
+    "type": "Enquiry Submitted",
+    "title": "Enquiry Submitted",
+    "body": "Hi Smita, thank you for your enquiry. We will review it shortly.",
+    "priority": "High",
+    "status": "Success",
+    "details": {
+      "smtp_server": "smtp.resend.com",
+      "port": 587,
+      "messageId": "<3bdc7203-23b8-1155-2be6-46652b7a72c5@edinsured.in>",
+      "live": true
+    }
+  },
+  {
     "id": "email_pyi1rg1ag",
     "timestamp": "2026-06-20T19:07:58.155Z",
     "recipient": "smitajhode@gmail.com",

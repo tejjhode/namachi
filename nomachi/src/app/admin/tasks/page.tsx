@@ -1,7 +1,7 @@
 import { createSupabaseServerClient } from "@/lib/supabase/server";
 import { normalizeRole } from "@/lib/auth/roles";
 import { redirect } from "next/navigation";
-import { ManagerTasksClient } from "@/app/manager/tasks/ManagerTasksClient";
+import { AdminTasksClient } from "./AdminTasksClient";
 
 type EntityKind = "Lead" | "Trip" | "Traveler" | "Departure" | "Booking";
 
@@ -39,11 +39,11 @@ export default async function AdminTasksPage() {
       .order("created_at", { ascending: false }),
     client
       .from("leads")
-      .select("id, name, status, trip_id, enquiry_id")
+      .select("id, name, status, trip_id, enquiry_id, assigned_to, is_lead")
       .order("created_at", { ascending: false }),
     client
       .from("trips")
-      .select("id, title, destination")
+      .select("id, title, destination, created_by")
       .order("created_at", { ascending: false }),
     client
       .from("trip_departures")
@@ -51,7 +51,7 @@ export default async function AdminTasksPage() {
       .order("created_at", { ascending: false }),
     client
       .from("profiles")
-      .select("id, full_name, avatar_url, role")
+      .select("id, full_name, avatar_url, role, email")
       .order("full_name")
   ]);
 
@@ -102,7 +102,7 @@ export default async function AdminTasksPage() {
   });
 
   return (
-    <ManagerTasksClient
+    <AdminTasksClient
       tasks={tasks}
       leads={leads}
       trips={trips}

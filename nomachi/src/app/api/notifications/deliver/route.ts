@@ -180,24 +180,50 @@ async function compileHtmlTemplate(params: {
     bodyContent = `
       <p>Hi ${firstName},</p>
       <p>Welcome to Nomichi.</p>
-      <p>We’re excited to have you join a growing community of curious travelers who believe journeys should be personal, meaningful, and memorable.</p>
-      <p>Your account has been successfully created, and you’re now ready to explore experiences designed around connection, culture, and adventure.</p>
-      <p>What you can do next:</p>
-      <ul style="padding-left: 20px; line-height: 1.6; margin: 15px 0;">
-        <li>Discover upcoming journeys</li>
-        <li>Save trips to your wishlist</li>
-        <li>Submit enquiries and connect with our team</li>
-        <li>Track your bookings and travel plans</li>
-        <li>Build your travel profile and preferences</li>
-      </ul>
-      <p>At Nomichi, we don’t just plan trips.</p>
-      <p>We create opportunities to wander beyond the obvious, connect with incredible people, and belong to experiences that stay with you long after you return home.</p>
-      <p>Whether it’s watching the sunrise over the Himalayas, exploring hidden villages, chasing the northern lights, or sharing stories around a campfire, we’re excited to be part of your journey.</p>
-      <p>Your adventure starts now.</p>
-      <div style="text-align: center; margin: 30px 0;">
-        <a href="https://nomachi.travel" style="background-color: #FF5B26; color: #ffffff; padding: 14px 28px; border-radius: 14px; font-weight: bold; text-decoration: none; display: inline-block; font-size: 13px; box-shadow: 0 4px 10px rgba(255,91,38,0.25);">Explore Journeys &rarr;</a>
+      <p>We’re thrilled to have you join a community of travelers who believe that the best journeys are about more than destinations—they’re about the people you meet, the stories you collect, and the memories you create along the way.</p>
+      <p>Your account has been successfully created and your traveler profile is now set up.</p>
+      
+      <h3 style="font-size: 14px; font-weight: 800; color: #1e1e1e; margin-top: 25px; margin-bottom: 8px;">Your Travel Profile</h3>
+      <p style="margin-top: 0;">We’ve saved your preferences so we can recommend journeys that match your travel style.</p>
+
+      <h3 style="font-size: 14px; font-weight: 800; color: #1e1e1e; margin-top: 25px; margin-bottom: 12px;">What Happens Next?</h3>
+      
+      <div style="margin-bottom: 12px; font-size: 13px; line-height: 1.5;">
+        <strong>🌍 Explore Unique Journeys</strong><br/>
+        <span style="color: #666666;">Discover carefully curated experiences across mountains, beaches, wildlife reserves, cultural hotspots, and hidden gems.</span>
       </div>
-      <p style="font-size: 11px; color: #888; border-top: 1px solid #e7e1d5/50; padding-top: 15px; margin-top: 25px;">Need help getting started? Reply to this email and our team will be happy to assist.</p>
+      
+      <div style="margin-bottom: 12px; font-size: 13px; line-height: 1.5;">
+        <strong>🤝 Connect With Like-Minded Travelers</strong><br/>
+        <span style="color: #666666;">Join small groups of people who share similar interests and travel styles.</span>
+      </div>
+      
+      <div style="margin-bottom: 12px; font-size: 13px; line-height: 1.5;">
+        <strong>✈️ Get Personalized Recommendations</strong><br/>
+        <span style="color: #666666;">We’ll suggest trips based on your travel preferences and interests.</span>
+      </div>
+      
+      <div style="margin-bottom: 20px; font-size: 13px; line-height: 1.5;">
+        <strong>❤️ Save Trips You Love</strong><br/>
+        <span style="color: #666666;">Create your wishlist and keep track of adventures you’re dreaming about.</span>
+      </div>
+
+      <h4 style="font-size: 13px; font-weight: 800; color: #1e1e1e; margin-top: 25px; margin-bottom: 15px; text-align: center;">Ready to Start Exploring?</h4>
+      <div style="text-align: center; margin: 20px 0;">
+        <a href="https://nomichii.vercel.app/?view=home" style="background-color: #FF5B26; color: #ffffff; padding: 14px 28px; border-radius: 14px; font-weight: bold; text-decoration: none; display: inline-block; font-size: 13px; box-shadow: 0 4px 10px rgba(255,91,38,0.25);">Explore Trips &rarr;</a>
+      </div>
+
+      <p style="font-style: italic; color: #555555; margin-top: 25px; border-top: 1px dashed #e7e1d5; padding-top: 15px;">
+        Travel isn’t just about where you go. It’s about discovering new perspectives, building meaningful connections, and finding places that feel like they were waiting for you all along.
+      </p>
+      <p>We’re excited to be part of your journey.</p>
+      
+      <div style="font-size: 11px; color: #888888; border-top: 1px solid #e7e1d5; padding-top: 15px; margin-top: 25px; line-height: 1.6;">
+        <p style="margin: 0 0 8px 0; font-weight: bold; color: #1e1e1e;">Need help getting started?</p>
+        <p style="margin: 0 0 4px 0;">📧 support@nomichi.com</p>
+        <p style="margin: 0 0 12px 0;">🌐 <a href="https://nomichii.vercel.app/view?=home" style="color: #FF5B26; text-decoration: none;">nomichii.vercel.app</a></p>
+        <p style="margin: 0; font-style: italic;">Follow us for travel inspiration and community stories.</p>
+      </div>
     `;
   } else if (type === "Manager Assigned") {
     const finalTripTitle = tripTitle || "your trip enquiry";
@@ -337,6 +363,10 @@ async function compileHtmlTemplate(params: {
   </style>
 </head>
 <body>
+  <!-- Preheader Text for Email Client Preview -->
+  <div style="display: none; max-height: 0px; overflow: hidden; opacity: 0; font-size: 1px; color: #ffffff; line-height: 1px;">
+    ${type === "Welcome to Nomichi" ? "Your profile is ready. Adventure, connection, and unforgettable experiences await." : title}
+  </div>
   <div class="wrapper">
     <div class="container">
       <!-- Header Banner -->
