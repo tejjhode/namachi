@@ -3135,24 +3135,27 @@ const firstName = lead.name ? lead.name.split(" ")[0] : "Traveler";
                     </div>
 
                     {/* Progress Timeline Progress Bar */}
-                    <div className="bg-white border border-[#e7e1d5]/50 rounded-[24px] p-6 shadow-sm">
-                      <div className="relative flex justify-between items-center w-full px-4 sm:px-8">
+                    <div className="bg-white border border-[#e7e1d5]/50 rounded-[24px] p-4 sm:p-6 shadow-sm overflow-x-auto">
+                      <div className="relative flex justify-between items-start w-full min-w-[340px] px-2 sm:px-4">
                         
                         {/* Horizontal Line Background */}
-                        <div className="absolute left-[10%] right-[10%] top-[24px] h-0.5 bg-zinc-100 -z-0" />
+                        <div className="absolute left-[10%] right-[10%] top-6 h-0.5 bg-zinc-100 -z-0" />
                         {/* Horizontal Line Completed Progress */}
                         <div 
-                          className="absolute left-[10%] top-[24px] h-0.5 bg-emerald-500 transition-all -z-0"
+                          className="absolute left-[10%] top-6 h-0.5 bg-emerald-500 transition-all duration-500 -z-0"
                           style={{ width: `${(Math.min(currentStatusIdx, 4) / 4) * 80}%` }}
                         />
 
                         {/* Steps list */}
                         {steps.map((st, idx) => {
                           const isDone = idx <= currentStatusIdx;
+                          const isActive = idx === currentStatusIdx;
                           
                           let stepColorClass = "border-zinc-200 bg-white text-zinc-300";
                           if (isDone) {
-                            stepColorClass = "bg-emerald-500 border-emerald-500 text-white";
+                            stepColorClass = isActive
+                              ? "bg-emerald-500 border-emerald-500 text-white ring-4 ring-emerald-100"
+                              : "bg-emerald-500 border-emerald-500 text-white";
                           }
 
                           let dateLabel = "";
@@ -3168,18 +3171,18 @@ const firstName = lead.name ? lead.name.split(" ")[0] : "Traveler";
                           const StepIcon = st.icon;
 
                           return (
-                            <div key={st.label} className="relative z-10 flex flex-col items-center space-y-2">
-                              <div className={`w-12 h-12 rounded-full border-2 flex items-center justify-center transition-all shadow-sm ${stepColorClass}`}>
+                            <div key={st.label} className="relative z-10 flex flex-col items-center gap-2" style={{ flex: '1 1 0', minWidth: 0 }}>
+                              <div className={`w-11 h-11 sm:w-12 sm:h-12 rounded-full border-2 flex items-center justify-center transition-all shadow-sm shrink-0 ${stepColorClass}`}>
                                 {idx < currentStatusIdx ? (
-                                  <Check className="w-5 h-5 stroke-[3.5px]" />
+                                  <Check className="w-4 h-4 sm:w-5 sm:h-5 stroke-[3.5px]" />
                                 ) : (
-                                  <StepIcon className="w-5 h-5 stroke-[2.2px]" />
+                                  <StepIcon className="w-4 h-4 sm:w-5 sm:h-5 stroke-[2.2px]" />
                                 )}
                               </div>
-                              <div className="text-center">
-                                <span className={`text-[11px] font-black block leading-tight ${isDone ? 'text-nomichi-ink' : 'text-nomichi-ink/35'}`}>{st.label}</span>
+                              <div className="text-center px-1">
+                                <span className={`text-[9px] sm:text-[11px] font-black block leading-tight ${isDone ? 'text-nomichi-ink' : 'text-nomichi-ink/35'}`}>{st.label}</span>
                                 {isDone && dateLabel && (
-                                  <span className="text-[9px] font-bold text-nomichi-ink/40 block mt-0.5">{dateLabel}</span>
+                                  <span className="text-[8px] sm:text-[9px] font-bold text-nomichi-ink/40 block mt-0.5">{dateLabel}</span>
                                 )}
                               </div>
                             </div>
@@ -3216,7 +3219,7 @@ const firstName = lead.name ? lead.name.split(" ")[0] : "Traveler";
                           </h4>
                           <p className="text-xs text-nomichi-ink/50 leading-relaxed font-semibold">
                             {currentStatusIdx === 0 && "We've received your enquiry and are reviewing your travel preferences. Our team will get back to you within 24 hours."}
-                            {currentStatusIdx === 1 && `${assignedExpert?.full_name || 'Priya Sharma'} will be your dedicated travel expert and will work with you to craft the perfect journey.`}
+                            {currentStatusIdx === 1 && `${assignedExpert?.full_name || 'Your Trip Expert'} will be your dedicated travel expert and will work with you to craft the perfect journey.`}
                             {currentStatusIdx === 2 && "We've crafted a memorable experience just for you. Please review the itinerary and let us know your thoughts."}
                             {currentStatusIdx === 3 && "Thanks for the great conversation! We've aligned on your preferences and finalized the perfect experience for you."}
                             {currentStatusIdx === 4 && "Your adventure is all set! We can't wait to host you on an unforgettable journey."}
@@ -3267,9 +3270,9 @@ const firstName = lead.name ? lead.name.split(" ")[0] : "Traveler";
                         {/* Trip Details Card (Horizontal layout) */}
                         <div className="bg-white border border-[#e7e1d5]/50 rounded-[24px] p-5 shadow-sm flex flex-col md:flex-row gap-5 items-stretch text-left">
                           <img 
-                            src={trip.image_url || "https://images.unsplash.com/photo-1469854523086-cc02fe5d8800?auto=format&fit=crop&w=350&q=80"}
+                            src={trip.image_url && !trip.image_url.includes('photo-1540959733332') ? trip.image_url : "https://images.unsplash.com/photo-1469854523086-cc02fe5d8800?auto=format&fit=crop&w=350&q=80"}
                             alt={trip.title}
-                            className="w-full md:w-56 h-36 rounded-2xl object-cover shrink-0 border border-[#e7e1d5]/20"
+                            className="w-full md:w-52 h-40 rounded-2xl object-cover shrink-0 border border-[#e7e1d5]/20"
                           />
                           <div className="flex flex-col justify-between flex-1 py-1 space-y-3">
                             <div>
@@ -3277,22 +3280,33 @@ const firstName = lead.name ? lead.name.split(" ")[0] : "Traveler";
                               <div className="grid grid-cols-2 gap-x-4 gap-y-2 mt-3 text-xs font-semibold text-nomichi-ink/50">
                                 <div className="flex items-center gap-1.5">
                                   <Calendar className="w-3.5 h-3.5 text-[#FF5B26]/65 shrink-0" />
-                                  <span>{trip.duration || "6 Days / 5 Nights"}</span>
+                                  <span>{trip.duration || (trip.start_date && trip.end_date ? `${Math.ceil((new Date(trip.end_date).getTime() - new Date(trip.start_date).getTime()) / (1000*60*60*24))} Days` : "Duration TBC")}</span>
                                 </div>
                                 <div className="flex items-center gap-1.5">
                                   <MapPin className="w-3.5 h-3.5 text-[#FF5B26]/65 shrink-0" />
-                                  <span className="truncate">{trip.destination || "Bali, Indonesia"}</span>
+                                  <span className="truncate">{trip.destination || trip.location || "India"}</span>
                                 </div>
                                 <div className="flex items-center gap-1.5">
                                   <CalendarDays className="w-3.5 h-3.5 text-[#FF5B26]/65 shrink-0" />
-                                  <span>12 - 16 Aug 2026</span>
+                                  <span>
+                                    {trip.start_date
+                                      ? new Date(trip.start_date).toLocaleDateString('en-IN', { day: 'numeric', month: 'short', year: 'numeric' })
+                                      : lead.preferred_month || "Month TBC"}
+                                  </span>
                                 </div>
                                 <div className="flex items-center gap-1.5">
                                   <Users className="w-3.5 h-3.5 text-[#FF5B26]/65 shrink-0" />
-                                  <span>{lead.group_size || 3} Travelers</span>
+                                  <span>{lead.group_size || 1} {(lead.group_size || 1) === 1 ? 'Traveler' : 'Travelers'}</span>
                                 </div>
                               </div>
                             </div>
+                            {/* hope_trip_feels_like as a highlighted message quote */}
+                            {lead.hope_trip_feels_like && (
+                              <div className="bg-gradient-to-r from-[#FFFBF7] to-[#FFF4EE] border border-[#FF5B26]/15 rounded-xl px-3.5 py-2.5">
+                                <span className="text-[9px] font-bold text-[#FF5B26] uppercase tracking-wider block mb-1">✨ Your Dream Vibe</span>
+                                <p className="text-[11px] text-nomichi-ink/80 font-semibold leading-relaxed italic">"{lead.hope_trip_feels_like}"</p>
+                              </div>
+                            )}
                             <div className="pt-2 border-t border-zinc-100 flex items-center justify-between">
                               <button 
                                 onClick={() => router.push(`/trips/${trip.id}`)}
@@ -3370,7 +3384,7 @@ const firstName = lead.name ? lead.name.split(" ")[0] : "Traveler";
                                 <div className="space-y-3.5">
                                   <div className="flex justify-between border-b border-zinc-100 pb-2">
                                     <span className="text-nomichi-ink/40 font-bold">Preferred Month</span>
-                                    <span>{lead.preferred_month || "August 2026"}</span>
+                                    <span>{lead.preferred_month || "Not specified"}</span>
                                   </div>
                                   <div className="flex justify-between border-b border-zinc-100 pb-2">
                                     <span className="text-nomichi-ink/40 font-bold">Travellers</span>
@@ -3378,16 +3392,24 @@ const firstName = lead.name ? lead.name.split(" ")[0] : "Traveler";
                                   </div>
                                   <div className="flex justify-between border-b border-zinc-100 pb-2">
                                     <span className="text-nomichi-ink/40 font-bold">Trip Style</span>
-                                    <span className="capitalize">{lead.group_type ? `${lead.group_type}, Scenic` : "Relaxing, Scenic, Cultural"}</span>
+                                    <span className="capitalize">{lead.group_type ? lead.group_type.charAt(0).toUpperCase() + lead.group_type.slice(1) : "Not specified"}</span>
                                   </div>
                                 </div>
                                 <div className="space-y-3.5">
                                   <div className="space-y-1">
-                                    <span className="text-nomichi-ink/40 font-bold block text-[10px] uppercase">Special Requests / Notes</span>
+                                    <span className="text-nomichi-ink/40 font-bold block text-[10px] uppercase">Special Requests / Dietary / Accessibility</span>
                                     <p className="text-[11px] text-nomichi-ink/80 leading-relaxed font-semibold bg-[#FAF8F4]/55 p-3 rounded-xl border border-zinc-100">
-                                      {lead.dietary_and_accessibility || "Private airport pickup and vegetarian meal options."}
+                                      {lead.dietary_and_accessibility || "None specified"}
                                     </p>
                                   </div>
+                                  {lead.hope_trip_feels_like && (
+                                    <div className="space-y-1">
+                                      <span className="text-nomichi-ink/40 font-bold block text-[10px] uppercase">✨ Your Dream Vibe</span>
+                                      <p className="text-[11px] text-nomichi-ink/80 leading-relaxed font-semibold bg-gradient-to-r from-[#FFFBF7] to-[#FFF4EE] p-3 rounded-xl border border-[#FF5B26]/15 italic">
+                                        "{lead.hope_trip_feels_like}"
+                                      </p>
+                                    </div>
+                                  )}
                                 </div>
                               </div>
                             )}
@@ -3604,7 +3626,7 @@ const firstName = lead.name ? lead.name.split(" ")[0] : "Traveler";
                                     <p className="text-[11px] text-nomichi-ink/50 font-semibold leading-relaxed">We have received your enquiry.</p>
                                   )}
                                   {idx === 1 && isDone && (
-                                    <p className="text-[11px] text-nomichi-ink/50 font-semibold leading-relaxed">{assignedExpert?.full_name || "Priya Sharma"} has been assigned to your enquiry.</p>
+                                    <p className="text-[11px] text-nomichi-ink/50 font-semibold leading-relaxed">{assignedExpert?.full_name || "Your Trip Expert"} has been assigned to your enquiry.</p>
                                   )}
                                   {idx === 2 && isDone && (
                                     <p className="text-[11px] text-nomichi-ink/50 font-semibold leading-relaxed">Your personalised itinerary and proposal are ready for review.</p>
@@ -3613,7 +3635,7 @@ const firstName = lead.name ? lead.name.split(" ")[0] : "Traveler";
                                     <p className="text-[11px] text-nomichi-ink/50 font-semibold leading-relaxed">We've discussed and finalized your trip experience.</p>
                                   )}
                                   {idx === 4 && isDone && (
-                                    <p className="text-[11px] text-nomichi-ink/50 font-semibold leading-relaxed">Yay! Your booking is confirmed. See you in Bali! 🌴</p>
+                                    <p className="text-[11px] text-nomichi-ink/50 font-semibold leading-relaxed">Yay! Your booking is confirmed. Your adventure is officially on! 🎉</p>
                                   )}
                                 </div>
                               );
@@ -3625,18 +3647,24 @@ const firstName = lead.name ? lead.name.split(" ")[0] : "Traveler";
                         {(currentStatusIdx >= 2) && (
                           <div className="bg-white border border-[#e7e1d5]/50 rounded-[24px] p-6 shadow-sm space-y-4 text-left">
                             <h3 className="text-xs font-black text-nomichi-ink/45 uppercase tracking-widest border-b border-[#e7e1d5]/20 pb-2">Your Travel Preferences</h3>
-                            <div className="grid grid-cols-1 md:grid-cols-3 gap-4 text-xs font-semibold text-nomichi-ink">
+                            {lead.hope_trip_feels_like && (
+                              <div className="bg-gradient-to-r from-[#FFFBF7] to-[#FFF4EE] border border-[#FF5B26]/15 rounded-xl px-4 py-3">
+                                <span className="text-[9px] font-bold text-[#FF5B26] uppercase tracking-wider block mb-1">✨ Your Dream Vibe</span>
+                                <p className="text-xs text-nomichi-ink/80 font-semibold leading-relaxed italic">"{lead.hope_trip_feels_like}"</p>
+                              </div>
+                            )}
+                            <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 text-xs font-semibold text-nomichi-ink">
                               <div className="space-y-1">
                                 <span className="text-[10px] font-bold text-nomichi-ink/40 uppercase block">Travel Month</span>
-                                <span className="block">{lead.preferred_month || "August 2026"}</span>
+                                <span className="block">{lead.preferred_month || "Not specified"}</span>
                               </div>
                               <div className="space-y-1">
                                 <span className="text-[10px] font-bold text-nomichi-ink/40 uppercase block">Travelers</span>
                                 <span className="block">{groupDetails}</span>
                               </div>
                               <div className="space-y-1">
-                                <span className="text-[10px] font-bold text-nomichi-ink/40 uppercase block">Trip Style</span>
-                                <span className="block capitalize">{lead.group_type ? `${lead.group_type}, Scenic` : "Relaxing, Scenic, Cultural"}</span>
+                                <span className="text-[10px] font-bold text-nomichi-ink/40 uppercase block">Group Type</span>
+                                <span className="block capitalize">{lead.group_type ? lead.group_type.charAt(0).toUpperCase() + lead.group_type.slice(1) : "Not specified"}</span>
                               </div>
                             </div>
                           </div>

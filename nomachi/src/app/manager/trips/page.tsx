@@ -51,7 +51,7 @@ export default async function ManagerTripsPage() {
     redirect("/admin/trips");
   }
 
-  const [tripsResult, leadsResult] = await Promise.all([
+  const [tripsResult, leadsResult , bookingsResult] = await Promise.all([
     supabase
       .from("trips")
       .select("id, title, destination, status, start_date, end_date, price, duration, image_url, total_seats, seats_left, created_at, created_by")
@@ -60,10 +60,16 @@ export default async function ManagerTripsPage() {
       .from("leads")
       .select("id, trip_id, group_size")
       .eq("assigned_to", user.id),
+    supabase
+  .from("bookings")
+  .select("id, trip_id"),
   ]);
 
   const trips = (tripsResult.data || []) as TripRecord[];
   const leads = (leadsResult.data || []) as ManagerLeadRecord[];
+const bookings = bookingsResult.data || [];
+// console.log("BOOKINGS", bookings.slice(0, 5));
+
   const assignedTripIds = new Set(
     leads
       .map((lead) => lead.trip_id)
@@ -75,16 +81,32 @@ export default async function ManagerTripsPage() {
       .filter((trip) => trip.created_by === user.id || assignedTripIds.has(trip.id))
       .map((trip) => trip.id)
   );
+// console.log(
+//   "TRIPS",
+//   trips.map((t) => ({
+//     id: t.id,
+//     title: t.title,
+//   }))
+// );
 
-  const serializedTrips = trips.map((trip) => {
-    const tripLeads = leads.filter((lead) => lead.trip_id === trip.id);
-    const travellers = tripLeads.reduce((sum, lead) => sum + (lead.group_size || 1), 0);
-    return {
-      ...trip,
-      leads_count: tripLeads.length,
-      travellers,
-    };
-  });
+
+
+const serializedTrips = trips.map((trip) => {
+  const travellers = bookings.filter(
+    (booking: any) => booking.trip_id === trip.id
+  ).length;
+
+  // console.log(
+  //   trip.title,
+  //   trip.id,
+  //   travellers
+  // );
+
+  return {
+    ...trip,
+    travellers,
+  };
+});
 
   return (
     <ManagerTripsClient

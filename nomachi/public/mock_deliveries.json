@@ -1,5 +1,209 @@
 [
   {
+    "id": "email_kkv9e5vlg",
+    "timestamp": "2026-06-24T07:02:55.148Z",
+    "recipient": "tejhode@gmail.com",
+    "channel": "Email",
+    "type": "Welcome to Nomichi",
+    "title": "Welcome to Nomichi 🌍 Your Journey Begins Here",
+    "body": "Your profile is ready. Adventure, connection, and unforgettable experiences await.",
+    "priority": "High",
+    "status": "Success",
+    "details": {
+      "smtp_server": "smtp.resend.com",
+      "port": 587,
+      "messageId": "<1fadd5fb-4e3e-4c39-e3e8-db53d9ee5950@edinsured.in>",
+      "live": true
+    }
+  },
+  {
+    "id": "email_njegamx6a",
+    "timestamp": "2026-06-24T07:00:13.003Z",
+    "recipient": "dev.edinsured@gmail.com",
+    "channel": "Email",
+    "type": "Trip Leader Assignment",
+    "title": "📋 You've been assigned as Trip Leader — Bali Tropical Paradise Escape",
+    "body": "Hello developer,\n\nYou have been assigned as the Trip Leader for the following departure:\n\nDeparture Code: DEP-2026-001\nTrip: Bali Tropical Paradise Escape (Bali, Indonesia)\nStart Date: 24 June 2026\nEnd Date: 29 June 2026\nTotal Seats: 12\nPrice per Person: ₹69,999\nMeeting Point: jabal pur\n\nConfirmed Travelers: 2\n\nPlease review the departure details and coordinate with the team for a smooth experience.\n\nYou can manage this departure from your Nomichi Manager Dashboard.\n\nBest regards,\nNomichi Admin Team",
+    "priority": "High",
+    "status": "Success",
+    "details": {
+      "smtp_server": "smtp.resend.com",
+      "port": 587,
+      "messageId": "<42363ff5-fdb3-f264-81e8-5ecee4345a39@edinsured.in>",
+      "live": true
+    }
+  },
+  {
+    "id": "email_crdlqz6nr",
+    "timestamp": "2026-06-24T07:00:05.007Z",
+    "recipient": "tejjhode@gmail.com",
+    "channel": "Email",
+    "type": "Departure Scheduled",
+    "title": "🎒 Departure Scheduled — Bali Tropical Paradise Escape",
+    "body": "Hello,\n\nGreat news! Your departure for Bali Tropical Paradise Escape has been officially scheduled.\n\nDeparture Code: DEP-2026-001\nTrip: Bali Tropical Paradise Escape (Bali, Indonesia)\nStart Date: 24 June 2026\nEnd Date: 29 June 2026\nPrice: ₹69,999\nMeeting Point: jabal pur\nTrip Leader: developer\n\nPlease ensure you carry all required documents, including valid ID proof and any necessary travel permits.\n\nWe can't wait to take you on this incredible journey!\n\nWarm regards,\nNomichi Travel Team",
+    "priority": "High",
+    "status": "Success",
+    "details": {
+      "smtp_server": "smtp.resend.com",
+      "port": 587,
+      "messageId": "<9774e16c-6125-771a-3166-76d28676eb30@edinsured.in>",
+      "live": true
+    }
+  },
+  {
+    "id": "email_qiefsu7ce",
+    "timestamp": "2026-06-24T06:59:57.054Z",
+    "recipient": "xyz.abc.2854@gmail.com",
+    "channel": "Email",
+    "type": "Departure Scheduled",
+    "title": "🎒 Departure Scheduled — Bali Tropical Paradise Escape",
+    "body": "Hello,\n\nGreat news! Your departure for Bali Tropical Paradise Escape has been officially scheduled.\n\nDeparture Code: DEP-2026-001\nTrip: Bali Tropical Paradise Escape (Bali, Indonesia)\nStart Date: 24 June 2026\nEnd Date: 29 June 2026\nPrice: ₹69,999\nMeeting Point: jabal pur\nTrip Leader: developer\n\nPlease ensure you carry all required documents, including valid ID proof and any necessary travel permits.\n\nWe can't wait to take you on this incredible journey!\n\nWarm regards,\nNomichi Travel Team",
+    "priority": "High",
+    "status": "Success",
+    "details": {
+      "smtp_server": "smtp.resend.com",
+      "port": 587,
+      "messageId": "<b5603866-ae33-a7b1-9b57-f2ae436b4146@edinsured.in>",
+      "live": true
+    }
+  },
+  {
+    "id": "email_19twegiel",
+    "timestamp": "2026-06-24T06:41:25.498Z",
+    "recipient": "tejaswajhode@gmail.com",
+    "channel": "Email",
+    "type": "Trip Leader Assignment",
+    "title": "📋 You've been assigned as Trip Leader — KANHA TIGER SAFARI & WILDERNESS",
+    "body": "Hello Tejaswa Jhode,\n\nYou have been assigned as the Trip Leader for the following departure:\n\nDeparture Code: DEP-2026-003\nTrip: KANHA TIGER SAFARI & WILDERNESS (Madhya Pradesh, India)\nStart Date: 27 June 2026\nEnd Date: 30 June 2026\nTotal Seats: 12\nPrice per Person: ₹10,000\nMeeting Point: Jabal pur\n\nOperational Notes:\ndfvff\n\nConfirmed Travelers: 0\n\nPlease review the departure details and coordinate with the team for a smooth experience.\n\nYou can manage this departure from your Nomichi Manager Dashboard.\n\nBest regards,\nNomichi Admin Team",
+    "priority": "High",
+    "status": "Success",
+    "details": {
+      "smtp_server": "smtp.resend.com",
+      "port": 587,
+      "messageId": "<d65ec4f0-c465-928a-7825-08e1834b8ef0@edinsured.in>",
+      "live": true
+    }
+  },
+  {
+    "id": "email_4hh4v0efy",
+    "timestamp": "2026-06-24T06:35:34.695Z",
+    "recipient": "tejaswajhode@gmail.com",
+    "channel": "Email",
+    "type": "Trip Leader Assignment",
+    "title": "📋 You've been assigned as Trip Leader — KANHA TIGER SAFARI & WILDERNESS",
+    "body": "Hello Tejaswa Jhode,\n\nYou have been assigned as the Trip Leader for the following departure:\n\nDeparture Code: DEP-2026-002\nTrip: KANHA TIGER SAFARI & WILDERNESS (Madhya Pradesh, India)\nStart Date: 8 August 2026\nEnd Date: 13 August 2026\nTotal Seats: 12\nPrice per Person: ₹10,000\nMeeting Point: To be communicated\n\nConfirmed Travelers: 0\n\nPlease review the departure details and coordinate with the team for a smooth experience.\n\nYou can manage this departure from your Nomichi Manager Dashboard.\n\nBest regards,\nNomichi Admin Team",
+    "priority": "High",
+    "status": "Success",
+    "details": {
+      "smtp_server": "smtp.resend.com",
+      "port": 587,
+      "messageId": "<22362258-4b61-25f6-55a6-ca47e7745af8@edinsured.in>",
+      "live": true
+    }
+  },
+  {
+    "id": "email_feak165aa",
+    "timestamp": "2026-06-24T06:14:19.179Z",
+    "recipient": "22et10jh371@mitsgwl.ac.in",
+    "channel": "Email",
+    "type": "Manager Assigned",
+    "title": "Manager Assigned",
+    "body": "Tejaswa Jhode has been assigned to assist you.",
+    "priority": "High",
+    "status": "Success",
+    "details": {
+      "smtp_server": "smtp.resend.com",
+      "port": 587,
+      "messageId": "<45c674a6-0ce0-628d-6ccf-910f7a26ed45@edinsured.in>",
+      "live": true
+    }
+  },
+  {
+    "id": "email_2dk6btyh1",
+    "timestamp": "2026-06-24T06:14:18.212Z",
+    "recipient": "tejaswajhode@gmail.com",
+    "channel": "Email",
+    "type": "Lead Assigned",
+    "title": "Lead Assigned",
+    "body": "New lead \"Io221072 Jhode Tejaswa Ghanshyam\" has been assigned to you.",
+    "priority": "High",
+    "status": "Success",
+    "details": {
+      "smtp_server": "smtp.resend.com",
+      "port": 587,
+      "messageId": "<3cde9776-3c5d-1c6f-3f90-ce9ecd608d02@edinsured.in>",
+      "live": true
+    }
+  },
+  {
+    "id": "email_gk3u56ule",
+    "timestamp": "2026-06-24T06:14:15.728Z",
+    "recipient": "22et10jh371@mitsgwl.ac.in",
+    "channel": "Email",
+    "type": "Manager Assigned",
+    "title": "Manager Assigned",
+    "body": "Tejaswa Jhode has been assigned to assist you.",
+    "priority": "High",
+    "status": "Success",
+    "details": {
+      "smtp_server": "smtp.resend.com",
+      "port": 587,
+      "messageId": "<45dcbb7b-f8ed-3e14-4b39-3d0899449466@edinsured.in>",
+      "live": true
+    }
+  },
+  {
+    "id": "email_7i0xf8r33",
+    "timestamp": "2026-06-24T06:14:15.118Z",
+    "recipient": "tejaswajhode@gmail.com",
+    "channel": "Email",
+    "type": "Lead Assigned",
+    "title": "Lead Assigned",
+    "body": "New lead \"Io221072 Jhode Tejaswa Ghanshyam\" has been assigned to you.",
+    "priority": "High",
+    "status": "Success",
+    "details": {
+      "smtp_server": "smtp.resend.com",
+      "port": 587,
+      "messageId": "<556ee4ac-3623-df3a-b19a-c46a0fd4e41a@edinsured.in>",
+      "live": true
+    }
+  },
+  {
+    "id": "email_cns97o2a3",
+    "timestamp": "2026-06-21T18:48:48.271Z",
+    "recipient": "tejjhode@gmail.com",
+    "channel": "Email",
+    "type": "Manager Assigned",
+    "title": "Manager Assigned",
+    "body": "Tejaswa Jhode has been assigned to assist you.",
+    "priority": "High",
+    "status": "Success",
+    "details": {
+      "smtp_server": "smtp.resend.com",
+      "port": 587,
+      "messageId": "<ef29a4ad-0013-839c-d50c-ab19c97c27da@edinsured.in>",
+      "live": true
+    }
+  },
+  {
+    "id": "email_shq2s0hdk",
+    "timestamp": "2026-06-21T18:48:48.120Z",
+    "recipient": "tejaswajhode@gmail.com",
+    "channel": "Email",
+    "type": "Lead Assigned",
+    "title": "Lead Assigned",
+    "body": "New lead \"Tejswa Jhode\" has been assigned to you.",
+    "priority": "High",
+    "status": "Success",
+    "details": {
+      "smtp_server": "smtp.resend.com",
+      "port": 587,
+      "messageId": "<b96c8dfb-bc1c-18aa-503b-dd22e768f97d@edinsured.in>",
+      "live": true
+    }
+  },
+  {
     "id": "email_5lcbncjtm",
     "timestamp": "2026-06-21T18:35:45.599Z",
     "recipient": "ayushsonwane65@gmail.com",

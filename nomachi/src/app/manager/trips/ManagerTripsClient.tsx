@@ -116,7 +116,6 @@ export function ManagerTripsClient({ user, trips, managerTrips }: ManagerTripsCl
       return true;
     });
   }, [destination, managerTrips, month, searchQuery, status, tab, trips]);
-
   const counts = {
     total: trips.length,
     upcoming: trips.filter((trip) => trip.start_date && new Date(trip.start_date).getTime() >= Date.now()).length,
@@ -315,14 +314,13 @@ export function ManagerTripsClient({ user, trips, managerTrips }: ManagerTripsCl
                       <th className="px-6 py-4">Departure Date</th>
                       <th className="px-6 py-4">Travellers</th>
                       <th className="px-6 py-4">Status</th>
-                      <th className="px-6 py-4">Assigned To</th>
                       <th className="px-6 py-4 text-right">Actions</th>
                     </tr>
                   </thead>
                   <tbody className="divide-y divide-slate-200">
                     {visibleTrips.length === 0 ? (
                       <tr>
-                        <td colSpan={8} className="px-6 py-12 text-center text-slate-500">
+                        <td colSpan={7} className="px-6 py-12 text-center text-slate-500">
                           No trips match your filters.
                         </td>
                       </tr>
@@ -330,7 +328,7 @@ export function ManagerTripsClient({ user, trips, managerTrips }: ManagerTripsCl
                       visibleTrips.map((trip) => {
                         const statusKey = (trip.status || "draft").toLowerCase();
                         const badge = statusMeta[statusKey] || statusMeta.draft;
-                        const isAssigned = managerTrips.includes(trip.id);
+                        // const isAssigned = managerTrips.includes(trip.id);
 
                         return (
                           <tr key={trip.id} className="hover:bg-slate-50/60">
@@ -363,18 +361,6 @@ export function ManagerTripsClient({ user, trips, managerTrips }: ManagerTripsCl
                               <span className={`inline-flex rounded-full px-3 py-1 text-xs font-semibold ${badge.className}`}>
                                 {badge.label}
                               </span>
-                            </td>
-                            <td className="px-6 py-4 text-sm text-slate-700">
-                              <div className="flex items-center gap-2">
-                                {user.avatar_url ? (
-                                  <img src={user.avatar_url} alt={user.full_name} className="w-7 h-7 rounded-full object-cover" />
-                                ) : (
-                                  <div className="w-7 h-7 rounded-full bg-[#FFF1EA] text-[#FF5B26] flex items-center justify-center text-xs font-bold">
-                                    {user.full_name.charAt(0).toUpperCase()}
-                                  </div>
-                                )}
-                                <span>{isAssigned ? user.full_name : "You"}</span>
-                              </div>
                             </td>
                             <td className="px-6 py-4">
                               <div className="flex items-center justify-end gap-2 text-slate-500">

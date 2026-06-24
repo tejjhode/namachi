@@ -10,7 +10,6 @@ import { Trip, Lead, LeadNote } from "@/types/admin.types";
 import {
   Loader2,
   Search,
-  Plus,
   ChevronDown,
   Globe,
   Instagram,
@@ -32,7 +31,6 @@ import {
 } from "lucide-react";
 import { useState, useEffect, useRef } from "react";
 import { useRouter } from "next/navigation";
-import Link from "next/link";
 import { createClient } from "@/lib/supabase/client";
 import { getLeadNoteAuthorLabel, getLeadNoteDisplay, getLeadNoteVisual } from "@/lib/lead-notes";
 
@@ -326,24 +324,17 @@ export default function LeadsPage() {
   const confirmedCount = leads.filter((l) => l.status === "converted").length;
 
   return (
-    <div className="flex w-full h-full gap-6 text-left relative overflow-hidden">
+    <div className="flex w-full h-full gap-6 text-left relative overflow-hidden min-h-0">
       {/* ===================== MIDDLE COLUMN (LEADS LIST) ===================== */}
       <div className="flex-1 space-y-6 overflow-y-auto pr-2 pb-6">
         {/* Top Header */}
-        <div className="flex justify-between items-center">
+        <div className="flex items-center justify-between">
           <div>
             <h1 className="text-2xl font-display font-extrabold text-nomichi-ink tracking-tight">Leads</h1>
             <p className="text-xs text-nomichi-ink/40 font-semibold mt-0.5">
               Manage and track all traveler enquiries
             </p>
           </div>
-          <Link
-            href="/admin/leads/new"
-            className="inline-flex items-center gap-2 px-4 py-2.5 bg-[#FF5B26] text-white text-xs font-bold rounded-xl hover:bg-[#FF5B26]/90 transition-all shadow-sm no-underline"
-          >
-            <Plus className="w-4 h-4 stroke-[2.5]" />
-            New Lead
-          </Link>
         </div>
 
         {/* Metrics Row */}
@@ -685,7 +676,11 @@ export default function LeadsPage() {
       {/* ===================== RIGHT SIDE DETAILS PANEL ===================== */}
       {selectedLeadId && (
         <div
-          className="w-[380px] bg-white border border-[#e7e1d5]/50 rounded-2xl shadow-sm flex flex-col justify-between shrink-0 overflow-hidden animate-in slide-in-from-right duration-300"
+          className="fixed inset-0 z-40 bg-black/30 backdrop-blur-sm flex items-center justify-end lg:relative lg:inset-auto lg:bg-transparent lg:backdrop-blur-none lg:z-auto lg:flex lg:items-stretch"
+          onClick={(e) => { if (e.target === e.currentTarget) setSelectedLeadId(null); }}
+        >
+        <div
+          className="w-full max-w-[400px] h-full lg:h-auto lg:w-[380px] bg-white border border-[#e7e1d5]/50 lg:rounded-2xl shadow-xl flex flex-col justify-between shrink-0 overflow-hidden animate-in slide-in-from-right duration-300"
         >
           {/* Header */}
           <div className="px-6 py-4 border-b border-[#e7e1d5]/30 flex justify-between items-center bg-[#FAF8F4]/30">
@@ -743,46 +738,45 @@ export default function LeadsPage() {
                   
                   const emailSubject = encodeURIComponent(`Nomichi Enquiry - ${tripTitle}`);
                   const emailBody = encodeURIComponent(`Hello ${travelerName},\n\nThis is ${adminName} from Nomichi. Thank you for your enquiry for the trip ${tripTitle}.`);
-                  const mailHref = selectedLead.email
-                    ? `mailto:${selectedLead.email}?subject=${emailSubject}&body=${emailBody}`
-                    : "#";
                   const gmailHref = selectedLead.email
                     ? `https://mail.google.com/mail/?view=cm&fs=1&to=${selectedLead.email}&su=${emailSubject}&body=${emailBody}`
                     : "#";
                   
                   return (
-                    <div className="grid grid-cols-4 gap-2">
+                    <div className="flex gap-3">
+                      {/* WhatsApp icon-only button */}
                       <a
                         href={waHref}
                         target="_blank"
                         rel="noopener noreferrer"
-                        className="flex items-center justify-center gap-1.5 py-2 border border-emerald-200 hover:bg-emerald-50/50 text-emerald-600 rounded-xl text-[10px] font-bold transition-all no-underline bg-white cursor-pointer"
+                        title={`WhatsApp ${selectedLead.name}`}
+                        className="flex-1 flex items-center justify-center h-11 border border-emerald-200 hover:bg-emerald-50 rounded-xl transition-all no-underline bg-white cursor-pointer group"
                       >
-                        <MessageCircle className="w-3.5 h-3.5 stroke-[2.5]" />
-                        WhatsApp
+                        <svg className="w-5 h-5 fill-[#25D366] group-hover:scale-110 transition-transform" viewBox="0 0 24 24">
+                          <path d="M.057 24l1.687-6.163c-1.041-1.804-1.588-3.849-1.587-5.946C.06 5.348 5.397.01 12.008.01c3.202.001 6.212 1.246 8.477 3.514 2.266 2.268 3.507 5.28 3.505 8.484-.004 6.657-5.34 11.997-11.953 11.997-2.005-.001-3.973-.504-5.729-1.464L0 24zm6.59-4.846c1.6.95 3.197 1.451 4.782 1.452 5.386 0 9.778-4.387 9.781-9.76.002-2.602-1.01-5.05-2.854-6.897-1.844-1.847-4.29-2.858-6.894-2.859-5.39 0-9.783 4.387-9.786 9.762-.001 1.7.461 3.35 1.339 4.816L1.99 21.053l4.657-1.226zM17.5 14.5c-.28-.14-1.65-.82-1.9-.91-.25-.09-.44-.14-.62.14-.18.28-.7 1-.86 1.18-.16.18-.32.2-.6.06-.28-.14-1.18-.44-2.25-1.4-1.22-1.09-1.62-1.62-1.82-1.9-.2-.28 0-.44.14-.58.13-.13.28-.32.42-.48.14-.16.2-.28.3-.46.1-.18.05-.34-.02-.48-.07-.14-.62-1.5-.85-2.05-.23-.55-.47-.48-.65-.48-.17 0-.37-.02-.57-.02-.2 0-.52.07-.79.37-.27.3-1.04 1.02-1.04 2.48s1.07 2.87 1.22 3.07c.15.2 2.1 3.2 5.08 4.5.7.3 1.26.49 1.69.63.71.22 1.35.19 1.86.11.57-.08 1.65-.68 1.88-1.33.23-.65.23-1.21.16-1.33-.07-.12-.25-.26-.53-.4z" />
+                        </svg>
                       </a>
+                      {/* Call icon-only button */}
                       <a
                         href={`tel:${selectedLead.phone || ""}`}
-                        className="flex items-center justify-center gap-1.5 py-2 border border-blue-200 hover:bg-blue-50/50 text-blue-600 rounded-xl text-[10px] font-bold transition-all no-underline bg-white cursor-pointer"
+                        title={`Call ${selectedLead.name}`}
+                        className="flex-1 flex items-center justify-center h-11 border border-blue-200 hover:bg-blue-50 rounded-xl transition-all no-underline bg-white cursor-pointer group"
                       >
-                        <Phone className="w-3.5 h-3.5" />
-                        Call
+                        <Phone className="w-5 h-5 text-blue-500 group-hover:scale-110 transition-transform" />
                       </a>
-                      <a
-                        href={mailHref}
-                        className="flex items-center justify-center gap-1.5 py-2 border border-[#e7e1d5] hover:bg-[#FAF8F4] text-nomichi-ink/70 rounded-xl text-[10px] font-bold transition-all no-underline bg-white cursor-pointer"
-                      >
-                        <Mail className="w-3.5 h-3.5" />
-                        Email
-                      </a>
+                      {/* Gmail icon-only button */}
                       <a
                         href={gmailHref}
                         target="_blank"
                         rel="noopener noreferrer"
-                        className="flex items-center justify-center gap-1.5 py-2 border border-red-200 hover:bg-red-50/50 text-red-600 rounded-xl text-[10px] font-bold transition-all no-underline bg-white cursor-pointer"
+                        title={`Gmail ${selectedLead.name}`}
+                        className="flex-1 flex items-center justify-center h-11 border border-red-200 hover:bg-red-50 rounded-xl transition-all no-underline bg-white cursor-pointer group"
                       >
-                        <Mail className="w-3.5 h-3.5 text-red-500" />
-                        Gmail
+                        <svg className="w-5 h-5 group-hover:scale-110 transition-transform" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
+                          <path d="M6.19 17.445H3.01A1.01 1.01 0 012 16.435V7.565c0-.48.337-.9.81-.99l8.655-1.71a1 1 0 011.07.54l1.465 2.93 1.465-2.93a1 1 0 011.07-.54l8.655 1.71c.473.09.81.51.81.99v8.87a1.01 1.01 0 01-1.01 1.01h-3.18L12 12.185 6.19 17.445z" fill="#4285F4"/>
+                          <path d="M2 7.565l10 7.272 10-7.272" fill="none" stroke="#34A853" strokeWidth=".5"/>
+                          <path d="M2 7.565L12 14.837l10-7.272L12.535 5.41a1 1 0 00-1.07 0L2 7.565z" fill="#EA4335"/>
+                        </svg>
                       </a>
                     </div>
                   );
@@ -1063,6 +1057,7 @@ export default function LeadsPage() {
               </button>
             </form>
           </div>
+        </div>
         </div>
       )}
     </div>
