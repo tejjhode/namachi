@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { sendEmailViaSMTP, sendWhatsAppViaAPI } from "@/lib/notifications/delivery";
 import { createClient } from "@supabase/supabase-js";
+import { generateBrochureToken } from "@/lib/brochure-token";
 import fs from "fs";
 import path from "path";
 
@@ -47,6 +48,52 @@ export async function POST(request: Request) {
         contentType: "image/png",
         disposition: "inline"
       });
+    }
+
+    // Attach PDF brochures if it's a Brochure Shared email
+    if (type === "Brochure Shared" && source_id) {
+      try {
+        const { data: lead } = await supabaseAdmin
+          .from("leads")
+          .select("*, trips(*)")
+          .eq("id", source_id)
+          .single();
+        if (lead?.trips?.brochure_url) {
+          const bUrl = lead.trips.brochure_url;
+          if (bUrl.startsWith("[")) {
+            const brochures = JSON.parse(bUrl);
+            brochures.forEach((item: any, idx: number) => {
+              if (item.url && item.url.startsWith("data:")) {
+                const match = item.url.match(/^data:([^;]+);base64,(.*)$/);
+                if (match) {
+                  const contentType = match[1];
+                  const base64Data = match[2];
+                  const buffer = Buffer.from(base64Data, "base64");
+                  attachments.push({
+                    filename: item.name || `brochure_${idx + 1}.pdf`,
+                    content: buffer,
+                    contentType: contentType
+                  });
+                }
+              }
+            });
+          } else if (bUrl.startsWith("data:")) {
+            const match = bUrl.match(/^data:([^;]+);base64,(.*)$/);
+            if (match) {
+              const contentType = match[1];
+              const base64Data = match[2];
+              const buffer = Buffer.from(base64Data, "base64");
+              attachments.push({
+                filename: "brochure.pdf",
+                content: buffer,
+                contentType: contentType
+              });
+            }
+          }
+        }
+      } catch (err) {
+        console.error("Failed to fetch and attach brochures during email delivery:", err);
+      }
     }
 
     if (email) {
@@ -138,9 +185,13 @@ async function compileHtmlTemplate(params: {
           if (lead.trips) {
             tripTitle = lead.trips.title;
             if (lead.trips.brochure_url) {
-              brochureUrl = lead.trips.brochure_url.startsWith("data:")
-                ? `${origin}/api/trips/${lead.trips.id || lead.trip_id}/brochure`
-                : lead.trips.brochure_url;
+              const bUrl = lead.trips.brochure_url;
+              if (bUrl.startsWith("data:") || bUrl.startsWith("[")) {
+                const token = generateBrochureToken(lead.trips.id || lead.trip_id, 0);
+                brochureUrl = `${origin}/api/trips/${lead.trips.id || lead.trip_id}/brochure?index=0&token=${token}`;
+              } else {
+                brochureUrl = bUrl;
+              }
             }
           }
 

@@ -3055,26 +3055,67 @@ export function DashboardView({ user, leads = [], trips = [], initialChatMessage
                   ? `₹${(rawPrice * (lead.group_size || 2)).toLocaleString("en-IN")}` 
                   : "₹1,24,500";
 
-                // Timeline step configuration
+                // Timeline step configuration — 5 user-facing stages
                 const steps = [
                   { label: "Enquiry Submitted", statusKey: "new", icon: Check },
                   { label: "Trip Expert Assigned", statusKey: "contacted", icon: UserIcon },
-                  { label: "Itinerary Shared", statusKey: "qualified", icon: FileText },
                   { label: "Vibe Check Completed", statusKey: "negotiating", icon: Heart },
-                  { label: "Booking Confirmed", statusKey: "converted", icon: Calendar }
+                  { label: "Itinerary Shared", statusKey: "qualified", icon: FileText },
+                  { label: "Booking Confirmed", statusKey: "confirmed", icon: Calendar }
                 ];
 
-                const getStatusIndex = (status: string) => {
-                  if (status === "new") return 0;
-                  if (status === "contacted") return 1;
-                  if (status === "qualified") return 2;
-                  if (status === "negotiating" || status === "vibe_check_sent") return 3;
-                  if (status === "converted" || status === "confirmed") return 4;
-                  if (status === "lost" || status === "not_a_fit") return 4; // default to confirmed for cancelled/lost timeline rendering
+                const getStatusIndex = (status: string, assignedTo?: string) => {
+                  const s = (status || "").toLowerCase().trim();
+                  // Stage 0: Enquiry Submitted
+                  if (s === "new" && !assignedTo) return 0;
+                  // Stage 1: Trip Expert Assigned
+                  if (s === "new" && assignedTo) return 1;
+                  if (s === "contacted" || s === "reviewed") return 1;
+                  // Stage 2: Vibe Check Completed
+                  if (s === "negotiating" || s === "vibe_check_sent" || s === "vibe check sent") return 2;
+                  // Stage 3: Itinerary Shared
+                  if (s === "qualified") return 3;
+                  // Stage 4: Booking Confirmed
+                  if (s === "converted" || s === "confirmed") return 4;
+                  // Lost leads — show at last reached stage
+                  if (s === "lost" || s === "not_a_fit" || s === "closed") return 4;
                   return 0;
                 };
 
-                const currentStatusIdx = getStatusIndex(lead.status);
+                const renderBrochureButtons = (brochureUrl?: string | null, customClass?: string) => {
+                  if (!brochureUrl) return null;
+                  if (brochureUrl.startsWith("[")) {
+                    try {
+                      const brochures = JSON.parse(brochureUrl);
+                      return brochures.map((b: any, index: number) => (
+                        <button
+                          key={index}
+                          onClick={() => {
+                            if (b.url) {
+                              window.open(b.url.startsWith("data:") ? `/api/trips/${trip.id}/brochure?index=${index}` : b.url, "_blank");
+                            }
+                          }}
+                          className={customClass || "bg-[#16A34A] hover:bg-[#16A34A]/90 text-white font-bold text-xs px-4 py-2.5 rounded-xl transition-all shadow-sm cursor-pointer inline-flex items-center gap-1.5 border-0"}
+                        >
+                          <FileText className="w-3.5 h-3.5" />
+                          <span>{b.name || `Brochure ${index + 1}`}</span>
+                        </button>
+                      ));
+                    } catch (e) {
+                      console.error(e);
+                    }
+                  }
+                  return (
+                    <button
+                      onClick={() => window.open(brochureUrl.startsWith("data:") ? `/api/trips/${trip.id}/brochure` : brochureUrl, "_blank")}
+                      className={customClass || "bg-[#16A34A] hover:bg-[#16A34A]/90 text-white font-bold text-xs px-5 py-2.5 rounded-xl transition-all shadow-sm border-0 cursor-pointer"}
+                    >
+                      View Itinerary &rarr;
+                    </button>
+                  );
+                };
+
+                const currentStatusIdx = getStatusIndex(lead.status, lead.assigned_to);
 
                 // Generate timeline log notes
                 const formatLogTime = (dateStr: string, minutesOffset = 0) => {
@@ -3199,7 +3240,7 @@ const firstName = lead.name ? lead.name.split(" ")[0] : "Traveler";
                             <svg className="w-5 h-5 stroke-[2.5px]" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                               <path strokeLinecap="round" strokeLinejoin="round" d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" />
                             </svg>
-                          ) : currentStatusIdx === 3 ? (
+                          ) : currentStatusIdx === 2 ? (
                             <svg className="w-5 h-5 fill-emerald-500 text-white stroke-[2.5px]" viewBox="0 0 24 24">
                               <path d="M12 21.35l-1.45-1.32C5.4 15.36 2 12.28 2 8.5 2 5.42 4.42 3 7.5 3c1.74 0 3.41.81 4.5 2.09C13.09 3.81 14.76 3 16.5 3 19.58 3 22 5.42 22 8.5c0 3.78-3.4 6.86-8.55 11.54L12 21.35z" />
                             </svg>
@@ -3213,15 +3254,15 @@ const firstName = lead.name ? lead.name.split(" ")[0] : "Traveler";
                           <h4 className="font-display font-extrabold text-sm text-nomichi-ink">
                             {currentStatusIdx === 0 && "Thank you! Your enquiry has been submitted."}
                             {currentStatusIdx === 1 && "Great news! Your Trip Expert has been assigned."}
-                            {currentStatusIdx === 2 && "Your personalised itinerary is ready!"}
-                            {currentStatusIdx === 3 && "Vibe Check Completed!"}
+                            {currentStatusIdx === 2 && "Vibe Check Completed!"}
+                            {currentStatusIdx === 3 && "Your personalised itinerary is ready!"}
                             {currentStatusIdx === 4 && "Congratulations! Your booking is confirmed."}
                           </h4>
                           <p className="text-xs text-nomichi-ink/50 leading-relaxed font-semibold">
                             {currentStatusIdx === 0 && "We've received your enquiry and are reviewing your travel preferences. Our team will get back to you within 24 hours."}
                             {currentStatusIdx === 1 && `${assignedExpert?.full_name || 'Your Trip Expert'} will be your dedicated travel expert and will work with you to craft the perfect journey.`}
-                            {currentStatusIdx === 2 && "We've crafted a memorable experience just for you. Please review the itinerary and let us know your thoughts."}
-                            {currentStatusIdx === 3 && "Thanks for the great conversation! We've aligned on your preferences and finalized the perfect experience for you."}
+                            {currentStatusIdx === 2 && "Thanks for the great conversation! We've aligned on your preferences and finalized the perfect experience for you."}
+                            {currentStatusIdx === 3 && "We've crafted a memorable experience just for you. Please review the itinerary and let us know your thoughts."}
                             {currentStatusIdx === 4 && "Your adventure is all set! We can't wait to host you on an unforgettable journey."}
                           </p>
                         </div>
@@ -3239,25 +3280,16 @@ const firstName = lead.name ? lead.name.split(" ")[0] : "Traveler";
                       )}
                       {currentStatusIdx === 2 && (
                         <button 
-                          onClick={() => {
-                            if (trip.brochure_url) {
-                              window.open(trip.brochure_url, "_blank");
-                            } else {
-                              alert("Brochure URL not found.");
-                            }
-                          }}
-                          className="bg-[#16A34A] hover:bg-[#16A34A]/90 text-white font-bold text-xs px-5 py-2.5 rounded-xl transition-all shadow-sm shrink-0 whitespace-nowrap active:scale-[0.97] border-0 cursor-pointer"
-                        >
-                          View Itinerary &rarr;
-                        </button>
-                      )}
-                      {currentStatusIdx === 3 && (
-                        <button 
                           onClick={() => alert("Your vibe check notes show travel fit matched 5/5.")}
                           className="bg-transparent hover:bg-[#FF5B26]/5 border border-[#FF5B26]/30 text-[#FF5B26] font-bold text-xs px-4 py-2.5 rounded-xl transition-all shadow-sm shrink-0 whitespace-nowrap active:scale-[0.97] bg-white cursor-pointer"
                         >
                           View Call Summary &rarr;
                         </button>
+                      )}
+                      {currentStatusIdx === 3 && (
+                        <div className="flex flex-wrap gap-2 shrink-0">
+                          {renderBrochureButtons(trip.brochure_url)}
+                        </div>
                       )}
                     </div>
 
@@ -3416,57 +3448,8 @@ const firstName = lead.name ? lead.name.split(" ")[0] : "Traveler";
                           </div>
                         )}
 
-                        {/* Stage 3: Itinerary & Proposal Card */}
-                        {currentStatusIdx === 2 && (
-                          <div className="bg-white border border-[#e7e1d5]/50 rounded-[24px] p-6 shadow-sm space-y-5 text-left animate-in slide-in-from-bottom duration-250">
-                            <div className="flex justify-between items-center border-b border-[#e7e1d5]/30 pb-3">
-                              <h3 className="text-sm font-bold text-nomichi-ink">Itinerary & Proposal</h3>
-                              <span className="px-2.5 py-0.5 bg-emerald-50 border border-emerald-200 text-emerald-700 text-[10px] font-black uppercase rounded-full">
-                                Shared on {formatDate(new Date(new Date(lead.created_at).getTime() + 24 * 60 * 60 * 1000).toISOString())}
-                              </span>
-                            </div>
-
-                            <div className="flex flex-col sm:flex-row gap-6 items-center justify-between bg-[#FAF8F4]/40 border border-[#e7e1d5]/35 p-5 rounded-2xl">
-                              <div className="space-y-2 max-w-md">
-                                <p className="text-xs text-nomichi-ink/75 leading-relaxed font-semibold">
-                                  A customised itinerary with a day-by-day plan, experiences, accommodations, and pricing details has been crafted for you.
-                                </p>
-                                <div className="flex flex-wrap gap-2 pt-2">
-                                  <button 
-                                    onClick={() => {
-                                      if (trip.brochure_url) {
-                                        window.open(trip.brochure_url, "_blank");
-                                      } else {
-                                        alert("Brochure PDF is being compiled by Priya Sharma.");
-                                      }
-                                    }}
-                                    className="bg-[#16A34A] hover:bg-[#16A34A]/90 text-white font-extrabold text-xs px-4 py-2.5 rounded-xl border-0 cursor-pointer shadow-sm"
-                                  >
-                                    View Itinerary
-                                  </button>
-                                  <button 
-                                    onClick={() => alert("Downloading PDF itinerary...")}
-                                    className="bg-white border border-zinc-200 text-nomichi-ink/70 font-extrabold text-xs px-4 py-2.5 rounded-xl cursor-pointer shadow-xs hover:bg-zinc-50"
-                                  >
-                                    Download PDF
-                                  </button>
-                                  <button 
-                                    onClick={() => navigateToView("messages")}
-                                    className="bg-transparent hover:bg-zinc-100 text-nomichi-ink/60 font-extrabold text-xs px-4 py-2.5 rounded-xl border-0 cursor-pointer"
-                                  >
-                                    Ask a Question
-                                  </button>
-                                </div>
-                              </div>
-                              <div className="w-20 h-20 rounded-2xl bg-[#FFEFEA] flex items-center justify-center text-[#FF5B26] shrink-0 border border-[#FF5B26]/10">
-                                <FileText className="w-10 h-10 stroke-[1.5px]" />
-                              </div>
-                            </div>
-                          </div>
-                        )}
-
                         {/* Stage 4: Vibe Check Summary Card */}
-                        {currentStatusIdx === 3 && (
+                        {currentStatusIdx === 2 && (
                           <div className="bg-white border border-[#e7e1d5]/50 rounded-[24px] p-6 shadow-sm space-y-5 text-left animate-in slide-in-from-bottom duration-250">
                             <div className="flex justify-between items-center border-b border-[#e7e1d5]/30 pb-3">
                               <h3 className="text-sm font-bold text-nomichi-ink">Vibe Check Summary</h3>
@@ -3500,29 +3483,43 @@ const firstName = lead.name ? lead.name.split(" ")[0] : "Traveler";
 
                             <div className="flex flex-wrap gap-2 pt-3 border-t border-zinc-100 justify-end">
                               <button 
-                                onClick={() => {
-                                  if (trip.brochure_url) {
-                                    window.open(trip.brochure_url, "_blank");
-                                  } else {
-                                    alert("Opening itinerary...");
-                                  }
-                                }}
-                                className="bg-[#16A34A] hover:bg-[#16A34A]/90 text-white font-extrabold text-xs px-4 py-2.5 rounded-xl border-0 cursor-pointer shadow-sm"
-                              >
-                                View Final Itinerary
-                              </button>
-                              <button 
-                                onClick={() => alert("Downloading PDF...")}
-                                className="bg-white border border-zinc-200 text-nomichi-ink/75 font-extrabold text-xs px-4 py-2.5 rounded-xl cursor-pointer hover:bg-zinc-50"
-                              >
-                                Download PDF
-                              </button>
-                              <button 
                                 onClick={() => navigateToView("messages")}
-                                className="bg-transparent hover:bg-zinc-100 text-nomichi-ink/60 font-extrabold text-xs px-4 py-2.5 rounded-xl border-0 cursor-pointer"
+                                className="bg-[#FF5B26] hover:bg-[#e04b1c] text-white font-extrabold text-xs px-4 py-2.5 rounded-xl border-0 cursor-pointer shadow-sm"
                               >
-                                Request Changes
+                                Message Expert
                               </button>
+                            </div>
+                          </div>
+                        )}
+
+                        {/* Stage 3: Itinerary & Proposal Card */}
+                        {currentStatusIdx === 3 && (
+                          <div className="bg-white border border-[#e7e1d5]/50 rounded-[24px] p-6 shadow-sm space-y-5 text-left animate-in slide-in-from-bottom duration-250">
+                            <div className="flex justify-between items-center border-b border-[#e7e1d5]/30 pb-3">
+                              <h3 className="text-sm font-bold text-nomichi-ink">Itinerary & Proposal</h3>
+                              <span className="px-2.5 py-0.5 bg-emerald-50 border border-emerald-200 text-emerald-700 text-[10px] font-black uppercase rounded-full">
+                                Shared on {formatDate(new Date(new Date(lead.created_at).getTime() + 24 * 60 * 60 * 1000).toISOString())}
+                              </span>
+                            </div>
+
+                            <div className="flex flex-col sm:flex-row gap-6 items-center justify-between bg-[#FAF8F4]/40 border border-[#e7e1d5]/35 p-5 rounded-2xl">
+                              <div className="space-y-2 max-w-md">
+                                <p className="text-xs text-nomichi-ink/75 leading-relaxed font-semibold">
+                                  A customised itinerary with a day-by-day plan, experiences, accommodations, and pricing details has been crafted for you.
+                                </p>
+                                <div className="flex flex-wrap gap-2 pt-2">
+                                  {renderBrochureButtons(trip.brochure_url)}
+                                  <button 
+                                    onClick={() => navigateToView("messages")}
+                                    className="bg-transparent hover:bg-zinc-100 text-nomichi-ink/60 font-extrabold text-xs px-4 py-2.5 rounded-xl border-0 cursor-pointer shadow-none"
+                                  >
+                                    Ask a Question
+                                  </button>
+                                </div>
+                              </div>
+                              <div className="w-20 h-20 rounded-2xl bg-[#FFEFEA] flex items-center justify-center text-[#FF5B26] shrink-0 border border-[#FF5B26]/10">
+                                <FileText className="w-10 h-10 stroke-[1.5px]" />
+                              </div>
                             </div>
                           </div>
                         )}
@@ -3799,8 +3796,8 @@ const firstName = lead.name ? lead.name.split(" ")[0] : "Traveler";
                                 <div className="flex gap-3 items-start text-xs leading-relaxed font-semibold">
                                   <div className="w-5 h-5 rounded bg-zinc-100 text-zinc-400 font-bold text-[10px] flex items-center justify-center shrink-0">3</div>
                                   <div>
-                                    <strong className="block text-nomichi-ink/45">Itinerary is shared</strong>
-                                    <span className="text-nomichi-ink/30 text-[11px] block mt-0.5">You receive a customised itinerary.</span>
+                                    <strong className="block text-nomichi-ink/45">Vibe Check briefing call</strong>
+                                    <span className="text-nomichi-ink/30 text-[11px] block mt-0.5">We'll connect for a quick briefing call.</span>
                                   </div>
                                 </div>
                               </>
@@ -3809,12 +3806,12 @@ const firstName = lead.name ? lead.name.split(" ")[0] : "Traveler";
                             {currentStatusIdx === 1 && (
                               <>
                                 <div className="flex gap-3 items-start text-xs leading-relaxed font-semibold">
-                                  <div className="w-5.5 h-5.5 rounded-full bg-emerald-50 text-emerald-600 border border-emerald-100 flex items-center justify-center shrink-0">
-                                    <Check className="w-3.5 h-3.5 stroke-[2.5px]" />
+                                  <div className="w-5.5 h-5.5 rounded-full bg-[#FFF1EA] text-[#FF5B26] border border-[#FFD3C4] flex items-center justify-center shrink-0">
+                                    <span className="w-1.5 h-1.5 rounded-full bg-[#FF5B26]" />
                                   </div>
                                   <div>
-                                    <strong className="block text-nomichi-ink">Itinerary Shared</strong>
-                                    <span className="text-nomichi-ink/50 text-[11px] block mt-0.5">Your personalized itinerary will be ready soon.</span>
+                                    <strong className="block text-nomichi-ink">Vibe Check briefing call</strong>
+                                    <span className="text-nomichi-ink/50 text-[11px] block mt-0.5">We'll connect for a quick briefing call.</span>
                                   </div>
                                 </div>
                                 <div className="flex gap-3 items-start text-xs leading-relaxed font-semibold">
@@ -3822,8 +3819,8 @@ const firstName = lead.name ? lead.name.split(" ")[0] : "Traveler";
                                     <span className="w-1.5 h-1.5 rounded-full bg-zinc-400" />
                                   </div>
                                   <div>
-                                    <strong className="block text-nomichi-ink/45">Vibe Check</strong>
-                                    <span className="text-nomichi-ink/30 text-[11px] block mt-0.5">We'll connect to understand your feedback.</span>
+                                    <strong className="block text-nomichi-ink/45">Itinerary shared</strong>
+                                    <span className="text-nomichi-ink/30 text-[11px] block mt-0.5">Your personalized itinerary will be ready soon.</span>
                                   </div>
                                 </div>
                                 <div className="flex gap-3 items-start text-xs leading-relaxed font-semibold">
@@ -3845,17 +3842,17 @@ const firstName = lead.name ? lead.name.split(" ")[0] : "Traveler";
                                     <Check className="w-3.5 h-3.5 stroke-[2.5px]" />
                                   </div>
                                   <div>
-                                    <strong className="block text-nomichi-ink">Vibe Check</strong>
-                                    <span className="text-nomichi-ink/50 text-[11px] block mt-0.5">We'll connect to understand your feedback.</span>
+                                    <strong className="block text-nomichi-ink">Vibe Check completed</strong>
+                                    <span className="text-nomichi-ink/50 text-[11px] block mt-0.5">Informal briefing and fit review completed.</span>
                                   </div>
                                 </div>
                                 <div className="flex gap-3 items-start text-xs leading-relaxed font-semibold">
-                                  <div className="w-5.5 h-5.5 rounded-full bg-zinc-100 text-zinc-400 flex items-center justify-center shrink-0">
-                                    <span className="w-1.5 h-1.5 rounded-full bg-zinc-400" />
+                                  <div className="w-5.5 h-5.5 rounded-full bg-[#FFF1EA] text-[#FF5B26] border border-[#FFD3C4] flex items-center justify-center shrink-0">
+                                    <span className="w-1.5 h-1.5 rounded-full bg-[#FF5B26]" />
                                   </div>
                                   <div>
-                                    <strong className="block text-nomichi-ink/45">Finalise & Confirm</strong>
-                                    <span className="text-nomichi-ink/30 text-[11px] block mt-0.5">We'll make final adjustments if needed.</span>
+                                    <strong className="block text-nomichi-ink">Itinerary Shared</strong>
+                                    <span className="text-nomichi-ink/50 text-[11px] block mt-0.5">We'll share the customized proposal & itinerary brochure.</span>
                                   </div>
                                 </div>
                                 <div className="flex gap-3 items-start text-xs leading-relaxed font-semibold">
@@ -3864,7 +3861,7 @@ const firstName = lead.name ? lead.name.split(" ")[0] : "Traveler";
                                   </div>
                                   <div>
                                     <strong className="block text-nomichi-ink/45">Booking Confirmation</strong>
-                                    <span className="text-nomichi-ink/30 text-[11px] block mt-0.5">Once confirmed, your adventure is locked in!</span>
+                                    <span className="text-nomichi-ink/30 text-[11px] block mt-0.5">Confirm slots and secure with a deposit.</span>
                                   </div>
                                 </div>
                               </>
@@ -3877,17 +3874,17 @@ const firstName = lead.name ? lead.name.split(" ")[0] : "Traveler";
                                     <Check className="w-3.5 h-3.5 stroke-[2.5px]" />
                                   </div>
                                   <div>
-                                    <strong className="block text-nomichi-ink">Finalise & Confirm</strong>
-                                    <span className="text-nomichi-ink/50 text-[11px] block mt-0.5">We'll make final adjustments if needed.</span>
+                                    <strong className="block text-nomichi-ink">Itinerary Shared</strong>
+                                    <span className="text-nomichi-ink/50 text-[11px] block mt-0.5">Your customized trip proposal is shared.</span>
                                   </div>
                                 </div>
                                 <div className="flex gap-3 items-start text-xs leading-relaxed font-semibold">
-                                  <div className="w-5.5 h-5.5 rounded-full bg-emerald-50 text-emerald-600 border border-emerald-100 flex items-center justify-center shrink-0">
-                                    <Check className="w-3.5 h-3.5 stroke-[2.5px]" />
+                                  <div className="w-5.5 h-5.5 rounded-full bg-[#FFF1EA] text-[#FF5B26] border border-[#FFD3C4] flex items-center justify-center shrink-0">
+                                    <span className="w-1.5 h-1.5 rounded-full bg-[#FF5B26]" />
                                   </div>
                                   <div>
                                     <strong className="block text-nomichi-ink">Booking Confirmation</strong>
-                                    <span className="text-nomichi-ink/50 text-[11px] block mt-0.5">Once confirmed, your adventure is locked in!</span>
+                                    <span className="text-nomichi-ink/50 text-[11px] block mt-0.5">Confirm slots and secure with a deposit.</span>
                                   </div>
                                 </div>
                                 <div className="flex gap-3 items-start text-xs leading-relaxed font-semibold">
@@ -3896,7 +3893,7 @@ const firstName = lead.name ? lead.name.split(" ")[0] : "Traveler";
                                   </div>
                                   <div>
                                     <strong className="block text-nomichi-ink/45">Get Ready!</strong>
-                                    <span className="text-nomichi-ink/30 text-[11px] block mt-0.5">We'll share all trip details and documents.</span>
+                                    <span className="text-nomichi-ink/30 text-[11px] block mt-0.5">We'll share all trip preparation details.</span>
                                   </div>
                                 </div>
                               </>

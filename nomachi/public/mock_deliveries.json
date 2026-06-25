@@ -1,5 +1,484 @@
 [
   {
+    "id": "wa_tsfnh4pap",
+    "timestamp": "2026-06-24T15:53:09.538Z",
+    "recipient": "+916262307665",
+    "channel": "WhatsApp",
+    "type": "Booking Confirmed",
+    "title": "WhatsApp Message",
+    "body": "Booking Confirmed: Your deposit payment has been received! Your booking is being processed.",
+    "priority": "High",
+    "status": "Failed",
+    "details": {
+      "phone_id": "123456789012345",
+      "error": {
+        "message": "Invalid JSON for postcard",
+        "type": "OAuthException",
+        "code": 190,
+        "fbtrace_id": "A9gvpUb070j9kf_VZAps68b"
+      },
+      "live": true
+    }
+  },
+  {
+    "id": "email_ptzmakf2a",
+    "timestamp": "2026-06-24T15:53:09.252Z",
+    "recipient": "ayushsonwane65@gmail.com",
+    "channel": "Email",
+    "type": "Booking Confirmed",
+    "title": "Booking Confirmed",
+    "body": "Your deposit payment has been received! Your booking is being processed.",
+    "priority": "High",
+    "status": "Success",
+    "details": {
+      "smtp_server": "smtp.resend.com",
+      "port": 587,
+      "messageId": "<9bdc4d6c-f14b-233f-10a6-e6c820678f2a@edinsured.in>",
+      "live": true
+    }
+  },
+  {
+    "id": "email_2ovt50fnj",
+    "timestamp": "2026-06-24T15:40:38.973Z",
+    "recipient": "tejjhode@gmail.com",
+    "channel": "Email",
+    "type": "Vibe Check Completed",
+    "title": "Great News!",
+    "body": "Hi Tejswa Jhode,\n\nThank you for the wonderful conversation! Based on our Vibe Check, we believe you are a fantastic fit for \"Kerala Backwaters & Hills Escape\".\n\nWe will share your personalised itinerary and brochure shortly. Stay excited! 🎒",
+    "priority": "High",
+    "status": "Success",
+    "details": {
+      "smtp_server": "smtp.resend.com",
+      "port": 587,
+      "messageId": "<8adf3017-d27e-2b17-66f4-d8f931e82683@edinsured.in>",
+      "live": true
+    }
+  },
+  {
+    "id": "email_qc33vttwg",
+    "timestamp": "2026-06-24T15:40:17.355Z",
+    "recipient": "tejjhode@gmail.com",
+    "channel": "Email",
+    "type": "Scheduled Call",
+    "title": "Vibe Check Scheduled",
+    "body": "Hi Tejswa Jhode,\n\nYour Vibe Check call for \"Kerala Backwaters & Hills Escape\" has been scheduled!\n\nDate & Time: 19 Jun 2026 at 12:59 AM\nMeeting Type: Phone Call\n\nWe will share your personalised trip brochure and itinerary shortly before our call. Looking forward to speaking with you!",
+    "priority": "High",
+    "status": "Success",
+    "details": {
+      "smtp_server": "smtp.resend.com",
+      "port": 587,
+      "messageId": "<5250c046-664b-1ac9-88a4-4be04691d8a5@edinsured.in>",
+      "live": true
+    }
+  },
+  {
+    "id": "email_bd8cyi19i",
+    "timestamp": "2026-06-24T15:34:15.285Z",
+    "recipient": "22et10jh371@mitsgwl.ac.in",
+    "channel": "Email",
+    "type": "Vibe Check Completed",
+    "title": "Great News!",
+    "body": "Hi Io221072 Jhode Tejaswa Ghanshyam,\n\nThank you for the wonderful conversation! Based on our Vibe Check, we believe you are a fantastic fit for \"Spiti Valley Adventure Expedition\".\n\nWe will share your personalised itinerary and brochure shortly. Stay excited! 🎒",
+    "priority": "High",
+    "status": "Success",
+    "details": {
+      "smtp_server": "smtp.resend.com",
+      "port": 587,
+      "messageId": "<c5134c32-43e5-fcce-0f02-b6ca4a5ac6fb@edinsured.in>",
+      "live": true
+    }
+  },
+  {
+    "id": "email_wxz8e1w93",
+    "timestamp": "2026-06-24T15:32:38.809Z",
+    "recipient": "22et10jh371@mitsgwl.ac.in",
+    "channel": "Email",
+    "type": "Scheduled Call",
+    "title": "Vibe Check Scheduled",
+    "body": "Hi Io221072 Jhode Tejaswa Ghanshyam,\n\nYour Vibe Check call for \"Spiti Valley Adventure Expedition\" has been scheduled!\n\nDate & Time: 26 Jun 2026 at 12:59 PM\nMeeting Type: Video Call\nMeeting Link: https://meet.google.com/wfu-ikhu-fkp\n\nWe will share your personalised trip brochure and itinerary shortly before our call. Looking forward to speaking with you!",
+    "priority": "High",
+    "status": "Success",
+    "details": {
+      "smtp_server": "smtp.resend.com",
+      "port": 587,
+      "messageId": "<9025178c-21fa-ee9b-824c-fbdb478fa656@edinsured.in>",
+      "live": true
+    }
+  },
+  {
+    "id": "wa_yas84e0rn",
+    "timestamp": "2026-06-24T15:07:35.630Z",
+    "recipient": "+917719915707",
+    "channel": "WhatsApp",
+    "type": "Booking Confirmed",
+    "title": "WhatsApp Message",
+    "body": "Booking Confirmed: Congratulations, Io221072 Jhode Tejaswa Ghanshyam! Your booking for \"KANHA TIGER SAFARI & WILDERNESS\" is officially confirmed. Get ready for an incredible adventure! 🎉",
+    "priority": "High",
+    "status": "Failed",
+    "details": {
+      "phone_id": "123456789012345",
+      "error": {
+        "message": "Invalid JSON for postcard",
+        "type": "OAuthException",
+        "code": 190,
+        "fbtrace_id": "An0y6pCHw-ldWLMEqb7CfiX"
+      },
+      "live": true
+    }
+  },
+  {
+    "id": "email_c4adthk8r",
+    "timestamp": "2026-06-24T15:07:35.357Z",
+    "recipient": "22et10jh371@mitsgwl.ac.in",
+    "channel": "Email",
+    "type": "Booking Confirmed",
+    "title": "Booking Confirmed",
+    "body": "Congratulations, Io221072 Jhode Tejaswa Ghanshyam! Your booking for \"KANHA TIGER SAFARI & WILDERNESS\" is officially confirmed. Get ready for an incredible adventure! 🎉",
+    "priority": "High",
+    "status": "Success",
+    "details": {
+      "smtp_server": "smtp.resend.com",
+      "port": 587,
+      "messageId": "<092cda7f-0642-92c6-88cd-f68990483468@edinsured.in>",
+      "live": true
+    }
+  },
+  {
+    "id": "wa_wzok4gxv0",
+    "timestamp": "2026-06-24T14:44:10.892Z",
+    "recipient": "+917719915707",
+    "channel": "WhatsApp",
+    "type": "Booking Confirmed",
+    "title": "WhatsApp Message",
+    "body": "Booking Confirmed: Your booking has been confirmed.",
+    "priority": "High",
+    "status": "Failed",
+    "details": {
+      "phone_id": "123456789012345",
+      "error": {
+        "message": "Invalid JSON for postcard",
+        "type": "OAuthException",
+        "code": 190,
+        "fbtrace_id": "ATeWMXqVVSR6ZntAQAWn3vr"
+      },
+      "live": true
+    }
+  },
+  {
+    "id": "email_1jqqdghh0",
+    "timestamp": "2026-06-24T14:44:10.618Z",
+    "recipient": "22et10jh371@mitsgwl.ac.in",
+    "channel": "Email",
+    "type": "Booking Confirmed",
+    "title": "Booking Confirmed",
+    "body": "Your booking has been confirmed.",
+    "priority": "High",
+    "status": "Success",
+    "details": {
+      "smtp_server": "smtp.resend.com",
+      "port": 587,
+      "messageId": "<c6325455-ce50-f21f-c213-2773e9da766e@edinsured.in>",
+      "live": true
+    }
+  },
+  {
+    "id": "email_usx69uhcr",
+    "timestamp": "2026-06-24T14:42:52.795Z",
+    "recipient": "22et10jh371@mitsgwl.ac.in",
+    "channel": "Email",
+    "type": "Scheduled Call",
+    "title": "Call Scheduled - Nomichi Travels",
+    "body": "Hi Io221072 Jhode Tejaswa Ghanshyam,\n\nYou have a scheduled call regarding the trip \"KANHA TIGER SAFARI & WILDERNESS\" with Nomichi Manager on 24 Jun 2026 at 08:12 PM.\n\nLooking forward to speaking with you!",
+    "priority": "High",
+    "status": "Success",
+    "details": {
+      "smtp_server": "smtp.resend.com",
+      "port": 587,
+      "messageId": "<9a27ef2b-eeda-66a0-960a-2722dbce58f1@edinsured.in>",
+      "live": true
+    }
+  },
+  {
+    "id": "wa_qft16v7h4",
+    "timestamp": "2026-06-24T14:22:58.024Z",
+    "recipient": "+917719915707",
+    "channel": "WhatsApp",
+    "type": "Brochure Shared",
+    "title": "WhatsApp Message",
+    "body": "Brochure Shared: We've prepared your trip brochure and itinerary details.",
+    "priority": "High",
+    "status": "Failed",
+    "details": {
+      "phone_id": "123456789012345",
+      "error": {
+        "message": "Invalid JSON for postcard",
+        "type": "OAuthException",
+        "code": 190,
+        "fbtrace_id": "AF4Cegr1ysfoEgKfYaz38pG"
+      },
+      "live": true
+    }
+  },
+  {
+    "id": "email_2n4eix8tq",
+    "timestamp": "2026-06-24T14:22:57.372Z",
+    "recipient": "22et10jh371@mitsgwl.ac.in",
+    "channel": "Email",
+    "type": "Brochure Shared",
+    "title": "Brochure Shared",
+    "body": "We've prepared your trip brochure and itinerary details.",
+    "priority": "High",
+    "status": "Success",
+    "details": {
+      "smtp_server": "smtp.resend.com",
+      "port": 587,
+      "messageId": "<b20090fc-6ac1-04fe-08ea-45e820cba8f8@edinsured.in>",
+      "live": true
+    }
+  },
+  {
+    "id": "email_bnxxwxfre",
+    "timestamp": "2026-06-24T14:08:02.838Z",
+    "recipient": "22et10jh371@mitsgwl.ac.in",
+    "channel": "Email",
+    "type": "Manager Assigned",
+    "title": "Manager Assigned",
+    "body": "Nomichi Manager has been assigned to assist you.",
+    "priority": "High",
+    "status": "Success",
+    "details": {
+      "smtp_server": "smtp.resend.com",
+      "port": 587,
+      "messageId": "<ce96cb65-4922-9ba6-e9d7-03d9262eaae5@edinsured.in>",
+      "live": true
+    }
+  },
+  {
+    "id": "email_9y0aj96jd",
+    "timestamp": "2026-06-24T14:08:02.593Z",
+    "recipient": "tejhode@gmail.com",
+    "channel": "Email",
+    "type": "Lead Assigned",
+    "title": "Lead Assigned",
+    "body": "New lead \"Io221072 Jhode Tejaswa Ghanshyam\" has been assigned to you.",
+    "priority": "High",
+    "status": "Success",
+    "details": {
+      "smtp_server": "smtp.resend.com",
+      "port": 587,
+      "messageId": "<a906b7e4-72b1-3636-7841-9341252c1b90@edinsured.in>",
+      "live": true
+    }
+  },
+  {
+    "id": "email_nmpcw1jq0",
+    "timestamp": "2026-06-24T14:05:58.519Z",
+    "recipient": "tejhode@gmail.com",
+    "channel": "Email",
+    "type": "Lead Assigned",
+    "title": "Lead Assigned",
+    "body": "New lead \"Tejaswa Jhode\" has been assigned to you.",
+    "priority": "High",
+    "status": "Success",
+    "details": {
+      "smtp_server": "smtp.resend.com",
+      "port": 587,
+      "messageId": "<88dc2817-7b66-333a-ecd8-c6433f79f768@edinsured.in>",
+      "live": true
+    }
+  },
+  {
+    "id": "email_hun4584wv",
+    "timestamp": "2026-06-24T14:05:58.042Z",
+    "recipient": "tejjhode@gmail.com",
+    "channel": "Email",
+    "type": "Manager Assigned",
+    "title": "Manager Assigned",
+    "body": "Nomichi Manager has been assigned to assist you.",
+    "priority": "High",
+    "status": "Success",
+    "details": {
+      "smtp_server": "smtp.resend.com",
+      "port": 587,
+      "messageId": "<57a73bd8-e0c3-8b8d-dda2-b3f14fc83dcb@edinsured.in>",
+      "live": true
+    }
+  },
+  {
+    "id": "email_eau9pskqy",
+    "timestamp": "2026-06-24T14:04:42.833Z",
+    "recipient": "jhodetejswa2004@gmail.com",
+    "channel": "Email",
+    "type": "New Enquiry",
+    "title": "🚨 New Enquiry Received – KANHA TIGER SAFARI & WILDERNESS",
+    "body": "Io221072 Jhode Tejaswa Ghanshyam submitted an enquiry for \"KANHA TIGER SAFARI & WILDERNESS\".",
+    "priority": "Medium",
+    "status": "Success",
+    "details": {
+      "smtp_server": "smtp.resend.com",
+      "port": 587,
+      "messageId": "<132f48f0-187f-1d67-e335-1acdf7895503@edinsured.in>",
+      "live": true
+    }
+  },
+  {
+    "id": "email_t80g2vwkn",
+    "timestamp": "2026-06-24T14:04:37.139Z",
+    "recipient": "22et10jh371@mitsgwl.ac.in",
+    "channel": "Email",
+    "type": "Enquiry Submitted",
+    "title": "We've received your enquiry 🌍",
+    "body": "Your enquiry has been received.",
+    "priority": "Medium",
+    "status": "Success",
+    "details": {
+      "smtp_server": "smtp.resend.com",
+      "port": 587,
+      "messageId": "<b13d9d36-16aa-9498-729f-dc899f0a004d@edinsured.in>",
+      "live": true
+    }
+  },
+  {
+    "id": "email_drvs8t9nv",
+    "timestamp": "2026-06-24T14:04:37.093Z",
+    "recipient": "tech@thenomichi.com",
+    "channel": "Email",
+    "type": "New Enquiry",
+    "title": "🚨 New Enquiry Received – KANHA TIGER SAFARI & WILDERNESS",
+    "body": "Io221072 Jhode Tejaswa Ghanshyam submitted an enquiry for \"KANHA TIGER SAFARI & WILDERNESS\".",
+    "priority": "Medium",
+    "status": "Success",
+    "details": {
+      "smtp_server": "smtp.resend.com",
+      "port": 587,
+      "messageId": "<104aebb6-04b0-22d9-e85f-7a018fa220ba@edinsured.in>",
+      "live": true
+    }
+  },
+  {
+    "id": "email_n9uscqj2v",
+    "timestamp": "2026-06-24T13:49:01.135Z",
+    "recipient": "22et10jh371@mitsgwl.ac.in",
+    "channel": "Email",
+    "type": "Manager Assigned",
+    "title": "Manager Assigned",
+    "body": "Nomichi Manager has been assigned to assist you.",
+    "priority": "High",
+    "status": "Success",
+    "details": {
+      "smtp_server": "smtp.resend.com",
+      "port": 587,
+      "messageId": "<64528d8e-2a70-9e8c-6164-b02fff110d3e@edinsured.in>",
+      "live": true
+    }
+  },
+  {
+    "id": "email_sh1usig1w",
+    "timestamp": "2026-06-24T13:49:00.945Z",
+    "recipient": "tejhode@gmail.com",
+    "channel": "Email",
+    "type": "Lead Assigned",
+    "title": "Lead Assigned",
+    "body": "New lead \"Tejaswa \" has been assigned to you.",
+    "priority": "High",
+    "status": "Success",
+    "details": {
+      "smtp_server": "smtp.resend.com",
+      "port": 587,
+      "messageId": "<f6287361-b3ba-d303-abbc-251b42fdd212@edinsured.in>",
+      "live": true
+    }
+  },
+  {
+    "id": "email_pzm6qxzva",
+    "timestamp": "2026-06-24T08:02:44.354Z",
+    "recipient": "tejjhode@gmail.com",
+    "channel": "Email",
+    "type": "Scheduled Call",
+    "title": "Call Scheduled - Nomichi Travels",
+    "body": "Hi Tejaswa Jhode,\n\nYou have a scheduled call regarding the trip \"Spiti Valley Adventure Expedition\" with Nomichi Manager on 24 Jun 2026 at 01:32 PM.\n\nLooking forward to speaking with you!",
+    "priority": "High",
+    "status": "Success",
+    "details": {
+      "smtp_server": "smtp.resend.com",
+      "port": 587,
+      "messageId": "<7dcb9c3b-09ad-fcd0-5f58-e855a0f6b770@edinsured.in>",
+      "live": true
+    }
+  },
+  {
+    "id": "wa_jvfce0456",
+    "timestamp": "2026-06-24T07:59:19.103Z",
+    "recipient": "+918602053483",
+    "channel": "WhatsApp",
+    "type": "Brochure Shared",
+    "title": "WhatsApp Message",
+    "body": "Brochure Shared: I'm excited to share the curated brochure for your upcoming adventure. It contains the detailed day-by-day itinerary, stay details, package inclusions, and cost breakdown.\n\nPlease let me know if you would like to adjust the itinerary or have any questions. Looking forward to our vibe check call!",
+    "priority": "High",
+    "status": "Failed",
+    "details": {
+      "phone_id": "123456789012345",
+      "error": {
+        "message": "Invalid JSON for postcard",
+        "type": "OAuthException",
+        "code": 190,
+        "fbtrace_id": "A_q2WW41B7goVjtn3bmy2UK"
+      },
+      "live": true
+    }
+  },
+  {
+    "id": "email_jhpe9mwk3",
+    "timestamp": "2026-06-24T07:59:18.835Z",
+    "recipient": "tejjhode@gmail.com",
+    "channel": "Email",
+    "type": "Brochure Shared",
+    "title": "Brochure Shared",
+    "body": "I'm excited to share the curated brochure for your upcoming adventure. It contains the detailed day-by-day itinerary, stay details, package inclusions, and cost breakdown.\n\nPlease let me know if you would like to adjust the itinerary or have any questions. Looking forward to our vibe check call!",
+    "priority": "High",
+    "status": "Success",
+    "details": {
+      "smtp_server": "smtp.resend.com",
+      "port": 587,
+      "messageId": "<78fb7d49-c9ca-e2a2-2be6-e1ba6cabac86@edinsured.in>",
+      "live": true
+    }
+  },
+  {
+    "id": "email_0wcc2mstk",
+    "timestamp": "2026-06-24T07:52:27.142Z",
+    "recipient": "tejjhode@gmail.com",
+    "channel": "Email",
+    "type": "Manager Assigned",
+    "title": "Manager Assigned",
+    "body": "Nomichi Traveler has been assigned to assist you.",
+    "priority": "High",
+    "status": "Success",
+    "details": {
+      "smtp_server": "smtp.resend.com",
+      "port": 587,
+      "messageId": "<cd40bad3-0bee-812c-8f5c-ed805e36a5d8@edinsured.in>",
+      "live": true
+    }
+  },
+  {
+    "id": "email_c09ehuddy",
+    "timestamp": "2026-06-24T07:52:26.619Z",
+    "recipient": "tejhode@gmail.com",
+    "channel": "Email",
+    "type": "Lead Assigned",
+    "title": "Lead Assigned",
+    "body": "New lead \"Tejaswa Jhode\" has been assigned to you.",
+    "priority": "High",
+    "status": "Success",
+    "details": {
+      "smtp_server": "smtp.resend.com",
+      "port": 587,
+      "messageId": "<055b50fb-0f48-06d9-fe0e-74848e8de667@edinsured.in>",
+      "live": true
+    }
+  },
+  {
     "id": "email_kkv9e5vlg",
     "timestamp": "2026-06-24T07:02:55.148Z",
     "recipient": "tejhode@gmail.com",

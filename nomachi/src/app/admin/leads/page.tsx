@@ -132,12 +132,17 @@ export default function LeadsPage() {
   const handleDrawerAssignChange = async (profileId: string) => {
     if (!selectedLead || !currentUser) return;
     try {
-      await leadService.updateLead(selectedLead.id, { assigned_to: profileId || null });
+      const updatePayload: any = { assigned_to: profileId || null };
+
+      await leadService.updateLead(selectedLead.id, updatePayload);
       const assignedUser = users.find(u => u.id === profileId);
       const assigneeName = assignedUser ? assignedUser.full_name : "Unassigned";
       
       // Auto-log assignment in timeline
-      await leadService.addLeadNote(selectedLead.id, `Lead assigned to ${assigneeName}.`, currentUser.id);
+      const noteText = profileId
+        ? `Trip Expert assigned: ${assigneeName} is now handling this lead.`
+        : "Lead unassigned.";
+      await leadService.addLeadNote(selectedLead.id, noteText, currentUser.id);
 
       // Auto-generate tasks for the manager when assigned (not when unassigning)
       if (profileId) {
@@ -146,7 +151,7 @@ export default function LeadsPage() {
           await taskService.createTasksForLeadAssignment({
             leadId: selectedLead.id,
             leadName: selectedLead.name,
-            leadStatus: selectedLead.status,
+            leadStatus: selectedLead.status || "new",
             tripName,
             enquiryId: selectedLead.enquiry_id,
             assignedTo: profileId,
@@ -169,8 +174,8 @@ export default function LeadsPage() {
 
           await notificationService.notifyTraveler(
             selectedLead.email,
-            "Manager Assigned",
-            `${assigneeName} has been assigned to assist you.`,
+            "Trip Expert Assigned",
+            `${assigneeName} has been assigned as your Trip Expert and will be in touch shortly.`,
             "Manager Assigned",
             selectedLead.id,
             "High"

@@ -27,18 +27,21 @@ import {
   MessageSquare,
   AlertCircle,
   MoreVertical,
-  CalendarCheck
+  CalendarCheck,
+  Video,
+  Link2,
+  CheckSquare
 } from "lucide-react";
 
 const statusMeta: Record<string, { label: string; className: string }> = {
   new: { label: "New", className: "bg-[#FAF8F5] text-[#625E5A] border-[#e7e1d5]/60" },
   contacted: { label: "Contacted", className: "bg-[#EBF5FF] text-[#2563EB] border-[#D0E2FF]/40" },
-  qualified: { label: "Qualified", className: "bg-[#F3E8FF] text-[#7C3AED] border-[#E9D5FF]/40" },
+  negotiating: { label: "Vibe Check Done", className: "bg-[#F5F3FF] text-[#7C3AED] border-[#DDD6FE]/40" },
   "vibe check sent": { label: "Vibe Check Sent", className: "bg-[#FFF8E6] text-[#D97706] border-[#FDE68A]/40" },
-  negotiating: { label: "Vibe Check", className: "bg-[#FFF8E6] text-[#D97706] border-[#FDE68A]/40" },
-  converted: { label: "Confirmed", className: "bg-[#ECFDF5] text-[#10B981] border-[#A7F3D0]/40" },
+  qualified: { label: "Itinerary Shared", className: "bg-[#F0FDF4] text-[#16A34A] border-[#BBF7D0]/40" },
+  converted: { label: "Payment Received", className: "bg-[#ECFDF5] text-[#10B981] border-[#A7F3D0]/40" },
   confirmed: { label: "Confirmed", className: "bg-[#ECFDF5] text-[#10B981] border-[#A7F3D0]/40" },
-  lost: { label: "Lost", className: "bg-[#FEF2F2] text-[#EF4444] border-[#FEE2E2]/40" },
+  lost: { label: "Not a Fit", className: "bg-[#FEF2F2] text-[#EF4444] border-[#FEE2E2]/40" },
 };
 
 const formatDateTime = (value?: string | null) => {
@@ -65,17 +68,8 @@ const formatDate = (value?: string | null) => {
   });
 };
 
-const formatDateRange = (start?: string | null, end?: string | null) => {
-  if (!start && !end) return "Flexible dates";
-  const startLabel = start ? new Date(start).toLocaleDateString("en-IN", { day: "2-digit", month: "short", year: "numeric" }) : "";
-  const endLabel = end ? new Date(end).toLocaleDateString("en-IN", { day: "2-digit", month: "short", year: "numeric" }) : "";
-  return startLabel && endLabel ? `${startLabel} - ${endLabel}` : startLabel || endLabel;
-};
-
 interface ManagerLeadDetailPageProps {
-  params: {
-    id: string;
-  };
+  params: { id: string };
 }
 
 export default function ManagerLeadDetailPage({ params }: ManagerLeadDetailPageProps) {
@@ -86,40 +80,66 @@ export default function ManagerLeadDetailPage({ params }: ManagerLeadDetailPageP
   const [currentUser, setCurrentUser] = useState<any>(null);
   const [checkingAuth, setCheckingAuth] = useState(true);
   const [activeTab, setActiveTab] = useState("Overview");
-  
+
   // Tasks state
   const [tasks, setTasks] = useState<any[]>([]);
   const [loadingTasks, setLoadingTasks] = useState(false);
-  const [taskCreateOpen, setTaskCreateOpen] = useState(false);
-  const [rescheduleTask, setRescheduleTask] = useState<any>(null);
-  const [rescheduleDate, setRescheduleDate] = useState("");
-  
-  // Note Form state
+
+  // Note form
   const [newNoteText, setNewNoteText] = useState("");
   const [addingNote, setAddingNote] = useState(false);
-  
-  // Task Create Form state
-  const [taskTitle, setTaskTitle] = useState("");
-  const [taskDesc, setTaskDesc] = useState("");
-  const [taskType, setTaskType] = useState("follow-up");
-  const [taskPriority, setTaskPriority] = useState("Medium");
-  const [taskDueDate, setTaskDueDate] = useState("");
-  const [addingTask, setAddingTask] = useState(false);
-  const [rescheduling, setRescheduling] = useState(false);
 
-  // Brochure upload states
-  const [brochureFile, setBrochureFile] = useState<File | null>(null);
-  const [brochureMsg, setBrochureMsg] = useState(
-    `I'm excited to share the curated brochure for your upcoming adventure. It contains the detailed day-by-day itinerary, stay details, package inclusions, and cost breakdown.\n\nPlease let me know if you would like to adjust the itinerary or have any questions. Looking forward to our vibe check call!`
-  );
-  const [uploadingBrochure, setUploadingBrochure] = useState(false);
-  
-  // Action Dropdowns
+  // Action dropdown
   const [actionsOpen, setActionsOpen] = useState(false);
   const [updatingStatus, setUpdatingStatus] = useState(false);
 
-  // Reassign state
-  const [isReassigning, setIsReassigning] = useState(false);
+  // Reschedule modal
+  const [rescheduleTask, setRescheduleTask] = useState<any>(null);
+  const [rescheduleDate, setRescheduleDate] = useState("");
+  const [rescheduling, setRescheduling] = useState(false);
+
+  // ── Step 1: Contact Traveller ──
+  const [callResult, setCallResult] = useState<string>("");
+  const [completingStep1, setCompletingStep1] = useState(false);
+
+  // ── Step 2: Schedule Vibe Check ──
+  const [vibeCheckDate, setVibeCheckDate] = useState("");
+  const [vibeCheckTime, setVibeCheckTime] = useState("");
+  const [meetingType, setMeetingType] = useState("Video Call");
+  const [meetingLink, setMeetingLink] = useState("");
+  const [schedulingVibeCheck, setSchedulingVibeCheck] = useState(false);
+
+  // ── Step 3: Share Brochure ──
+  const [brochureFiles, setBrochureFiles] = useState<File[]>([]);
+  const [brochureMsg, setBrochureMsg] = useState(
+    `I'm excited to share the curated brochure for your upcoming adventure. It contains the detailed day-by-day itinerary, stay details, package inclusions, and cost breakdown.\n\nPlease take your time reviewing it before our upcoming call. Looking forward to an amazing conversation!`
+  );
+  const [uploadingBrochure, setUploadingBrochure] = useState(false);
+
+  // ── Step 4: Conduct Vibe Check ──
+  const [vibeResult, setVibeResult] = useState<string>("");
+  const [vibeNotes, setVibeNotes] = useState("");
+  const [completingVibeCheck, setCompletingVibeCheck] = useState(false);
+
+  // ── Step 5: Payment Follow-up ──
+  const [paymentLinkUrl, setPaymentLinkUrl] = useState("");
+  const [paymentResult, setPaymentResult] = useState<string>("");
+  const [receiptAmt, setReceiptAmt] = useState("");
+  const [refId, setRefId] = useState("");
+  const [completingPayment, setCompletingPayment] = useState(false);
+
+  // ── Step 6: Collect Documents ──
+  const [docChecklist, setDocChecklist] = useState({
+    passport: false,
+    visa: false,
+    id_proof: false,
+    emergency_contact: false,
+  });
+  const [idDocRef, setIdDocRef] = useState("");
+  const [approvingDocs, setApprovingDocs] = useState(false);
+
+  // ── Step 7: Confirm Booking ──
+  const [confirmingBooking, setConfirmingBooking] = useState(false);
 
   const usersById = new Map(users.map((user) => [user.id, user]));
   const supabase = createClient();
@@ -141,11 +161,7 @@ export default function ManagerLeadDetailPage({ params }: ManagerLeadDetailPageP
           } else if (role === "ADMIN") {
             router.push(`/admin/leads/${params.id}`);
           } else {
-            setCurrentUser({
-              ...data.user,
-              profile,
-              role,
-            });
+            setCurrentUser({ ...data.user, profile, role });
           }
         } else {
           router.push("/login");
@@ -157,7 +173,6 @@ export default function ManagerLeadDetailPage({ params }: ManagerLeadDetailPageP
         setCheckingAuth(false);
       }
     };
-
     fetchUserAndProfile();
   }, [params.id, router]);
 
@@ -170,7 +185,6 @@ export default function ManagerLeadDetailPage({ params }: ManagerLeadDetailPageP
     }
   }, [leadData, currentUser, router]);
 
-  // Fetch lead tasks
   const fetchLeadTasks = useCallback(async () => {
     try {
       setLoadingTasks(true);
@@ -178,7 +192,7 @@ export default function ManagerLeadDetailPage({ params }: ManagerLeadDetailPageP
         .from("tasks")
         .select("*")
         .eq("source_id", params.id)
-        .order("due_date", { ascending: true });
+        .order("step", { ascending: true });
       if (error) throw error;
       setTasks(data || []);
     } catch (err) {
@@ -189,17 +203,14 @@ export default function ManagerLeadDetailPage({ params }: ManagerLeadDetailPageP
   }, [params.id]);
 
   useEffect(() => {
-    if (lead) {
-      fetchLeadTasks();
-    }
+    if (lead) fetchLeadTasks();
   }, [lead, fetchLeadTasks]);
 
+  // The current active (first non-completed) task
   const nextActionTask = useMemo(() => {
-    return tasks.find(t => t.status !== "completed" && t.status !== "cancelled");
-  }, [tasks]);
-
-  const followUpTasks = useMemo(() => {
-    return tasks.filter(t => ["communication", "vibe check", "follow-up", "payment"].includes(t.type));
+    return tasks
+      .filter(t => t.status !== "completed" && t.status !== "cancelled")
+      .sort((a, b) => (a.step || 0) - (b.step || 0))[0];
   }, [tasks]);
 
   const handleUpdateStatusDirect = async (status: string) => {
@@ -208,14 +219,10 @@ export default function ManagerLeadDetailPage({ params }: ManagerLeadDetailPageP
       await changeStatus(status);
       await fetchLeadTasks();
     } catch (err) {
-      console.error("Failed to update status directly:", err);
+      console.error("Failed to update status:", err);
     } finally {
       setUpdatingStatus(false);
     }
-  };
-
-  const handleStatusChange = async (e: React.ChangeEvent<HTMLSelectElement>) => {
-    await handleUpdateStatusDirect(e.target.value);
   };
 
   const handleAddNoteSubmit = async (e: React.FormEvent) => {
@@ -232,97 +239,11 @@ export default function ManagerLeadDetailPage({ params }: ManagerLeadDetailPageP
     }
   };
 
-  const handleCreateTask = async (e: React.FormEvent) => {
-    e.preventDefault();
-    if (!taskTitle.trim() || !currentUser) return;
-    try {
-      setAddingTask(true);
-      const payload = {
-        title: taskTitle.trim(),
-        description: taskDesc.trim(),
-        related_to: leadData?.name || "General",
-        related_id: leadData?.enquiry_id || "Lead",
-        source_kind: "lead",
-        source_id: leadData?.id,
-        type: taskType,
-        priority: taskPriority,
-        due_date: taskDueDate ? new Date(taskDueDate).toISOString() : new Date().toISOString(),
-        status: "to do",
-        assigned_to: currentUser.id,
-        created_by: currentUser.id,
-        details: taskDesc.trim(),
-        subtasks: [
-          { title: "Review requirements", completed: false },
-          { title: "Perform action", completed: false }
-        ],
-        step: 5,
-      };
-
-      await taskService.createTask(payload);
-
-      // Auto-trigger notifications if it's a communication/call task
-      if (taskType === "communication" || taskTitle.toLowerCase().includes("call")) {
-        const phoneDigits = (leadData?.phone || "").replace(/[^0-9]/g, "");
-        const travelerName = leadData?.name || "there";
-        const managerName = currentUser?.profile?.full_name || currentUser?.user_metadata?.full_name || "Manager";
-        const tripTitle = leadData?.trips?.title || "your trip";
-        const enquiryId = leadData?.enquiry_id || "";
-        const formattedCallTime = taskDueDate ? new Date(taskDueDate).toLocaleString("en-IN", {
-          day: "2-digit",
-          month: "short",
-          year: "numeric",
-          hour: "2-digit",
-          minute: "2-digit"
-        }) : new Date().toLocaleString("en-IN", {
-          day: "2-digit",
-          month: "short",
-          year: "numeric",
-          hour: "2-digit",
-          minute: "2-digit"
-        });
-
-        const callMsgText = `Hello ${travelerName}, this is ${managerName} from Nomichi. I have scheduled a call with you to discuss your enquiry ${enquiryId ? `(${enquiryId})` : ""} for the trip "${tripTitle}".\n\nScheduled Time: ${formattedCallTime}\n\nLooking forward to speaking with you!`;
-
-        const waLink = phoneDigits ? `https://wa.me/${phoneDigits}?text=${encodeURIComponent(callMsgText)}` : "";
-        const emailSubject = `Scheduled Call - Nomichi Enquiry`;
-        const emailBody = callMsgText;
-        const gmailLink = leadData?.email ? `https://mail.google.com/mail/?view=cm&fs=1&to=${leadData.email}&su=${encodeURIComponent(emailSubject)}&body=${encodeURIComponent(emailBody)}` : "";
-
-        if (waLink) {
-          window.open(waLink, "_blank");
-        }
-        if (gmailLink) {
-          window.open(gmailLink, "_blank");
-        }
-      }
-
-      setTaskTitle("");
-      setTaskDesc("");
-      setTaskDueDate("");
-      setTaskCreateOpen(false);
-      await fetchLeadTasks();
-    } catch (err) {
-      console.error("Failed to create task:", err);
-    } finally {
-      setAddingTask(false);
-    }
-  };
-
-  const handleCompleteTask = async (taskId: string) => {
-    try {
-      await taskService.updateTaskStatus(taskId, "completed");
-      await fetchLeadTasks();
-      await refresh();
-    } catch (err) {
-      console.error("Failed to complete task:", err);
-    }
-  };
-
   const handleRescheduleClick = (task: any) => {
     setRescheduleTask(task);
-    if (task.due_date) {
+    if (task?.due_date) {
       const d = new Date(task.due_date);
-      const pad = (num: number) => String(num).padStart(2, '0');
+      const pad = (num: number) => String(num).padStart(2, "0");
       setRescheduleDate(`${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}T${pad(d.getHours())}:${pad(d.getMinutes())}`);
     }
   };
@@ -337,7 +258,6 @@ export default function ManagerLeadDetailPage({ params }: ManagerLeadDetailPageP
         .update({ due_date: new Date(rescheduleDate).toISOString() })
         .eq("id", rescheduleTask.id);
       if (error) throw error;
-      
       setRescheduleTask(null);
       setRescheduleDate("");
       await fetchLeadTasks();
@@ -348,161 +268,274 @@ export default function ManagerLeadDetailPage({ params }: ManagerLeadDetailPageP
     }
   };
 
+  // ── Step 1 handler: Contact Traveller ──
+  const handleCompleteContactTraveller = async () => {
+    if (!callResult) { alert("Please select a call result."); return; }
+    if (!nextActionTask) return;
+    setCompletingStep1(true);
+    try {
+      if (callResult === "not_interested") {
+        await taskService.updateTaskStatus(nextActionTask.id, "completed", { callResult });
+        await handleUpdateStatusDirect("lost");
+      } else {
+        await taskService.updateTaskStatus(nextActionTask.id, "completed", { callResult });
+      }
+      setCallResult("");
+      await fetchLeadTasks();
+      await refresh();
+    } catch (err) {
+      console.error("Step 1 completion failed:", err);
+    } finally {
+      setCompletingStep1(false);
+    }
+  };
+
+  // ── Step 2 handler: Schedule Vibe Check — sends email + WhatsApp ──
+  const handleScheduleVibeCheck = async () => {
+    if (!vibeCheckDate || !vibeCheckTime) { alert("Please select a date and time for the Vibe Check."); return; }
+    if (!nextActionTask) return;
+    setSchedulingVibeCheck(true);
+    try {
+      const meetingDateTimeISO = new Date(`${vibeCheckDate}T${vibeCheckTime}`).toISOString();
+      const phoneDigits = (leadData?.phone || "").replace(/[^0-9]/g, "");
+      const tripTitle = leadData?.trips?.title || "your trip";
+      const managerName = currentUser?.profile?.full_name || "your Trip Expert";
+      const formattedTime = new Date(meetingDateTimeISO).toLocaleString("en-IN", {
+        day: "2-digit", month: "short", year: "numeric",
+        hour: "2-digit", minute: "2-digit"
+      });
+      const linkLine = meetingLink ? `\nMeeting Link: ${meetingLink}` : "";
+
+      // WhatsApp
+      const waText = `Hello ${leadData?.name || "there"}, your Vibe Check for "${tripTitle}" is scheduled on ${formattedTime}${linkLine ? ` — ${meetingLink}` : ""}. Looking forward to speaking with you!`;
+      if (phoneDigits) window.open(`https://wa.me/${phoneDigits}?text=${encodeURIComponent(waText)}`, "_blank");
+
+      // Gmail — always open, with link if provided
+      if (leadData?.email) {
+        const emailSubject = `Vibe Check Scheduled — ${tripTitle}`;
+        const emailBody = `Hi ${leadData?.name || "there"},\n\nYour Vibe Check for "${tripTitle}" has been scheduled!\n\nDate & Time: ${formattedTime}\nMeeting Type: ${meetingType}${linkLine}\nTrip Expert: ${managerName}\n\nWe will share your personalised brochure and itinerary after our call.\n\nLooking forward to speaking with you!\n\nWarm regards,\n${managerName}`;
+        const gmailUrl = `https://mail.google.com/mail/?view=cm&fs=1&to=${leadData.email}&su=${encodeURIComponent(emailSubject)}&body=${encodeURIComponent(emailBody)}`;
+        window.open(gmailUrl, "_blank");
+      }
+
+      await taskService.updateTaskStatus(nextActionTask.id, "completed", {
+        meetingDate: meetingDateTimeISO,
+        meetingLink,
+        meetingType,
+      });
+
+      setVibeCheckDate("");
+      setVibeCheckTime("");
+      setMeetingLink("");
+      await fetchLeadTasks();
+      await refresh();
+    } catch (err) {
+      console.error("Step 2 scheduling failed:", err);
+    } finally {
+      setSchedulingVibeCheck(false);
+    }
+  };
+
+  // ── Step 3 handler: Conduct Vibe Check ──
+  const handleCompleteVibeCheck = async () => {
+    if (!vibeResult) { alert("Please select a Vibe Check result."); return; }
+    if (!nextActionTask) return;
+    setCompletingVibeCheck(true);
+    try {
+      await taskService.updateTaskStatus(nextActionTask.id, "completed", { vibeResult, vibeNotes });
+      setVibeResult("");
+      setVibeNotes("");
+      await fetchLeadTasks();
+      await refresh();
+    } catch (err) {
+      console.error("Step 3 vibe check failed:", err);
+    } finally {
+      setCompletingVibeCheck(false);
+    }
+  };
+
+  // ── Step 4 handler: Share Brochure ──
   const handleUploadAndShareBrochure = async () => {
-    if (!leadData?.trip_id) {
-      alert("No trip is associated with this lead.");
+    if (!leadData?.trip_id) { alert("No trip is associated with this lead."); return; }
+    let existingBrochureUrl = leadData?.trips?.brochure_url;
+    if (brochureFiles.length === 0 && !existingBrochureUrl) {
+      alert("Please select at least one brochure PDF to upload.");
       return;
     }
-
-    let brochureUrl = leadData?.trips?.brochure_url;
-
-    if (!brochureFile && !brochureUrl) {
-      alert("Please select a brochure PDF file to upload.");
-      return;
-    }
-
     setUploadingBrochure(true);
     try {
-      if (brochureFile) {
-        // Read file as base64
-        const reader = new FileReader();
-        const base64Promise = new Promise<string>((resolve, reject) => {
-          reader.onloadend = () => resolve(reader.result as string);
-          reader.onerror = reject;
-        });
-        reader.readAsDataURL(brochureFile);
-        const base64Data = await base64Promise;
-
-        // Upload to database trips table
-        const { error: updateError } = await supabase
-          .from("trips")
-          .update({ brochure_url: base64Data })
-          .eq("id", leadData.trip_id);
-
+      // Store files as base64 in trips table
+      if (brochureFiles.length > 0) {
+        const uploaded: { name: string; url: string }[] = [];
+        for (const file of brochureFiles) {
+          const reader = new FileReader();
+          const base64Data = await new Promise<string>((resolve, reject) => {
+            reader.onloadend = () => resolve(reader.result as string);
+            reader.onerror = reject;
+            reader.readAsDataURL(file);
+          });
+          uploaded.push({ name: file.name, url: base64Data });
+        }
+        const serialized = JSON.stringify(uploaded);
+        const { error: updateError } = await supabase.from("trips").update({ brochure_url: serialized }).eq("id", leadData.trip_id);
         if (updateError) throw updateError;
-        brochureUrl = base64Data;
+        existingBrochureUrl = serialized;
       }
 
-      // Send the email with the professional message
-      if (leadData.email) {
-        await notificationService.notifyTraveler(
-          leadData.email,
-          "Brochure Shared",
-          brochureMsg.trim(),
-          "Brochure Shared",
-          leadData.id,
-          "High"
-        );
+      // Get signed brochure links via the token API
+      const { data: sessionData } = await supabase.auth.getSession();
+      const accessToken = sessionData?.session?.access_token || "";
+      const origin = window.location.origin;
+      let brochureLinks = "";
+
+      const buildSignedLinks = async (brochureUrlStr: string): Promise<string> => {
+        if (brochureUrlStr.startsWith("[")) {
+          try {
+            const parsed = JSON.parse(brochureUrlStr);
+            const lines: string[] = [];
+            for (let idx = 0; idx < parsed.length; idx++) {
+              const res = await fetch("/api/brochure-token", {
+                method: "POST",
+                headers: { "Content-Type": "application/json", Authorization: `Bearer ${accessToken}` },
+                body: JSON.stringify({ tripId: leadData.trip_id, index: idx }),
+              });
+              if (res.ok) {
+                const { url } = await res.json();
+                lines.push(`${parsed[idx].name || `Brochure ${idx + 1}`}: ${url}`);
+              } else {
+                lines.push(`${parsed[idx].name || `Brochure ${idx + 1}`}: ${origin}/api/trips/${leadData.trip_id}/brochure?index=${idx}`);
+              }
+            }
+            return lines.join("\n");
+          } catch {
+            return `${origin}/api/trips/${leadData.trip_id}/brochure`;
+          }
+        }
+        // Single brochure
+        const res = await fetch("/api/brochure-token", {
+          method: "POST",
+          headers: { "Content-Type": "application/json", Authorization: `Bearer ${accessToken}` },
+          body: JSON.stringify({ tripId: leadData.trip_id, index: 0 }),
+        });
+        if (res.ok) { const { url } = await res.json(); return url; }
+        return `${origin}/api/trips/${leadData.trip_id}/brochure`;
+      };
+
+      brochureLinks = await buildSignedLinks(existingBrochureUrl || "");
+
+      // WhatsApp
+      const phoneDigits = (leadData?.phone || "").replace(/[^0-9]/g, "");
+      const tripTitle = leadData?.trips?.title || "your trip";
+      const waText = `Hello ${leadData?.name || "there"}, here is your personalised itinerary and brochure for "${tripTitle}":\n\n${brochureLinks}\n\n${brochureMsg.trim()}`;
+      if (phoneDigits) window.open(`https://wa.me/${phoneDigits}?text=${encodeURIComponent(waText)}`, "_blank");
+
+      // Gmail — open email with download links embedded
+      if (leadData?.email) {
+        const emailSubject = `Your Personalised Itinerary — ${tripTitle}`;
+        const emailBody = `Hi ${leadData?.name || "there"},\n\n${brochureMsg.trim()}\n\nYour personalised brochure and itinerary links:\n${brochureLinks}\n\nLooking forward to our Vibe Check call!`;
+        const gmailUrl = `https://mail.google.com/mail/?view=cm&fs=1&to=${leadData.email}&su=${encodeURIComponent(emailSubject)}&body=${encodeURIComponent(emailBody)}`;
+        window.open(gmailUrl, "_blank");
       }
 
-      // Add interaction log note
-      if (currentUser) {
-        await addNote(
-          `Share Brochure: Uploaded and shared trip brochure PDF with custom message: "${brochureMsg.trim().slice(0, 100)}..."`,
-          currentUser.id
-        );
+      // Complete step 4
+      if (nextActionTask && nextActionTask.step === 4) {
+        await taskService.updateTaskStatus(nextActionTask.id, "completed", { brochureMsg });
       }
 
-      // Complete the task (Step 2 is Share Brochure)
-      const shareBrochureTask = tasks.find((t) => t.step === 2 && t.status !== "completed");
-      if (shareBrochureTask) {
-        await handleCompleteTask(shareBrochureTask.id);
-      } else {
-        await handleUpdateStatusDirect("contacted");
-      }
-
-      alert("Brochure uploaded, professional email sent, and task marked complete!");
-      setBrochureFile(null);
+      setBrochureFiles([]);
+      await fetchLeadTasks();
       await refresh();
+      alert("Brochure sent via WhatsApp & Gmail successfully!");
     } catch (err: any) {
-      console.error("Failed to upload/share brochure:", err);
-      alert("Failed to upload/share brochure: " + (err.message || err));
+      console.error("Failed to share brochure:", err);
+      alert("Failed to share brochure: " + (err.message || err));
     } finally {
       setUploadingBrochure(false);
     }
   };
 
-  const handleMoveToNextStage = async () => {
-    let nextStatus = "";
-    const currentStatus = (leadData?.status || "new").toLowerCase();
-    if (currentStatus === "new") nextStatus = "contacted";
-    else if (currentStatus === "contacted") nextStatus = "qualified";
-    else if (currentStatus === "qualified") nextStatus = "negotiating"; // Vibe Check
-    else if (currentStatus === "negotiating" || currentStatus === "vibe check sent") nextStatus = "converted"; // Confirmed
-    
-    if (nextStatus) {
-      await handleUpdateStatusDirect(nextStatus);
-    }
-  };
-
-  const handleScheduleCallDirect = () => {
-    setTaskType("communication");
-    setTaskTitle("Call Traveller");
-    setTaskDesc("Conduct follow-up phone call with traveler.");
-    setTaskCreateOpen(true);
-  };
-
-  const handleShareBrochureDirect = async () => {
-    const brochureUrl = leadData?.trips?.brochure_url;
-    if (!brochureUrl) {
-      alert("No brochure document is attached to this trip yet. Please use the 'Upload & Share Brochure' form in the 'Next Action' panel to attach and send one.");
-      return;
-    }
-
+  // ── Step 5 handler: Payment Follow-up ──
+  const handleSendPaymentLink = () => {
     const phoneDigits = (leadData?.phone || "").replace(/[^0-9]/g, "");
-    const travelerName = leadData?.name || "there";
-    const managerName = currentUser?.profile?.full_name || currentUser?.user_metadata?.full_name || "Manager";
     const tripTitle = leadData?.trips?.title || "your trip";
-    const shareText = `Hello ${travelerName}, here is the itinerary brochure for the trip "${tripTitle}" we discussed:\n\n${brochureUrl}\n\nPlease let me know if you have any questions!`;
-
-    const waLink = phoneDigits ? `https://wa.me/${phoneDigits}?text=${encodeURIComponent(shareText)}` : "";
-    const emailSubject = `Trip Itinerary Brochure - ${tripTitle}`;
-    const emailBody = shareText;
-    const mailLink = leadData?.email ? `mailto:${leadData.email}?subject=${encodeURIComponent(emailSubject)}&body=${encodeURIComponent(emailBody)}` : "";
-
-    if (waLink) {
-      window.open(waLink, "_blank");
+    const link = paymentLinkUrl || "https://your-payment-portal.com/pay";
+    const waText = `Hello ${leadData?.name || "there"}, here is your payment link for "${tripTitle}":\n${link}\n\nPlease complete the payment at your earliest convenience.`;
+    if (phoneDigits) window.open(`https://wa.me/${phoneDigits}?text=${encodeURIComponent(waText)}`, "_blank");
+    const emailSubject = `Payment Link — ${tripTitle}`;
+    if (leadData?.email) {
+      const gmailHref = `https://mail.google.com/mail/?view=cm&fs=1&to=${leadData.email}&su=${encodeURIComponent(emailSubject)}&body=${encodeURIComponent(waText)}`;
+      window.open(gmailHref, "_blank");
     }
-    if (mailLink) {
-      window.open(mailLink, "_blank");
-    }
-
-    // Trigger background SMTP rich HTML email notification
-    if (leadData?.email && leadData?.id) {
-      try {
-        await notificationService.notifyTraveler(
-          leadData.email,
-          "Brochure Shared",
-          "We've prepared your trip brochure and itinerary details.",
-          "Brochure Shared",
-          leadData.id,
-          "High"
-        );
-      } catch (notifErr) {
-        console.error("Failed to send background brochure shared notification:", notifErr);
-      }
-    }
-
-    const shareBrochureTask = tasks.find(t => t.step === 2 && t.status !== "completed");
-    if (shareBrochureTask) {
-      await handleCompleteTask(shareBrochureTask.id);
-      alert("Brochure link opened, background email dispatched, and task marked as complete!");
-    } else {
-      try {
-        await addNote(`Share Brochure: Shared trip itinerary brochure (${brochureUrl}) via WhatsApp/Email`, currentUser.id);
-        await handleUpdateStatusDirect("contacted");
-        alert("Brochure link opened, background email dispatched, and shared action logged successfully!");
-      } catch (err) {
-        console.error(err);
-      }
+    if (currentUser) {
+      addNote(`Payment Follow-up: Payment link sent — ${link}`, currentUser.id).catch(console.error);
     }
   };
 
-  const handleMarkTaskCompleteDirect = async () => {
-    if (nextActionTask) {
-      await handleCompleteTask(nextActionTask.id);
-    } else {
-      alert("No pending tasks to complete!");
+  const handleCompletePayment = async () => {
+    if (!paymentResult) { alert("Please select payment status."); return; }
+    if (!nextActionTask) return;
+    setCompletingPayment(true);
+    try {
+      await taskService.updateTaskStatus(nextActionTask.id, "completed", {
+        paymentStatus: paymentResult,
+        receiptAmt,
+        refId,
+      });
+      setPaymentResult("");
+      setReceiptAmt("");
+      setRefId("");
+      await fetchLeadTasks();
+      await refresh();
+    } catch (err) {
+      console.error("Step 5 completion failed:", err);
+    } finally {
+      setCompletingPayment(false);
+    }
+  };
+
+  // ── Step 6 handler: Collect Documents ──
+  const handleApproveDocuments = async () => {
+    const allChecked = Object.values(docChecklist).every(Boolean);
+    if (!allChecked) { alert("Please verify all documents before approving."); return; }
+    if (!nextActionTask) return;
+    setApprovingDocs(true);
+    try {
+      await taskService.updateTaskStatus(nextActionTask.id, "completed", { idDocRef });
+      setDocChecklist({ passport: false, visa: false, id_proof: false, emergency_contact: false });
+      setIdDocRef("");
+      await fetchLeadTasks();
+      await refresh();
+    } catch (err) {
+      console.error("Step 6 completion failed:", err);
+    } finally {
+      setApprovingDocs(false);
+    }
+  };
+
+  // ── Step 7 handler: Confirm Booking ──
+  const handleConfirmBooking = async () => {
+    if (!nextActionTask) return;
+    if (!window.confirm("Are you sure you want to confirm this booking? This action is final.")) return;
+    setConfirmingBooking(true);
+    try {
+      await taskService.updateTaskStatus(nextActionTask.id, "completed", {});
+      await fetchLeadTasks();
+      await refresh();
+    } catch (err) {
+      console.error("Step 7 confirmation failed:", err);
+    } finally {
+      setConfirmingBooking(false);
+    }
+  };
+
+  const logInteraction = async (type: "call" | "whatsapp" | "email") => {
+    if (!currentUser) return;
+    let noteText = "";
+    if (type === "call") noteText = `Called: Initiated phone call to ${leadData?.phone || "traveler"}`;
+    else if (type === "whatsapp") noteText = `Called: Initiated WhatsApp chat`;
+    else if (type === "email") noteText = `Called: Opened email client for ${leadData?.email}`;
+    if (noteText) {
+      try { await addNote(noteText, currentUser.id); } catch (err) { console.error(err); }
     }
   };
 
@@ -514,33 +547,10 @@ export default function ManagerLeadDetailPage({ params }: ManagerLeadDetailPageP
     }, 100);
   };
 
-  const logInteraction = async (type: "call" | "whatsapp" | "email") => {
-    if (!currentUser) return;
-    let noteText = "";
-    if (type === "call") {
-      noteText = `Called: Initiated phone call to ${leadData?.phone || "traveler"} (tel:${leadData?.phone})`;
-    } else if (type === "whatsapp") {
-      const waLink = phoneDigits ? `https://wa.me/${phoneDigits}` : "#";
-      noteText = `Called: Initiated WhatsApp chat at ${waLink}`;
-    } else if (type === "email") {
-      noteText = `Called: Opened email client for ${leadData?.email} (mailto:${leadData?.email})`;
-    }
+  const formatLeadId = (lead: any) =>
+    lead?.enquiry_id?.replace("ENQ", "LD-") || `LD-${lead?.id?.slice(0, 4).toUpperCase()}`;
 
-    if (noteText) {
-      try {
-        await addNote(noteText, currentUser.id);
-      } catch (err) {
-        console.error(`Failed to log ${type} interaction:`, err);
-      }
-    }
-  };
-
-  const formatLeadId = (lead: any) => {
-    if (lead?.name === "Smita Jhode") return "LD-1024";
-    return lead?.enquiry_id?.replace("ENQ", "LD-") || `LD-${lead?.id?.slice(0, 4).toUpperCase()}`;
-  };
-
-  const leadLocation = leadData?.name === "Smita Jhode" ? "Madhya Pradesh, India" : (leadData?.trips?.destination || "India");
+  const leadLocation = leadData?.trips?.destination || "India";
 
   const lastContactDateText = useMemo(() => {
     if (leadData?.lead_notes && leadData.lead_notes.length > 0) {
@@ -549,32 +559,50 @@ export default function ManagerLeadDetailPage({ params }: ManagerLeadDetailPageP
     return formatDateTime(leadData?.updated_at || leadData?.created_at);
   }, [leadData]);
 
-  const getNextStageButtonText = () => {
-    const currentStatus = (leadData?.status || "new").toLowerCase();
-    if (currentStatus === "new") return "Move To Contacted";
-    if (currentStatus === "contacted") return "Move To Qualified";
-    if (currentStatus === "qualified") return "Move To Vibe Check";
-    if (currentStatus === "negotiating" || currentStatus === "vibe check sent" || currentStatus === "vibe check") return "Move To Confirmed";
-    return "Stage Confirmed";
-  };
-
+  // Pipeline stages shown at the top — VIBE CHECK DONE before ITINERARY SHARED
   const pipelineStages = [
-    { key: "new", label: "NEW", date: "19 Jun" },
-    { key: "contacted", label: "CONTACTED", date: "19 Jun" },
-    { key: "qualified", label: "QUALIFIED" },
-    { key: "negotiating", label: "VIBE CHECK" },
-    { key: "converted", label: "CONFIRMED" }
+    { key: "new", label: "NEW" },
+    { key: "contacted", label: "CONTACTED" },
+    { key: "negotiating", label: "VIBE CHECK DONE" },
+    { key: "qualified", label: "ITINERARY SHARED" },
+    { key: "converted", label: "PAYMENT RECEIVED" },
+    { key: "confirmed", label: "CONFIRMED" },
   ];
 
   const currentStatusKey = (leadData?.status || "new").toLowerCase();
-  const activeStageIndex = pipelineStages.findIndex(s => s.key === currentStatusKey || (s.key === "negotiating" && currentStatusKey === "vibe check sent") || (s.key === "converted" && currentStatusKey === "confirmed"));
+  const activeStageIndex = pipelineStages.findIndex(
+    (s) =>
+      s.key === currentStatusKey ||
+      (s.key === "confirmed" && currentStatusKey === "confirmed") ||
+      (s.key === "converted" && currentStatusKey === "converted")
+  );
 
-  // Build activity timeline logs dynamically
+  // Workflow progress (7 steps)
+  const workflowSteps = useMemo(() => {
+    const isTaskDone = (stepNum: number) => tasks.some((t) => t.step === stepNum && t.status === "completed");
+    const isTaskPending = (stepNum: number) => tasks.some((t) => t.step === stepNum && t.status !== "completed");
+
+    const steps = [1, 2, 3, 4, 5, 6, 7];
+    return steps.map((s) => ({
+      step: s,
+      state: isTaskDone(s) ? "completed" : isTaskPending(s) ? "in-progress" : "pending",
+    }));
+  }, [tasks]);
+
+  const WORKFLOW_LABELS = [
+    "Contact Traveller",
+    "Schedule Vibe Check",
+    "Conduct Vibe Check",
+    "Share Brochure",
+    "Payment Follow-up",
+    "Collect Documents",
+    "Confirm Booking",
+  ];
+
+  // Activity timeline
   const timelineEvents = useMemo(() => {
     if (!leadData) return [];
     const events: any[] = [];
-    
-    // 1. Creation event
     events.push({
       date: formatDateTime(leadData.created_at),
       title: "Lead Assigned",
@@ -584,21 +612,20 @@ export default function ManagerLeadDetailPage({ params }: ManagerLeadDetailPageP
       timestamp: new Date(leadData.created_at).getTime()
     });
 
-    // 2. Lead Notes
     if (leadData.lead_notes) {
       leadData.lead_notes.forEach((note: any) => {
         const { title: noteTitle, description: noteDesc } = getLeadNoteDisplay(note.note_text);
         const { iconColor, Icon } = getLeadNoteVisual(note.note_text);
-        
         let customBg = iconColor;
-        if (noteTitle.startsWith("Called") || noteTitle.startsWith("Spoke")) {
+        if (noteTitle.startsWith("Called") || noteTitle.startsWith("Spoke") || noteTitle.startsWith("Contact")) {
           customBg = "bg-blue-50 text-blue-600 border-blue-100";
         } else if (noteTitle.startsWith("Share") || noteTitle.startsWith("Brochure")) {
           customBg = "bg-orange-50 text-[#FF5B26] border-orange-100";
-        } else if (noteTitle.startsWith("Vibe") || noteTitle.startsWith("Scheduled")) {
+        } else if (noteTitle.startsWith("Vibe") || noteTitle.startsWith("Schedule") || noteTitle.startsWith("Scheduled")) {
           customBg = "bg-purple-50 text-purple-600 border-purple-100";
+        } else if (noteTitle.startsWith("Payment")) {
+          customBg = "bg-emerald-50 text-emerald-600 border-emerald-100";
         }
-
         events.push({
           date: formatDateTime(note.created_at),
           title: noteTitle,
@@ -610,140 +637,19 @@ export default function ManagerLeadDetailPage({ params }: ManagerLeadDetailPageP
       });
     }
 
-    // Sort chronologically
-    const sorted = events.sort((a, b) => b.timestamp - a.timestamp);
-    
-    if (leadData.name === "Smita Jhode" && sorted.length <= 2) {
-      const mockEvents = [
-        {
-          date: "20 Jun 2026, 04:00 PM",
-          title: "Follow-up Scheduled",
-          subtitle: "Follow-up call scheduled",
-          icon: CalendarDays,
-          iconBg: "bg-purple-50 text-purple-600 border-purple-100",
-          timestamp: new Date("2026-06-20T16:00:00Z").getTime()
-        },
-        {
-          date: "19 Jun 2026, 02:10 PM",
-          title: "Brochure Shared",
-          subtitle: "Kanha Tiger Safari shared over email",
-          icon: Mail,
-          iconBg: "bg-orange-50 text-[#FF5B26] border-orange-100",
-          timestamp: new Date("2026-06-19T14:10:00Z").getTime()
-        },
-        {
-          date: "19 Jun 2026, 01:45 PM",
-          title: "Call Completed",
-          subtitle: "Spoke with Smita regarding trip interest",
-          icon: Phone,
-          iconBg: "bg-blue-50 text-blue-600 border-blue-100",
-          timestamp: new Date("2026-06-19T13:45:00Z").getTime()
-        }
-      ];
-      return [...mockEvents, ...sorted].sort((a, b) => b.timestamp - a.timestamp);
-    }
-
-    return sorted;
+    return events.sort((a, b) => b.timestamp - a.timestamp);
   }, [leadData, assignedProfile]);
 
-  const workflowSteps = useMemo(() => {
-    const status = (leadData?.status || "new").toLowerCase();
-    const isTaskDone = (stepNum: number) => tasks.some(t => t.step === stepNum && t.status === "completed");
-    
-    const contactTravellerDone = isTaskDone(1) || status !== "new";
-    const shareBrochureDone = isTaskDone(2) || ["qualified", "negotiating", "vibe check", "vibe check sent", "converted", "confirmed"].includes(status);
-    const vibeCheckDone = isTaskDone(6) || ["converted", "confirmed"].includes(status);
-    const paymentDone = ["converted", "confirmed"].includes(status);
-    const documentsDone = isTaskDone(7) && isTaskDone(8);
-
-    let step1State = contactTravellerDone ? "completed" : "in-progress";
-    let step2State = shareBrochureDone ? "completed" : (contactTravellerDone ? "in-progress" : "pending");
-    let step3State = vibeCheckDone ? "completed" : (shareBrochureDone ? "in-progress" : "pending");
-    let step4State = paymentDone ? "completed" : (vibeCheckDone ? "in-progress" : "pending");
-    let step5State = documentsDone ? "completed" : (paymentDone ? "in-progress" : "pending");
-
-    if (leadData?.name === "Smita Jhode") {
-      step1State = "completed";
-      step2State = "completed";
-      step3State = "in-progress";
-      step4State = "pending";
-      step5State = "pending";
-    }
-
-    return {
-      step1: step1State,
-      step2: step2State,
-      step3: step3State,
-      step4: step4State,
-      step5: step5State
-    };
-  }, [leadData, tasks]);
-
-  const requirements = useMemo(() => {
-    if (leadData?.name === "Smita Jhode") {
-      return {
-        groupType: leadData.group_type || "Friends",
-        preferredMonth: leadData.preferred_month || "Sep 2026",
-        feelsLike: leadData.hope_trip_feels_like || "Explore jungles with family",
-        budget: "Not shared",
-        activities: "Wildlife, Nature",
-        specialRequests: leadData.dietary_and_accessibility || "None"
-      };
-    }
-    return {
-      groupType: leadData?.group_type || "Not shared",
-      preferredMonth: leadData?.preferred_month || "Flexible",
-      feelsLike: leadData?.hope_trip_feels_like || "Not shared",
-      budget: "Not shared",
-      activities: "Not shared",
-      specialRequests: leadData?.dietary_and_accessibility || "None"
-    };
-  }, [leadData]);
-
-  const nextAction = useMemo(() => {
-    if (nextActionTask) {
-      return {
-        title: nextActionTask.title,
-        description: nextActionTask.description || "Share brochure and itinerary.",
-        due: formatDateTime(nextActionTask.due_date),
-        priority: (nextActionTask.priority || "High").toUpperCase(),
-        id: nextActionTask.id
-      };
-    }
-    return {
-      title: "Share Brochure",
-      description: "Share trip brochure and itinerary details.",
-      due: "Today, 07:00 PM",
-      priority: "HIGH",
-      id: null
-    };
-  }, [nextActionTask]);
-
-  const upcomingFollowUp = useMemo(() => {
-    const followUp = tasks.find(t => t.id !== nextActionTask?.id && t.status !== "completed" && t.status !== "cancelled");
-    if (followUp) {
-      return {
-        title: followUp.title,
-        due: formatDateTime(followUp.due_date),
-        id: followUp.id
-      };
-    }
-    return {
-      title: "Call Traveller",
-      due: "20 Jun 2026, 04:00 PM",
-      id: null
-    };
-  }, [tasks, nextActionTask]);
-
+  // Quick action hrefs
   const phoneDigits = (leadData?.phone || "").replace(/[^0-9]/g, "");
-  const managerNameForLead = currentUser?.profile?.full_name || currentUser?.user_metadata?.full_name || "Manager";
+  const managerNameForLead = currentUser?.profile?.full_name || "Manager";
   const travelerNameForLead = leadData?.name || "there";
   const tripTitleForLead = leadData?.trips?.title || "your trip";
-  const leadWaText = encodeURIComponent(`Hello ${travelerNameForLead}, this is ${managerNameForLead} from Nomichi. Thank you for your enquiry for the trip ${tripTitleForLead}.`);
+  const leadWaText = encodeURIComponent(`Hello ${travelerNameForLead}, this is ${managerNameForLead} from Nomichi. Thank you for your enquiry for the trip "${tripTitleForLead}".`);
   const whatsAppHref = phoneDigits ? `https://wa.me/${phoneDigits}?text=${leadWaText}` : "#";
   const callHref = leadData?.phone ? `tel:${leadData.phone}` : "#";
-  const leadEmailSubject = encodeURIComponent(`Nomichi Enquiry - ${tripTitleForLead}`);
-  const leadEmailBody = encodeURIComponent(`Hello ${travelerNameForLead},\n\nThis is ${managerNameForLead} from Nomichi. Thank you for your enquiry for the trip ${tripTitleForLead}.`);
+  const leadEmailSubject = encodeURIComponent(`Nomichi Enquiry — ${tripTitleForLead}`);
+  const leadEmailBody = encodeURIComponent(`Hello ${travelerNameForLead},\n\nThis is ${managerNameForLead} from Nomichi. Thank you for your enquiry for the trip "${tripTitleForLead}".`);
   const gmailHref = leadData?.email ? `https://mail.google.com/mail/?view=cm&fs=1&to=${leadData.email}&su=${leadEmailSubject}&body=${leadEmailBody}` : "#";
 
   if (checkingAuth || (loading && !lead)) {
@@ -764,12 +670,9 @@ export default function ManagerLeadDetailPage({ params }: ManagerLeadDetailPageP
           <AlertCircle className="h-12 w-12 text-rose-500" />
           <h2 className="text-lg font-bold text-slate-900 font-display">Lead Not Found</h2>
           <p className="text-xs text-slate-500 font-semibold leading-relaxed">
-            {error || "We couldn't retrieve the details for this lead. It may have been deleted or you may not have permission to view it."}
+            {error || "We couldn't retrieve the details for this lead."}
           </p>
-          <Link
-            href="/manager/leads"
-            className="mt-2 inline-flex items-center gap-2 px-4 py-2 bg-[#FF5B26] hover:bg-[#FF5B26]/90 text-white font-bold text-xs rounded-xl shadow-xs transition-all no-underline border-0"
-          >
+          <Link href="/manager/leads" className="mt-2 inline-flex items-center gap-2 px-4 py-2 bg-[#FF5B26] hover:bg-[#FF5B26]/90 text-white font-bold text-xs rounded-xl shadow-xs transition-all no-underline border-0">
             <ArrowLeft className="w-4 h-4 text-white" />
             Back to Leads
           </Link>
@@ -778,70 +681,421 @@ export default function ManagerLeadDetailPage({ params }: ManagerLeadDetailPageP
     );
   }
 
-  const tripTitle = leadData.trips?.title || "KANHA TIGER SAFARI & WILDERNESS";
-  const tripDestination = leadData.trips?.destination || "Madhya Pradesh, India";
-  const tripImage = leadData.trips?.image_url || "https://images.unsplash.com/photo-1602491453979-53a99888c03c?auto=format&fit=crop&w=600&q=80";
+  // ── Render the step-specific "Next Action" content ──
+  const renderNextActionContent = () => {
+    if (!nextActionTask) {
+      const isConfirmed = currentStatusKey === "confirmed";
+      const isLost = currentStatusKey === "lost";
+      return (
+        <div className="flex flex-col items-center justify-center py-6 gap-2">
+          <CheckCircle2 className={`w-10 h-10 ${isLost ? "text-rose-400" : "text-emerald-500"}`} />
+          <p className="text-sm font-bold text-slate-700">
+            {isLost ? "Lead marked as Not a Fit" : isConfirmed ? "Booking Confirmed!" : "All tasks complete"}
+          </p>
+          <p className="text-xs text-slate-400 font-semibold text-center">
+            {isLost ? "The workflow has ended for this lead." : "This lead has completed the full workflow."}
+          </p>
+        </div>
+      );
+    }
+
+    const step = nextActionTask.step;
+
+    // ── Step 1: Contact Traveller ──
+    if (step === 1) {
+      return (
+        <div className="space-y-4">
+          <p className="text-xs text-slate-500 font-semibold leading-relaxed">
+            Call the traveler to introduce Nomichi, understand their travel requirements, and qualify their interest.
+          </p>
+          <div className="flex gap-2 mb-2">
+            <a href={callHref} onClick={() => logInteraction("call")} className="flex-1 py-2 bg-blue-600 hover:bg-blue-700 text-white text-xs font-bold rounded-xl flex items-center justify-center gap-1.5 no-underline border-0 cursor-pointer">
+              <Phone className="w-3.5 h-3.5" /> Call Now
+            </a>
+            <a href={whatsAppHref} target="_blank" rel="noopener noreferrer" onClick={() => logInteraction("whatsapp")} className="flex-1 py-2 bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-bold rounded-xl flex items-center justify-center gap-1.5 no-underline border-0 cursor-pointer">
+              <MessageCircle className="w-3.5 h-3.5" /> WhatsApp
+            </a>
+          </div>
+          <div className="space-y-2">
+            <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest block">Call Result</label>
+            {[
+              { value: "completed", label: "✅ Call Completed" },
+              { value: "no_answer", label: "📵 No Answer" },
+              { value: "reschedule", label: "📅 Reschedule" },
+              { value: "not_interested", label: "❌ Not Interested" },
+            ].map((opt) => (
+              <label key={opt.value} className={`flex items-center gap-3 p-3 rounded-xl border cursor-pointer transition-all ${callResult === opt.value ? "bg-[#FFEFEA] border-[#FF5B26]/40 text-[#FF5B26]" : "border-[#e7e1d5]/55 hover:bg-slate-50 text-slate-700"}`}>
+                <input
+                  type="radio"
+                  name="callResult"
+                  value={opt.value}
+                  checked={callResult === opt.value}
+                  onChange={(e) => setCallResult(e.target.value)}
+                  className="accent-[#FF5B26]"
+                />
+                <span className="text-xs font-bold">{opt.label}</span>
+              </label>
+            ))}
+          </div>
+          <button
+            disabled={completingStep1}
+            onClick={handleCompleteContactTraveller}
+            className="w-full py-2.5 bg-[#FF5B26] hover:bg-[#e04b1c] disabled:bg-slate-200 disabled:text-slate-400 text-white text-xs font-bold rounded-xl transition-all shadow-xs cursor-pointer border-0 flex items-center justify-center gap-1.5"
+          >
+            {completingStep1 ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <CheckCircle2 className="w-3.5 h-3.5" />}
+            {completingStep1 ? "Completing..." : "Complete Task"}
+          </button>
+        </div>
+      );
+    }
+
+    // ── Step 2: Schedule Vibe Check ──
+    if (step === 2) {
+      return (
+        <div className="space-y-3">
+          <p className="text-xs text-slate-500 font-semibold leading-relaxed">
+            Schedule a Vibe Check consultation call. The traveler will receive an email and WhatsApp reminder.
+          </p>
+          <div className="grid grid-cols-2 gap-2">
+            <div className="space-y-1">
+              <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest block">Date</label>
+              <input
+                type="date"
+                value={vibeCheckDate}
+                onChange={(e) => setVibeCheckDate(e.target.value)}
+                className="w-full h-9 px-3 border border-[#e7e1d5]/70 rounded-xl text-xs font-semibold focus:outline-none focus:border-[#FF5B26]/40 bg-white"
+              />
+            </div>
+            <div className="space-y-1">
+              <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest block">Time</label>
+              <input
+                type="time"
+                value={vibeCheckTime}
+                onChange={(e) => setVibeCheckTime(e.target.value)}
+                className="w-full h-9 px-3 border border-[#e7e1d5]/70 rounded-xl text-xs font-semibold focus:outline-none focus:border-[#FF5B26]/40 bg-white"
+              />
+            </div>
+          </div>
+          <div className="space-y-1">
+            <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest block">Meeting Type</label>
+            <select
+              value={meetingType}
+              onChange={(e) => setMeetingType(e.target.value)}
+              className="w-full h-9 px-3 border border-[#e7e1d5]/70 rounded-xl text-xs font-semibold bg-white focus:outline-none"
+            >
+              <option>Video Call</option>
+              <option>Phone Call</option>
+              <option>In-Person Meeting</option>
+            </select>
+          </div>
+          <div className="space-y-1">
+            <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest block">Meeting Link (optional)</label>
+            <input
+              type="url"
+              placeholder="https://meet.google.com/..."
+              value={meetingLink}
+              onChange={(e) => setMeetingLink(e.target.value)}
+              className="w-full h-9 px-3 border border-[#e7e1d5]/70 rounded-xl text-xs font-semibold focus:outline-none focus:border-[#FF5B26]/40 bg-white"
+            />
+          </div>
+          <button
+            disabled={schedulingVibeCheck}
+            onClick={handleScheduleVibeCheck}
+            className="w-full py-2.5 bg-[#FF5B26] hover:bg-[#e04b1c] disabled:bg-slate-200 disabled:text-slate-400 text-white text-xs font-bold rounded-xl transition-all shadow-xs cursor-pointer border-0 flex items-center justify-center gap-1.5"
+          >
+            {schedulingVibeCheck ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <CalendarCheck className="w-3.5 h-3.5" />}
+            {schedulingVibeCheck ? "Scheduling..." : "Schedule & Notify Traveler"}
+          </button>
+        </div>
+      );
+    }
+
+    // ── Step 3: Conduct Vibe Check ──
+    if (step === 3) {
+      return (
+        <div className="space-y-4">
+          <p className="text-xs text-slate-500 font-semibold leading-relaxed">
+            Conduct the scheduled Vibe Check call and record the outcome to advance the lead.
+          </p>
+          <div className="space-y-2">
+            <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest block">Vibe Check Result</label>
+            {[
+              { value: "qualified", label: "✅ Qualified — Proceed to Booking" },
+              { value: "not_qualified", label: "❌ Not Qualified — End Workflow" },
+              { value: "need_follow_up", label: "🔄 Need Follow-up — Reschedule" },
+            ].map((opt) => (
+              <label key={opt.value} className={`flex items-center gap-3 p-3 rounded-xl border cursor-pointer transition-all ${vibeResult === opt.value ? "bg-[#FFEFEA] border-[#FF5B26]/40 text-[#FF5B26]" : "border-[#e7e1d5]/55 hover:bg-slate-50 text-slate-700"}`}>
+                <input
+                  type="radio"
+                  name="vibeResult"
+                  value={opt.value}
+                  checked={vibeResult === opt.value}
+                  onChange={(e) => setVibeResult(e.target.value)}
+                  className="accent-[#FF5B26]"
+                />
+                <span className="text-xs font-bold">{opt.label}</span>
+              </label>
+            ))}
+          </div>
+          <div className="space-y-1">
+            <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest block">Notes (optional)</label>
+            <textarea
+              rows={2}
+              placeholder="Key discussion points, concerns, or feedback..."
+              value={vibeNotes}
+              onChange={(e) => setVibeNotes(e.target.value)}
+              className="w-full rounded-xl border border-[#e7e1d5]/70 p-3 text-xs font-semibold text-slate-700 bg-white focus:outline-none"
+            />
+          </div>
+          <button
+            disabled={completingVibeCheck}
+            onClick={handleCompleteVibeCheck}
+            className="w-full py-2.5 bg-[#FF5B26] hover:bg-[#e04b1c] disabled:bg-slate-200 disabled:text-slate-400 text-white text-xs font-bold rounded-xl transition-all shadow-xs cursor-pointer border-0 flex items-center justify-center gap-1.5"
+          >
+            {completingVibeCheck ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <CheckCircle2 className="w-3.5 h-3.5" />}
+            {completingVibeCheck ? "Submitting..." : "Submit Vibe Check Result"}
+          </button>
+        </div>
+      );
+    }
+
+    // ── Step 4: Share Brochure ──
+    if (step === 4) {
+      return (
+        <div className="space-y-3">
+          <p className="text-xs text-slate-500 font-semibold leading-relaxed">
+            Share the curated trip brochure, itinerary, and pricing with the traveler following your Vibe Check discussion.
+          </p>
+          <div className="space-y-1.5">
+            <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest block">Upload Brochure PDFs</label>
+            <input
+              type="file"
+              accept="application/pdf"
+              id="brochure-pdf-upload"
+              className="hidden"
+              multiple
+              onChange={(e) => {
+                const files = Array.from(e.target.files || []).filter((file) => {
+                  if (file.type !== "application/pdf") { alert(`"${file.name}" is not a PDF.`); return false; }
+                  if (file.size > 20 * 1024 * 1024) { alert(`"${file.name}" exceeds 20MB.`); return false; }
+                  return true;
+                });
+                setBrochureFiles((prev) => [...prev, ...files]);
+              }}
+            />
+            <label htmlFor="brochure-pdf-upload" className="px-4 py-2 border border-dashed border-[#e7e1d5] hover:border-[#FF5B26]/30 bg-white hover:bg-[#FAF8F5] text-slate-700 rounded-xl text-xs font-bold transition-all cursor-pointer inline-flex items-center gap-1.5">
+              <FileText className="w-3.5 h-3.5 text-[#FF5B26]" />
+              {brochureFiles.length > 0 ? "Add More PDFs" : "Choose PDF Files"}
+            </label>
+            {brochureFiles.length > 0 && (
+              <div className="space-y-1 pt-1">
+                {brochureFiles.map((file, idx) => (
+                  <div key={idx} className="flex items-center justify-between bg-slate-50 border border-slate-100 rounded-xl p-2 text-xs font-semibold text-slate-700">
+                    <span className="truncate max-w-[150px]">{file.name}</span>
+                    <button onClick={() => setBrochureFiles((prev) => prev.filter((_, i) => i !== idx))} className="text-red-500 hover:text-red-700 bg-transparent border-0 cursor-pointer text-[10px] font-black">Remove</button>
+                  </div>
+                ))}
+              </div>
+            )}
+            {brochureFiles.length === 0 && leadData?.trips?.brochure_url && (
+              <span className="text-xs font-bold text-emerald-600">✓ Brochure(s) already attached</span>
+            )}
+          </div>
+          <div className="space-y-1.5">
+            <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest block">Custom Message</label>
+            <textarea
+              rows={3}
+              className="w-full rounded-xl border border-[#e7e1d5]/70 focus:border-[#FF5B26]/30 focus:ring-0 focus:outline-none p-3 text-xs font-semibold text-slate-700 bg-white"
+              value={brochureMsg}
+              onChange={(e) => setBrochureMsg(e.target.value)}
+              placeholder="Enter a message to the traveler..."
+            />
+          </div>
+          <button
+            disabled={uploadingBrochure || (brochureFiles.length === 0 && !leadData?.trips?.brochure_url)}
+            onClick={handleUploadAndShareBrochure}
+            className="w-full py-2.5 bg-[#FF5B26] hover:bg-[#e04b1c] disabled:bg-slate-200 disabled:text-slate-400 text-white text-xs font-bold rounded-xl transition-all shadow-xs cursor-pointer border-0 flex items-center justify-center gap-1.5"
+          >
+            {uploadingBrochure ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Send className="w-3.5 h-3.5" />}
+            {uploadingBrochure ? "Sending..." : "Send via WhatsApp & Gmail"}
+          </button>
+        </div>
+      );
+    }
+
+    // ── Step 5: Payment Follow-up ──
+    if (step === 5) {
+      return (
+        <div className="space-y-4">
+          <p className="text-xs text-slate-500 font-semibold leading-relaxed">
+            Send the payment link and confirm deposit receipt from the traveler.
+          </p>
+          <div className="space-y-1">
+            <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest block">Payment Link URL</label>
+            <input
+              type="url"
+              placeholder="https://payment.example.com/..."
+              value={paymentLinkUrl}
+              onChange={(e) => setPaymentLinkUrl(e.target.value)}
+              className="w-full h-9 px-3 border border-[#e7e1d5]/70 rounded-xl text-xs font-semibold focus:outline-none focus:border-[#FF5B26]/40 bg-white"
+            />
+          </div>
+          <button
+            onClick={handleSendPaymentLink}
+            className="w-full py-2 bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-bold rounded-xl cursor-pointer border-0 flex items-center justify-center gap-1.5"
+          >
+            <Send className="w-3.5 h-3.5" /> Send Payment Link
+          </button>
+          <div className="border-t border-slate-100 pt-3 space-y-2">
+            <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest block">Payment Status</label>
+            {[
+              { value: "paid", label: "✅ Paid — Deposit Received" },
+              { value: "waiting", label: "⏳ Waiting — Payment Pending" },
+              { value: "declined", label: "❌ Declined — Traveler Opted Out" },
+            ].map((opt) => (
+              <label key={opt.value} className={`flex items-center gap-3 p-3 rounded-xl border cursor-pointer transition-all ${paymentResult === opt.value ? "bg-[#FFEFEA] border-[#FF5B26]/40 text-[#FF5B26]" : "border-[#e7e1d5]/55 hover:bg-slate-50 text-slate-700"}`}>
+                <input
+                  type="radio"
+                  name="paymentResult"
+                  value={opt.value}
+                  checked={paymentResult === opt.value}
+                  onChange={(e) => setPaymentResult(e.target.value)}
+                  className="accent-[#FF5B26]"
+                />
+                <span className="text-xs font-bold">{opt.label}</span>
+              </label>
+            ))}
+          </div>
+          {paymentResult === "paid" && (
+            <div className="grid grid-cols-2 gap-2">
+              <div className="space-y-1">
+                <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest block">Amount (₹)</label>
+                <input type="text" placeholder="25,000" value={receiptAmt} onChange={(e) => setReceiptAmt(e.target.value)} className="w-full h-9 px-3 border border-[#e7e1d5]/70 rounded-xl text-xs font-semibold focus:outline-none bg-white" />
+              </div>
+              <div className="space-y-1">
+                <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest block">Transaction Ref</label>
+                <input type="text" placeholder="TXN123" value={refId} onChange={(e) => setRefId(e.target.value)} className="w-full h-9 px-3 border border-[#e7e1d5]/70 rounded-xl text-xs font-semibold focus:outline-none bg-white" />
+              </div>
+            </div>
+          )}
+          <button
+            disabled={completingPayment}
+            onClick={handleCompletePayment}
+            className="w-full py-2.5 bg-[#FF5B26] hover:bg-[#e04b1c] disabled:bg-slate-200 disabled:text-slate-400 text-white text-xs font-bold rounded-xl transition-all shadow-xs cursor-pointer border-0 flex items-center justify-center gap-1.5"
+          >
+            {completingPayment ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <CheckCircle2 className="w-3.5 h-3.5" />}
+            {completingPayment ? "Updating..." : "Confirm Payment Status"}
+          </button>
+        </div>
+      );
+    }
+
+    // ── Step 6: Collect Documents ──
+    if (step === 6) {
+      return (
+        <div className="space-y-4">
+          <p className="text-xs text-slate-500 font-semibold leading-relaxed">
+            Verify that all required travel documents have been received from the traveler.
+          </p>
+          <div className="space-y-2">
+            <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest block">Document Checklist</label>
+            {[
+              { key: "passport", label: "🛂 Passport / Visa Copy" },
+              { key: "id_proof", label: "🪪 ID Proof (Aadhaar / PAN)" },
+              { key: "emergency_contact", label: "🚨 Emergency Contact Details" },
+            ].map((doc) => (
+              <label key={doc.key} className={`flex items-center gap-3 p-3 rounded-xl border cursor-pointer transition-all ${docChecklist[doc.key as keyof typeof docChecklist] ? "bg-emerald-50 border-emerald-200 text-emerald-700" : "border-[#e7e1d5]/55 hover:bg-slate-50 text-slate-700"}`}>
+                <input
+                  type="checkbox"
+                  checked={docChecklist[doc.key as keyof typeof docChecklist]}
+                  onChange={(e) => setDocChecklist((prev) => ({ ...prev, [doc.key]: e.target.checked }))}
+                  className="accent-emerald-600"
+                />
+                <span className="text-xs font-bold">{doc.label}</span>
+              </label>
+            ))}
+          </div>
+          <div className="space-y-1">
+            <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest block">ID Document Reference (optional)</label>
+            <input
+              type="text"
+              placeholder="Passport no. or Aadhaar no."
+              value={idDocRef}
+              onChange={(e) => setIdDocRef(e.target.value)}
+              className="w-full h-9 px-3 border border-[#e7e1d5]/70 rounded-xl text-xs font-semibold focus:outline-none focus:border-[#FF5B26]/40 bg-white"
+            />
+          </div>
+          <button
+            disabled={approvingDocs}
+            onClick={handleApproveDocuments}
+            className="w-full py-2.5 bg-[#FF5B26] hover:bg-[#e04b1c] disabled:bg-slate-200 disabled:text-slate-400 text-white text-xs font-bold rounded-xl transition-all shadow-xs cursor-pointer border-0 flex items-center justify-center gap-1.5"
+          >
+            {approvingDocs ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <CheckSquare className="w-3.5 h-3.5" />}
+            {approvingDocs ? "Approving..." : "Approve Documents"}
+          </button>
+        </div>
+      );
+    }
+
+    // ── Step 7: Confirm Booking ──
+    if (step === 7) {
+      const completedSteps = tasks.filter((t) => t.status === "completed").map((t) => t.step);
+      const SUMMARY_STEPS = [
+        { step: 1, label: "Call Completed" },
+        { step: 2, label: "Vibe Check Scheduled" },
+        { step: 3, label: "Brochure Shared" },
+        { step: 4, label: "Vibe Check Conducted" },
+        { step: 5, label: "Payment Received" },
+        { step: 6, label: "Documents Verified" },
+      ];
+      return (
+        <div className="space-y-4">
+          <p className="text-xs text-slate-500 font-semibold leading-relaxed">
+            All tasks are complete. Click below to officially confirm the booking.
+          </p>
+          <div className="bg-emerald-50/50 border border-emerald-100 rounded-2xl p-4 space-y-2">
+            {SUMMARY_STEPS.map((s) => (
+              <div key={s.step} className={`flex items-center gap-2 text-xs font-bold ${completedSteps.includes(s.step) ? "text-emerald-700" : "text-slate-400"}`}>
+                {completedSteps.includes(s.step) ? "✓" : "○"} {s.label}
+              </div>
+            ))}
+          </div>
+          <button
+            disabled={confirmingBooking}
+            onClick={handleConfirmBooking}
+            className="w-full py-3 bg-emerald-600 hover:bg-emerald-700 disabled:bg-slate-200 disabled:text-slate-400 text-white text-sm font-black rounded-xl transition-all shadow-sm cursor-pointer border-0 flex items-center justify-center gap-2"
+          >
+            {confirmingBooking ? <Loader2 className="w-4 h-4 animate-spin" /> : <CheckCircle2 className="w-4 h-4" />}
+            {confirmingBooking ? "Confirming..." : "Confirm Booking 🎉"}
+          </button>
+        </div>
+      );
+    }
+
+    return null;
+  };
 
   return (
     <section className="px-5 md:px-8 py-6 space-y-6 text-left text-nomichi-ink bg-[#FAF8F5]/30 min-h-screen">
-      {/* Back navigation header */}
+      {/* Back navigation */}
       <div className="flex items-center justify-between">
         <Link href="/manager/leads" className="inline-flex items-center gap-2 text-xs font-bold text-slate-500 hover:text-slate-800 transition-colors no-underline">
-          <ArrowLeft className="w-4 h-4" />
-          Back to Leads
+          <ArrowLeft className="w-4 h-4" /> Back to Leads
         </Link>
-
-        {/* Top Dropdowns and Options */}
         <div className="flex items-center gap-2">
           <div className="relative">
-            <button
-              onClick={() => setActionsOpen(!actionsOpen)}
-              className="px-4 py-2 border border-[#e7e1d5] hover:bg-[#FAF8F4] text-slate-700 font-bold text-xs rounded-xl flex items-center gap-2 bg-white cursor-pointer transition-all shadow-xs"
-            >
-              Actions
-              <ChevronDown className="w-4 h-4 text-slate-400" />
+            <button onClick={() => setActionsOpen(!actionsOpen)} className="px-4 py-2 border border-[#e7e1d5] hover:bg-[#FAF8F4] text-slate-700 font-bold text-xs rounded-xl flex items-center gap-2 bg-white cursor-pointer transition-all shadow-xs">
+              Actions <ChevronDown className="w-4 h-4 text-slate-400" />
             </button>
-            
             {actionsOpen && (
               <>
                 <div className="fixed inset-0 z-10" onClick={() => setActionsOpen(false)} />
-                <div className="absolute right-0 mt-2 w-48 rounded-2xl bg-white border border-[#e7e1d5]/55 shadow-lg py-2 z-20 font-bold text-xs text-left">
-                  <button
-                    onClick={() => { setActionsOpen(false); handleUpdateStatusDirect("contacted"); }}
-                    className="w-full px-4 py-2.5 text-slate-700 hover:bg-[#FAF8F4] text-left border-0 bg-transparent cursor-pointer"
-                  >
-                    Change Status: Contacted
+                <div className="absolute right-0 mt-2 w-52 rounded-2xl bg-white border border-[#e7e1d5]/55 shadow-lg py-2 z-20 font-bold text-xs text-left">
+                  <button onClick={() => { setActionsOpen(false); handleUpdateStatusDirect("lost"); }} className="w-full px-4 py-2.5 text-rose-600 hover:bg-rose-50 text-left border-0 bg-transparent cursor-pointer">
+                    Mark Not a Fit
                   </button>
-                  <button
-                    onClick={() => { setActionsOpen(false); handleUpdateStatusDirect("qualified"); }}
-                    className="w-full px-4 py-2.5 text-slate-700 hover:bg-[#FAF8F4] text-left border-0 bg-transparent cursor-pointer"
-                  >
-                    Change Status: Qualified
-                  </button>
-                  <button
-                    onClick={() => { setActionsOpen(false); handleUpdateStatusDirect("negotiating"); }}
-                    className="w-full px-4 py-2.5 text-slate-700 hover:bg-[#FAF8F4] text-left border-0 bg-transparent cursor-pointer"
-                  >
-                    Change Status: Vibe Check
-                  </button>
-                  <button
-                    onClick={() => { setActionsOpen(false); handleUpdateStatusDirect("converted"); }}
-                    className="w-full px-4 py-2.5 text-slate-700 hover:bg-[#FAF8F4] text-left border-0 bg-transparent cursor-pointer"
-                  >
-                    Convert to Booking
-                  </button>
-                  <button
-                    onClick={() => { setActionsOpen(false); handleUpdateStatusDirect("lost"); }}
-                    className="w-full px-4 py-2.5 text-rose-600 hover:bg-rose-50 text-left border-0 bg-transparent cursor-pointer"
-                  >
-                    Mark Not Fit
-                  </button>
-                  <div className="border-t border-slate-100 my-1" />
-                  <button
-                    onClick={() => { setActionsOpen(false); setTaskCreateOpen(true); }}
-                    className="w-full px-4 py-2.5 text-slate-700 hover:bg-[#FAF8F4] text-left border-0 bg-transparent cursor-pointer"
-                  >
-                    Assign Task
+                  <button onClick={() => { setActionsOpen(false); handleAddNoteClick(); }} className="w-full px-4 py-2.5 text-slate-700 hover:bg-[#FAF8F4] text-left border-0 bg-transparent cursor-pointer">
+                    Add Note
                   </button>
                 </div>
               </>
@@ -855,21 +1109,16 @@ export default function ManagerLeadDetailPage({ params }: ManagerLeadDetailPageP
 
       {/* Main split grid */}
       <div className="grid grid-cols-1 xl:grid-cols-12 gap-6 items-start">
-        {/* Left Column (8 cols) */}
+        {/* Left column */}
         <div className="xl:col-span-8 space-y-6">
-          
-          {/* Header Card: Lead Details Profile */}
+
+          {/* Header card */}
           <div className="bg-white rounded-3xl border border-[#e7e1d5]/55 shadow-xs p-6">
             <div className="flex flex-col md:flex-row md:items-stretch justify-between gap-6 md:divide-x md:divide-[#e7e1d5]/50">
               <div className="flex items-start gap-4 flex-1">
                 <div className="w-16 h-16 rounded-full border border-slate-200 bg-white overflow-hidden shrink-0 flex items-center justify-center font-bold">
                   <img
-                    src={leadData.travelerProfile?.avatar_url
-                      ? leadData.travelerProfile.avatar_url
-                      : (leadData.name === "Smita Jhode"
-                        ? "https://images.unsplash.com/photo-1494790108377-be9c29b29330?auto=format&fit=crop&w=150&h=150&q=80"
-                        : `https://api.dicebear.com/7.x/avataaars/svg?seed=${encodeURIComponent(leadData.name || "default")}`)
-                    }
+                    src={leadData.travelerProfile?.avatar_url || `https://api.dicebear.com/7.x/avataaars/svg?seed=${encodeURIComponent(leadData.name || "default")}`}
                     alt={leadData.name}
                     className="w-full h-full object-cover"
                   />
@@ -877,44 +1126,21 @@ export default function ManagerLeadDetailPage({ params }: ManagerLeadDetailPageP
                 <div className="space-y-1">
                   <div className="flex flex-wrap items-center gap-3">
                     <h1 className="text-2xl font-bold text-slate-900 leading-tight">{leadData.name}</h1>
-                    
-                    {/* Status Pill */}
-                    <span className={`inline-flex items-center rounded-lg px-2.5 py-1 text-[10px] font-black uppercase tracking-wider border ${
-                      leadData.status === "contacted"
-                        ? "bg-[#E8F5E9] text-[#2E7D32] border-[#C8E6C9]/40"
-                        : statusMeta[currentStatusKey]?.className || ""
-                    }`}>
-                      {leadData.status === "negotiating" ? "Vibe Check" : leadData.status === "converted" || leadData.status === "confirmed" ? "Confirmed" : (leadData.status || "New")}
+                    <span className={`inline-flex items-center rounded-lg px-2.5 py-1 text-[10px] font-black uppercase tracking-wider border ${statusMeta[currentStatusKey]?.className || "bg-slate-50 text-slate-500 border-slate-200"}`}>
+                      {statusMeta[currentStatusKey]?.label || leadData.status || "New"}
                     </span>
                   </div>
-                  
-                  {/* Subtext info */}
                   <div className="pt-1.5 space-y-1 text-[11px] font-semibold text-slate-500">
-                    <div className="flex items-center gap-2">
-                      <Phone className="w-3.5 h-3.5 text-slate-400" />
-                      <span>{leadData.phone || "No phone number"}</span>
-                    </div>
-                    <div className="flex items-center gap-2">
-                      <Mail className="w-3.5 h-3.5 text-slate-400" />
-                      <span>{leadData.email}</span>
-                    </div>
-                    <div className="flex items-center gap-2">
-                      <MapPin className="w-3.5 h-3.5 text-slate-400 shrink-0" />
-                      <span>{leadLocation}</span>
-                    </div>
+                    <div className="flex items-center gap-2"><Phone className="w-3.5 h-3.5 text-slate-400" /><span>{leadData.phone || "No phone"}</span></div>
+                    <div className="flex items-center gap-2"><Mail className="w-3.5 h-3.5 text-slate-400" /><span>{leadData.email}</span></div>
+                    <div className="flex items-center gap-2"><MapPin className="w-3.5 h-3.5 text-slate-400 shrink-0" /><span>{leadLocation}</span></div>
                   </div>
-
-                  {/* Lead ID Pill */}
                   <div className="pt-2">
-                    <span className="inline-flex items-center rounded-lg bg-[#EBF5FF] px-2.5 py-1 text-[10px] font-bold text-[#2563EB]">
-                      Lead ID: {formatLeadId(leadData)}
-                    </span>
+                    <span className="inline-flex items-center rounded-lg bg-[#EBF5FF] px-2.5 py-1 text-[10px] font-bold text-[#2563EB]">Lead ID: {formatLeadId(leadData)}</span>
                   </div>
                 </div>
               </div>
-
-              {/* Metadata Grid */}
-              <div className="grid grid-cols-2 gap-x-6 gap-y-4 text-left w-full md:w-auto md:min-w-[360px] md:pl-6">
+              <div className="grid grid-cols-2 gap-x-6 gap-y-4 text-left w-full md:w-auto md:min-w-[340px] md:pl-6">
                 <div>
                   <div className="text-[9px] font-black uppercase tracking-wider text-slate-400">Lead Source</div>
                   <div className="mt-1 text-xs font-extrabold text-slate-800">{leadData.source || "Website"}</div>
@@ -942,117 +1168,89 @@ export default function ManagerLeadDetailPage({ params }: ManagerLeadDetailPageP
             </div>
           </div>
 
-          {/* Lead Pipeline Tracker Card */}
+          {/* Pipeline tracker */}
           <div className="bg-white rounded-3xl border border-[#e7e1d5]/55 shadow-xs p-6 space-y-4 text-left">
             <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-6 pt-1">
-              <div className="flex flex-nowrap items-center gap-2 lg:gap-2.5 flex-1 overflow-x-auto scrollbar-none py-1.5">
+              <div className="flex flex-nowrap items-center gap-2 flex-1 overflow-x-auto scrollbar-none py-1.5">
                 {pipelineStages.map((stage, idx) => {
                   const isDone = idx < activeStageIndex && currentStatusKey !== "lost";
                   const isCurrent = idx === activeStageIndex && currentStatusKey !== "lost";
-                  
                   let pillStyle = "bg-slate-50 text-slate-400 border-slate-200";
-                  let circleStyle = "";
-                  let showCircle = false;
-                  
-                  if (isDone) {
-                    pillStyle = "bg-[#E8F5E9]/50 text-emerald-700 border-emerald-200/80";
-                    circleStyle = "bg-emerald-600 text-white";
-                    showCircle = true;
-                  } else if (isCurrent) {
-                    pillStyle = "bg-[#FFF5F2] text-[#FF5B26] border-[#FFD3C4]/80 ring-2 ring-[#FF5B26]/5";
-                    circleStyle = "bg-[#FF5B26] text-white";
-                    showCircle = true;
-                  }
-
+                  if (isDone) pillStyle = "bg-[#E8F5E9]/50 text-emerald-700 border-emerald-200/80";
+                  else if (isCurrent) pillStyle = "bg-[#FFF5F2] text-[#FF5B26] border-[#FFD3C4]/80 ring-2 ring-[#FF5B26]/5";
                   return (
-                     <div key={stage.key} className="flex items-center gap-2 shrink-0">
-                      <div className={`flex items-center gap-2.5 px-3.5 py-2.5 rounded-2xl text-[10px] font-black uppercase tracking-wider border transition-all ${pillStyle}`}>
-                        {showCircle && (
-                          <div className={`w-4 h-4 rounded-full flex items-center justify-center shrink-0 ${circleStyle}`}>
-                            <span className="text-[9px] font-black">✓</span>
-                          </div>
-                        )}
-                        <div className="flex flex-col text-left leading-tight">
-                          <span className="font-extrabold">{stage.label}</span>
-                          {stage.date && (
-                            <span className="text-[8px] text-slate-400 font-bold lowercase mt-0.5">{stage.date}</span>
-                          )}
-                        </div>
+                    <div key={stage.key} className="flex items-center gap-2 shrink-0">
+                      <div className={`flex items-center gap-2 px-3 py-2 rounded-xl text-[9px] font-black uppercase tracking-wider border transition-all ${pillStyle}`}>
+                        {(isDone || isCurrent) && <span className="font-black">{isDone ? "✓" : "●"}</span>}
+                        {stage.label}
                       </div>
-                      {idx < pipelineStages.length - 1 && (
-                        <span className="text-slate-300 font-extrabold text-xs inline-flex items-center justify-center shrink-0 px-0.5 font-display">{">"}</span>
-                      )}
+                      {idx < pipelineStages.length - 1 && <span className="text-slate-300 font-extrabold text-xs shrink-0">›</span>}
                     </div>
                   );
                 })}
               </div>
-              
-              <div className="flex flex-col gap-1.5 shrink-0 w-full lg:w-auto md:min-w-[120px]">
-                <button
-                  onClick={() => handleUpdateStatusDirect("lost")}
-                  disabled={currentStatusKey === "lost" || updatingStatus}
-                  className="px-4 py-1.5 border border-[#FF5B26] hover:bg-[#FFEFEA] text-[#FF5B26] font-bold text-[10px] rounded-lg transition-all cursor-pointer bg-white w-full text-center"
-                >
+              <div className="shrink-0">
+                <button onClick={() => handleUpdateStatusDirect("lost")} disabled={currentStatusKey === "lost" || updatingStatus} className="px-4 py-1.5 border border-[#FF5B26] hover:bg-[#FFEFEA] text-[#FF5B26] font-bold text-[10px] rounded-lg transition-all cursor-pointer bg-white w-full text-center">
                   Mark Not Fit
                 </button>
               </div>
             </div>
           </div>
 
-          {/* Lead Workflow Progress Card */}
+          {/* Conversion Roadmap */}
           <div className="bg-white rounded-3xl border border-[#e7e1d5]/55 shadow-xs p-6 space-y-4 text-left">
-            <div className="border-b border-slate-100 pb-3">
-              <span className="text-[10px] font-black uppercase tracking-widest text-slate-400">Lead Workflow Progress</span>
+            <div className="border-b border-slate-100 pb-3 flex items-center justify-between">
+              <div>
+                <span className="text-xs font-black uppercase tracking-widest text-slate-700">Conversion Roadmap</span>
+                <p className="text-[10px] text-slate-400 font-semibold mt-0.5">7-step lead journey progress</p>
+              </div>
+              {nextActionTask && (
+                <span className="text-[9px] font-black uppercase tracking-widest px-2.5 py-1 rounded-full bg-[#FFEFEA] text-[#FF5B26]">
+                  Step {nextActionTask.step} Active
+                </span>
+              )}
             </div>
-            
-            <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-2 lg:gap-3 py-2 overflow-x-auto lg:overflow-x-visible scrollbar-none">
-              {renderWorkflowStep("Contact Traveller", workflowSteps.step1, "Completed", 1)}
-              <div className="hidden lg:block text-slate-300 font-extrabold">→</div>
-              {renderWorkflowStep("Share Brochure", workflowSteps.step2, "Completed", 2)}
-              <div className="hidden lg:block text-slate-300 font-extrabold">→</div>
-              {renderWorkflowStep("Schedule Vibe Check", workflowSteps.step3, "In Progress", 3)}
-              <div className="hidden lg:block text-slate-300 font-extrabold">→</div>
-              {renderWorkflowStep("Payment Follow-up", workflowSteps.step4, "Pending", 4)}
-              <div className="hidden lg:block text-slate-300 font-extrabold">→</div>
-              {renderWorkflowStep("Collect Documents", workflowSteps.step5, "Pending", 5)}
-            </div>
-
-            <div className="text-[10px] text-slate-400 font-bold tracking-wide">
-              Complete current step to unlock next action.
+            <div className="grid grid-cols-4 lg:grid-cols-7 gap-2">
+              {workflowSteps.map(({ step, state }) => {
+                const label = WORKFLOW_LABELS[step - 1];
+                let circleClass = "bg-slate-50 text-slate-400 border-slate-200";
+                let icon: any = <span className="text-[9px] font-black text-slate-300">{step}</span>;
+                if (state === "completed") {
+                  circleClass = "bg-emerald-50 text-emerald-600 border-emerald-200";
+                  icon = <span className="font-extrabold text-[10px]">✓</span>;
+                } else if (state === "in-progress") {
+                  circleClass = "bg-[#FFEFEA] text-[#FF5B26] border-[#FFD3C4] ring-2 ring-[#FF5B26]/10";
+                  icon = <span className="text-[9px] font-black">{step}</span>;
+                }
+                return (
+                  <div key={step} className="flex flex-col items-center gap-1.5 text-center">
+                    <div className={`w-8 h-8 rounded-full border flex items-center justify-center shrink-0 transition-all ${circleClass}`}>{icon}</div>
+                    <div className={`text-[8px] font-bold leading-tight ${state === "in-progress" ? "text-[#FF5B26]" : state === "completed" ? "text-slate-600" : "text-slate-300"}`}>
+                      {label}
+                    </div>
+                  </div>
+                );
+              })}
             </div>
           </div>
 
-          {/* Dynamic Tabs Block with side-by-side timeline split */}
+          {/* Tabs */}
           <div className="bg-transparent border-0 space-y-6">
-            
-            {/* Tabs Selector */}
             <div className="bg-white rounded-3xl border border-[#e7e1d5]/55 shadow-xs p-4 flex items-center justify-between">
               <div className="flex items-center gap-2 overflow-x-auto scrollbar-none">
-                {["Overview", "Tasks", "Follow-ups", "Notes", "Activity"].map((tab) => {
+                {["Overview", "Tasks", "Notes", "Activity"].map((tab) => {
                   let badgeVal = 0;
-                  if (tab === "Tasks") {
-                    badgeVal = tasks.filter(t => t.status !== 'completed').length;
-                  } else if (tab === "Notes") {
-                    badgeVal = leadData?.lead_notes?.length || 0;
-                  }
-
+                  if (tab === "Tasks") badgeVal = tasks.filter((t) => t.status !== "completed").length;
+                  else if (tab === "Notes") badgeVal = leadData?.lead_notes?.length || 0;
                   return (
                     <button
                       key={tab}
                       onClick={() => setActiveTab(tab)}
-                      className={`px-4 py-2 text-xs font-bold rounded-xl transition-all cursor-pointer border-0 flex items-center gap-1.5 ${
-                        activeTab === tab
-                          ? "bg-[#FFEFEA] text-[#FF5B26]"
-                          : "text-slate-500 hover:bg-[#FAF8F5] hover:text-slate-700 bg-transparent"
-                      }`}
+                      className={`px-4 py-2 text-xs font-bold rounded-xl transition-all cursor-pointer border-0 flex items-center gap-1.5 ${activeTab === tab ? "bg-[#FFEFEA] text-[#FF5B26]" : "text-slate-500 hover:bg-[#FAF8F5] hover:text-slate-700 bg-transparent"}`}
                     >
                       <span>{tab}</span>
                       {badgeVal > 0 && (
-                        <span className={`w-4 h-4 rounded-full text-[9px] font-black flex items-center justify-center shrink-0 ${
-                          activeTab === tab ? "bg-[#FF5B26] text-white" : "bg-slate-100 text-slate-500"
-                        }`}>
-                          {badgeVal}
-                        </span>
+                        <span className={`w-4 h-4 rounded-full text-[9px] font-black flex items-center justify-center shrink-0 ${activeTab === tab ? "bg-[#FF5B26] text-white" : "bg-slate-100 text-slate-500"}`}>{badgeVal}</span>
                       )}
                     </button>
                   );
@@ -1061,760 +1259,261 @@ export default function ManagerLeadDetailPage({ params }: ManagerLeadDetailPageP
             </div>
 
             <div className="grid grid-cols-1 lg:grid-cols-12 gap-6 items-start">
-              {/* Active Tab Content Card */}
-              <div className="lg:col-span-7 bg-white rounded-3xl border border-[#e7e1d5]/55 shadow-xs p-6 flex flex-col justify-between">
-                <div className="flex-1">
-                  
-                  {/* Overview Tab content */}
-                  {activeTab === "Overview" && (
-                    <div className="space-y-6">
-                      
-                      {/* Trip Interest card */}
-                      <div>
-                        <h2 className="text-sm font-black uppercase tracking-wider text-slate-400 text-left mb-3">Trip Interest</h2>
-                        <div className="flex flex-col gap-4 border border-[#e7e1d5]/55 rounded-2xl overflow-hidden p-3.5 text-left bg-[#FAF8F5]/20">
-                          <div className="relative w-full h-40 rounded-xl overflow-hidden shrink-0 shadow-2xs">
-                            <img
-                              src={leadData.trips?.image_url || "https://images.unsplash.com/photo-1540959733332-eab4deabeeaf?auto=format&fit=crop&w=600&q=80"}
-                              alt={leadData.trips?.title || "Trip"}
-                              className="w-full h-full object-cover"
-                            />
-                            <div className="absolute bottom-2 left-2 text-white text-[8px] font-black bg-black/60 px-2 py-0.5 rounded-md shadow-xs">
-                              {leadData.trips?.destination || "Destination"}
-                            </div>
-                          </div>
-                          
-                          <div className="flex flex-col justify-between py-0.5 text-left w-full space-y-2">
-                            <div>
-                              <h3 className="text-xs font-black uppercase text-slate-800 leading-snug">{leadData.trips?.title || "General Enquiry"}</h3>
-                              <div className="mt-1 flex items-center">
-                                <span className="inline-flex rounded-full bg-emerald-50 border border-emerald-100 px-2.5 py-0.5 text-[8px] font-black text-emerald-600 uppercase">
-                                  Open For Enquiries
-                                </span>
-                              </div>
-                            </div>
-                            
-                            <div className="flex justify-between items-end border-t border-slate-200/50 pt-2.5 text-[9px] font-bold text-slate-500">
-                              <div className="grid grid-cols-2 sm:grid-cols-3 gap-x-6 gap-y-2.5 flex-1 pr-3">
-                                <div>
-                                  <span className="text-[8px] font-black uppercase text-slate-400 tracking-wider">Seats Available</span>
-                                  <span className="block text-slate-700 font-extrabold mt-0.5">
-                                    {leadData?.name === "Smita Jhode" ? "50 / 50" : `${leadData.trips?.seats_left ?? 0} / ${leadData.trips?.total_seats ?? 20}`}
-                                  </span>
-                                </div>
-                                <div>
-                                  <span className="text-[8px] font-black uppercase text-slate-400 tracking-wider">Enquiries</span>
-                                  <span className="block text-slate-700 font-extrabold mt-0.5">
-                                    {leadData?.name === "Smita Jhode" ? "24" : "1"}
-                                  </span>
-                                </div>
-                                <div>
-                                  <span className="text-[8px] font-black uppercase text-slate-400 tracking-wider">Confirmed</span>
-                                  <span className="block text-slate-700 font-extrabold mt-0.5">
-                                    {leadData?.name === "Smita Jhode" ? "12" : "0"}
-                                  </span>
-                                </div>
-                                <div>
-                                  <span className="text-[8px] font-black uppercase text-slate-400 tracking-wider">Next Departure</span>
-                                  <span className="block text-slate-700 font-extrabold mt-0.5 truncate max-w-[100px]">
-                                    {leadData?.name === "Smita Jhode" ? "12 Jul 2026" : (leadData.trips?.dates || "TBD")}
-                                  </span>
-                                </div>
-                                <div>
-                                  <span className="text-[8px] font-black uppercase text-slate-400 tracking-wider">Manager</span>
-                                  <div className="flex items-center gap-1.5 mt-0.5">
-                                    <img
-                                      src="https://images.unsplash.com/photo-1535713875002-d1d0cf377fde?auto=format&fit=crop&w=40&h=40&q=80"
-                                      alt="Manager"
-                                      className="w-4 h-4 rounded-full object-cover shrink-0"
-                                    />
-                                    <span className="text-slate-700 font-extrabold text-[8px] truncate max-w-[80px]">
-                                      {assignedProfile?.full_name || "Manager"}
-                                    </span>
-                                  </div>
-                                </div>
-                              </div>
-                              <div className="shrink-0 pl-2">
-                                <Link href={`/manager/trips/${leadData.trips?.id || ""}`} className="px-3 py-1.5 bg-white hover:bg-slate-50 text-[#FF5B26] text-[10px] font-bold border border-[#FF5B26] rounded-xl transition-all leading-none no-underline shadow-2xs block">
-                                  View Trip
-                                </Link>
-                              </div>
-                            </div>
-                          </div>
-                        </div>
-                      </div>
+              {/* Tab content */}
+              <div className="lg:col-span-7 bg-white rounded-3xl border border-[#e7e1d5]/55 shadow-xs p-6">
 
-                      {/* Requirements Grid */}
-                      <div className="border-t border-slate-100 pt-5">
-                        <h2 className="text-sm font-black uppercase tracking-wider text-slate-400 text-left mb-3">Requirements</h2>
-                        <div className="grid grid-cols-2 gap-4 text-xs font-semibold text-slate-500 text-left">
-                          <div>
-                            <div className="text-[9px] font-black uppercase text-slate-400 tracking-wider">Group Type</div>
-                            <div className="mt-1 text-slate-800 font-bold">{leadData.group_type || "N/A"}</div>
+                {/* Overview */}
+                {activeTab === "Overview" && (
+                  <div className="space-y-6">
+                    <div>
+                      <h2 className="text-sm font-black uppercase tracking-wider text-slate-400 mb-3">Trip Interest</h2>
+                      <div className="flex flex-col gap-4 border border-[#e7e1d5]/55 rounded-2xl overflow-hidden p-3.5 bg-[#FAF8F5]/20">
+                        <div className="relative w-full h-36 rounded-xl overflow-hidden">
+                          <img src={leadData.trips?.image_url || "https://images.unsplash.com/photo-1540959733332-eab4deabeeaf?auto=format&fit=crop&w=600&q=80"} alt={leadData.trips?.title} className="w-full h-full object-cover" />
+                          <div className="absolute bottom-2 left-2 text-white text-[8px] font-black bg-black/60 px-2 py-0.5 rounded-md">{leadData.trips?.destination || "Destination"}</div>
+                        </div>
+                        <div className="space-y-2">
+                          <h3 className="text-xs font-black uppercase text-slate-800">{leadData.trips?.title || "General Enquiry"}</h3>
+                          <div className="grid grid-cols-2 sm:grid-cols-3 gap-x-4 gap-y-2 text-[9px] font-bold text-slate-500">
+                            <div><span className="text-[8px] font-black uppercase text-slate-400 tracking-wider block">Seats Left</span><span className="text-slate-700 font-extrabold">{leadData.trips?.seats_left ?? "—"} / {leadData.trips?.total_seats ?? "—"}</span></div>
+                            <div><span className="text-[8px] font-black uppercase text-slate-400 tracking-wider block">Group Size</span><span className="text-slate-700 font-extrabold">{leadData.group_size || "—"}</span></div>
+                            <div><span className="text-[8px] font-black uppercase text-slate-400 tracking-wider block">Group Type</span><span className="text-slate-700 font-extrabold capitalize">{leadData.group_type || "—"}</span></div>
                           </div>
-                          <div>
-                            <div className="text-[9px] font-black uppercase text-slate-400 tracking-wider">Preferred Month</div>
-                            <div className="mt-1 text-slate-800 font-bold">{leadData.preferred_month || "N/A"}</div>
-                          </div>
-                          <div>
-                            <div className="text-[9px] font-black uppercase text-slate-400 tracking-wider">Wants trip to feel</div>
-                            <div className="mt-1 text-slate-800 font-bold">{leadData.hope_trip_feels_like || "N/A"}</div>
-                          </div>
-                          <div>
-                            <div className="text-[9px] font-black uppercase text-slate-400 tracking-wider">Special Requests</div>
-                            <div className="mt-1 text-slate-800 font-bold text-rose-600">{leadData.dietary_and_accessibility || "None"}</div>
-                          </div>
+                          <Link href={`/manager/trips/${leadData.trips?.id || ""}`} className="inline-block px-3 py-1.5 bg-white hover:bg-slate-50 text-[#FF5B26] text-[10px] font-bold border border-[#FF5B26] rounded-xl no-underline shadow-2xs">View Trip</Link>
                         </div>
                       </div>
                     </div>
-                  )}
-
-                  {/* Tasks list tab */}
-                  {activeTab === "Tasks" && (
-                    <div className="space-y-4 text-left">
-                      <div className="flex items-center justify-between border-b border-slate-100 pb-2">
-                        <h2 className="text-xs font-black uppercase tracking-widest text-slate-400">Lead Tasks</h2>
-                        <button
-                          onClick={() => setTaskCreateOpen(true)}
-                          className="px-3 py-1.5 bg-[#FF5B26] hover:bg-[#FF5B26]/90 text-white font-bold text-xs rounded-xl shadow-xs transition-all border-0 cursor-pointer"
-                        >
-                          + Create Task
-                        </button>
-                      </div>
-                      
-                      <div className="divide-y divide-slate-100 bg-[#FAF8F5]/30 border border-[#e7e1d5]/55 rounded-2xl p-4 space-y-2 max-h-[360px] overflow-y-auto">
-                        {tasks.length === 0 ? (
-                          <p className="py-6 text-center text-[11px] font-bold text-slate-400">No tasks created yet.</p>
-                        ) : (
-                          tasks.map((t) => (
-                            <div key={t.id} className="flex items-center justify-between py-2.5">
-                              <label className="flex items-center gap-3 font-bold text-xs text-slate-800 cursor-pointer">
-                                <input
-                                  type="checkbox"
-                                  checked={t.status === "completed"}
-                                  disabled={t.status === "completed"}
-                                  onChange={() => handleCompleteTask(t.id)}
-                                  className="h-4 w-4 rounded border-[#e7e1d5] text-[#FF5B26] focus:ring-[#FF5B26] disabled:opacity-50"
-                                />
-                                <span className={t.status === "completed" ? "line-through text-slate-400" : ""}>{t.title}</span>
-                              </label>
-                              <span className={`px-2.5 py-0.5 rounded-full text-[9px] font-black uppercase ${
-                                t.status === "completed" ? "bg-emerald-50 text-emerald-700" : "bg-orange-50 text-orange-700"
-                              }`}>
-                                {t.status}
-                              </span>
-                            </div>
-                          ))
-                        )}
+                    <div className="border-t border-slate-100 pt-5">
+                      <h2 className="text-sm font-black uppercase tracking-wider text-slate-400 mb-3">Requirements</h2>
+                      <div className="grid grid-cols-2 gap-4 text-xs font-semibold text-slate-500">
+                        <div><div className="text-[9px] font-black uppercase text-slate-400 tracking-wider">Group Type</div><div className="mt-1 text-slate-800 font-bold">{leadData.group_type || "N/A"}</div></div>
+                        <div><div className="text-[9px] font-black uppercase text-slate-400 tracking-wider">Preferred Month</div><div className="mt-1 text-slate-800 font-bold">{leadData.preferred_month || "N/A"}</div></div>
+                        <div><div className="text-[9px] font-black uppercase text-slate-400 tracking-wider">Wants Trip to Feel</div><div className="mt-1 text-slate-800 font-bold">{leadData.hope_trip_feels_like || "N/A"}</div></div>
+                        <div><div className="text-[9px] font-black uppercase text-slate-400 tracking-wider">Special Requests</div><div className="mt-1 text-slate-800 font-bold text-rose-600">{leadData.dietary_and_accessibility || "None"}</div></div>
                       </div>
                     </div>
-                  )}
+                  </div>
+                )}
 
-                  {/* Follow-ups list tab */}
-                  {activeTab === "Follow-ups" && (
-                    <div className="space-y-4 text-left">
-                      <div className="flex items-center justify-between border-b border-slate-100 pb-2">
-                        <h2 className="text-xs font-black uppercase tracking-widest text-slate-400">Follow-up Schedule</h2>
-                        <button
-                          onClick={handleScheduleCallDirect}
-                          className="px-3 py-1.5 bg-[#FF5B26] hover:bg-[#FF5B26]/90 text-white font-bold text-xs rounded-xl shadow-xs transition-all border-0 cursor-pointer"
-                        >
-                          + Schedule Call
-                        </button>
-                      </div>
-                      
-                      <div className="overflow-x-auto border border-[#e7e1d5]/55 rounded-2xl bg-white max-h-[360px]">
-                        <table className="w-full border-collapse text-xs text-left">
-                          <thead>
-                            <tr className="bg-slate-50 border-b border-[#e7e1d5]/40 text-slate-400 font-bold uppercase text-[9px] tracking-wider">
-                              <th className="px-5 py-3">Date</th>
-                              <th className="px-5 py-3">Type</th>
-                              <th className="px-5 py-3">Status</th>
-                              <th className="px-5 py-3 text-right">Action</th>
-                            </tr>
-                          </thead>
-                          <tbody className="divide-y divide-slate-100 font-bold text-slate-700">
-                            {followUpTasks.length === 0 ? (
-                              <tr>
-                                <td colSpan={4} className="px-5 py-6 text-center text-slate-400">
-                                  No follow-up dates scheduled.
-                                </td>
-                              </tr>
-                            ) : (
-                              followUpTasks.map((f) => (
-                                <tr key={f.id} className="hover:bg-slate-50/50">
-                                  <td className="px-5 py-3.5">{formatDate(f.due_date)}</td>
-                                  <td className="px-5 py-3.5 capitalize">{f.type === "communication" ? "Call" : f.type}</td>
-                                  <td className="px-5 py-3.5">
-                                    <span className={`px-2 py-0.5 rounded-full text-[9px] font-black uppercase ${
-                                      f.status === "completed" ? "bg-emerald-50 text-emerald-700" :
-                                      f.status === "cancelled" ? "bg-gray-100 text-gray-500" : "bg-amber-50 text-amber-700"
-                                    }`}>
-                                      {f.status === "completed" ? "Completed" : f.status === "to do" ? "Pending" : f.status}
-                                    </span>
-                                  </td>
-                                  <td className="px-5 py-3.5 text-right">
-                                    {f.status !== "completed" && f.status !== "cancelled" && (
-                                      <button
-                                        onClick={() => handleCompleteTask(f.id)}
-                                        className="px-2.5 py-1 text-[10px] font-black uppercase text-emerald-600 hover:bg-emerald-50 rounded-lg border-0 bg-transparent cursor-pointer"
-                                      >
-                                        Complete
-                                      </button>
-                                    )}
-                                  </td>
-                                </tr>
-                              ))
-                            )}
-                          </tbody>
-                        </table>
-                      </div>
+                {/* Tasks — read-only list */}
+                {activeTab === "Tasks" && (
+                  <div className="space-y-4 text-left">
+                    <div className="flex items-center justify-between border-b border-slate-100 pb-2">
+                      <h2 className="text-xs font-black uppercase tracking-widest text-slate-400">Workflow Tasks</h2>
+                      <span className="text-[10px] text-slate-400 font-bold">Complete via Next Action panel →</span>
                     </div>
-                  )}
-
-                  {/* Notes tab */}
-                  {activeTab === "Notes" && (
-                    <div className="space-y-4">
-                      <div className="flex items-center justify-between border-b border-slate-100 pb-2">
-                        <h2 className="text-xs font-black uppercase tracking-widest text-slate-400 text-left font-display">Log note</h2>
-                      </div>
-                      
-                      <form onSubmit={handleAddNoteSubmit} className="space-y-3">
-                        <textarea
-                          required
-                          rows={3}
-                          placeholder="Log a client interaction or note requirements..."
-                          value={newNoteText}
-                          onChange={(e) => setNewNoteText(e.target.value)}
-                          className="w-full px-4 py-3 bg-[#FAF8F4]/30 border border-[#e7e1d5]/55 rounded-2xl text-xs font-bold focus:outline-none focus:border-[#FF5B26]/30 transition-all resize-none text-slate-800 placeholder-slate-400"
-                        />
-                        <div className="flex justify-end">
-                          <button
-                            type="submit"
-                            disabled={addingNote || !newNoteText.trim() || !currentUser}
-                            className="flex items-center gap-2 px-5 py-2.5 bg-[#FF5B26] text-white text-xs font-bold rounded-xl hover:bg-[#FF5B26]/90 transition-all shadow-xs border-0 cursor-pointer"
-                          >
-                            {addingNote ? <Loader2 className="w-3.5 h-3.5 animate-spin shrink-0" /> : <Send className="w-3.5 h-3.5 shrink-0" />}
-                            Log Note
-                          </button>
-                        </div>
-                      </form>
-
-                      <div className="space-y-3 max-h-[220px] overflow-y-auto overflow-x-hidden scrollbar-none">
-                        {!leadData.lead_notes || leadData.lead_notes.length === 0 ? (
-                          <div className="rounded-2xl border border-dashed border-[#e7e1d5]/50 bg-slate-50/50 px-4 py-6 text-xs text-slate-400 text-center font-semibold">
-                            No notes logged yet.
-                          </div>
-                        ) : (
-                          [...leadData.lead_notes]
-                            .sort((a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime())
-                            .map((note) => {
-                              const noteText = note.note_text || "";
-                              const { title: noteTitle, description: noteDesc } = getLeadNoteDisplay(noteText);
-                              const { iconColor, Icon } = getLeadNoteVisual(noteText);
-                              const authorLabel = getLeadNoteAuthorLabel(note, usersById);
-
-                              return (
-                                <div key={note.id} className="rounded-2xl border border-[#e7e1d5]/55 bg-[#FAF8F5]/20 p-4 space-y-2 text-left text-xs">
-                                  <div className="flex items-center justify-between text-slate-500 font-bold text-[10px]">
-                                    <span className="inline-flex items-center gap-1">
-                                      <Clock3 className="w-3 h-3 text-slate-400" />
-                                      {formatDateTime(note.created_at)}
-                                    </span>
-                                    <span className="uppercase tracking-wider">
-                                      {authorLabel}
-                                    </span>
-                                  </div>
-                                  <div className={`inline-flex items-center gap-1 rounded-full border px-2.5 py-0.5 text-[8px] font-black uppercase tracking-widest ${iconColor}`}>
-                                    <Icon className="w-3.5 h-3.5" />
-                                    {noteTitle}
-                                  </div>
-                                  <p className="text-slate-700 font-semibold leading-relaxed break-all">{noteDesc}</p>
-                                </div>
-                              );
-                            })
-                        )}
-                      </div>
-                    </div>
-                  )}
-
-                  {/* Activity Tab */}
-                  {activeTab === "Activity" && (
-                    <div className="space-y-4 text-left">
-                      <div className="border-b border-slate-100 pb-2">
-                        <h2 className="text-xs font-black uppercase tracking-widest text-slate-400">Activity History</h2>
-                      </div>
-                      <div className="bg-[#FAF8F5]/30 border border-[#e7e1d5]/55 rounded-2xl p-4 max-h-[360px] overflow-y-auto animate-in fade-in duration-300">
-                        <div className="space-y-4">
-                          {timelineEvents.map((event, idx) => (
-                            <div key={idx} className="flex gap-3 text-xs">
-                              <div className={`h-7 w-7 rounded-full flex items-center justify-center shrink-0 border border-white ${event.iconBg}`}>
-                                <event.icon className="w-3.5 h-3.5" />
+                    <div className="divide-y divide-slate-100 bg-[#FAF8F5]/30 border border-[#e7e1d5]/55 rounded-2xl p-4 space-y-1 max-h-[400px] overflow-y-auto">
+                      {tasks.length === 0 ? (
+                        <p className="py-6 text-center text-[11px] font-bold text-slate-400">No tasks yet. Tasks are auto-generated as the workflow progresses.</p>
+                      ) : (
+                        tasks.sort((a, b) => (a.step || 0) - (b.step || 0)).map((t) => (
+                          <div key={t.id} className="flex items-center justify-between py-3">
+                            <div className="flex items-center gap-3">
+                              <div className={`w-6 h-6 rounded-full flex items-center justify-center shrink-0 border text-[10px] font-black ${t.status === "completed" ? "bg-emerald-50 text-emerald-600 border-emerald-200" : nextActionTask?.id === t.id ? "bg-[#FFEFEA] text-[#FF5B26] border-[#FFD3C4]" : "bg-slate-50 text-slate-400 border-slate-200"}`}>
+                                {t.status === "completed" ? "✓" : t.step || "·"}
                               </div>
                               <div>
-                                <div className="font-extrabold text-slate-800">{event.title}</div>
-                                <div className="text-[10px] text-slate-400 font-bold mt-0.5">{event.date} · {event.subtitle}</div>
+                                <span className={`text-xs font-bold ${t.status === "completed" ? "line-through text-slate-400" : "text-slate-800"}`}>{t.title}</span>
+                                {t.due_date && <div className="text-[9px] text-slate-400 font-semibold mt-0.5">Due: {formatDate(t.due_date)}</div>}
                               </div>
                             </div>
-                          ))}
-                        </div>
-                      </div>
-                    </div>
-                  )}
-
-                </div>
-              </div>
-
-              {/* Activity Timeline Card (5 cols) */}
-              <div className="lg:col-span-5 bg-white rounded-3xl border border-[#e7e1d5]/55 shadow-xs p-6 text-left flex flex-col justify-between">
-                <div>
-                  <div className="flex items-center justify-between border-b border-slate-100 pb-3 mb-4">
-                    <h2 className="text-sm font-black uppercase tracking-wider text-slate-800">Activity Timeline</h2>
-                    <Link
-                      href={`/manager/activity?search=${encodeURIComponent(leadData.name)}`}
-                      className="text-xs font-bold text-[#FF5B26] hover:underline no-underline"
-                    >
-                      View All
-                    </Link>
-                  </div>
-                  
-                  {/* Timeline Tree */}
-                  <div className="space-y-5 relative before:absolute before:left-3.5 before:top-2 before:bottom-2 before:w-[1.5px] before:bg-slate-100 pl-1 max-h-[380px] overflow-y-auto overflow-x-hidden scrollbar-none">
-                    {timelineEvents.slice(0, 5).map((event, idx) => (
-                      <div key={idx} className="flex gap-3.5 relative z-10 text-xs items-start">
-                        <div className={`h-7 w-7 rounded-full flex items-center justify-center shrink-0 border border-white shadow-xs ${event.iconBg}`}>
-                          <event.icon className="w-3.5 h-3.5" />
-                        </div>
-                        <div className="pt-0.5 space-y-0.5 min-w-0 flex-1 break-all">
-                          <div className="text-xs font-black text-slate-800">{event.title}</div>
-                          <div className="text-[10px] text-slate-400 font-bold leading-normal break-all">{event.subtitle}</div>
-                          <div className="text-[8px] text-slate-400 font-medium">{event.date}</div>
-                        </div>
-                      </div>
-                    ))}
-                  </div>
-                </div>
-              </div>
-
-            </div>
-
-          </div>
-        </div>
-
-        {/* Right Sidebar Columns (4 cols) */}
-          <div className="xl:col-span-4 space-y-6">
-            
-            {/* Contact Information */}
-            <div className="bg-white rounded-3xl border border-[#e7e1d5]/55 shadow-xs p-6 text-left">
-              <h2 className="text-sm font-black uppercase tracking-wider text-slate-800">Contact Information</h2>
-              <div className="mt-5 space-y-4 text-xs font-semibold">
-                <div className="flex items-center justify-between gap-3 text-slate-700">
-                  <div className="flex items-center gap-2.5">
-                    <Phone className="w-4 h-4 text-slate-400" />
-                    <span>{leadData.phone || "No phone number"}</span>
-                  </div>
-                  <div className="flex items-center gap-1.5">
-                    <a href={callHref} onClick={() => logInteraction("call")} className="p-2 rounded-xl bg-blue-50 text-blue-600 hover:bg-blue-100 transition-colors border-0 flex items-center justify-center shrink-0 shadow-2xs" title="Call">
-                      <Phone className="w-3.5 h-3.5" />
-                    </a>
-                    <a href={whatsAppHref} onClick={() => logInteraction("whatsapp")} target="_blank" rel="noopener noreferrer" className="p-2 rounded-xl bg-emerald-50 text-emerald-600 hover:bg-emerald-100 transition-colors border-0 flex items-center justify-center shrink-0 shadow-2xs" title="WhatsApp">
-                      <MessageCircle className="w-3.5 h-3.5" />
-                    </a>
-                  </div>
-                </div>
-                <div className="flex items-center justify-between gap-3 text-slate-700 border-t border-slate-100 pt-4">
-                  <div className="flex items-center gap-2.5 truncate max-w-[200px]" title={leadData.email}>
-                    <Mail className="w-4 h-4 text-slate-400" />
-                    <span className="truncate">{leadData.email}</span>
-                  </div>
-                  <div className="flex items-center gap-1.5">
-                    <a href={gmailHref} onClick={() => logInteraction("email")} target="_blank" rel="noopener noreferrer" className="p-2 rounded-xl bg-red-50 text-red-600 hover:bg-red-100 transition-colors border-0 flex items-center justify-center shrink-0 shadow-2xs" title="Send Email">
-                      <Mail className="w-3.5 h-3.5" />
-                    </a>
-                  </div>
-                </div>
-                <div className="flex items-center gap-2.5 text-slate-700 border-t border-slate-100 pt-4">
-                  <MapPin className="w-4 h-4 text-slate-400" />
-                  <span>{leadLocation}</span>
-                </div>
-              </div>
-            </div>
-
-            {/* Quick Actions Grid */}
-            <div className="bg-white rounded-3xl border border-[#e7e1d5]/55 shadow-xs p-6 text-left">
-              <h2 className="text-sm font-black uppercase tracking-wider text-slate-800">Quick Actions</h2>
-              <div className="mt-5 grid grid-cols-2 gap-2 text-xs font-bold text-slate-700">
-                <a href={callHref} onClick={() => logInteraction("call")} className="rounded-2xl border border-[#e7e1d5]/55 px-3 py-3.5 hover:bg-[#FAF8F5] transition-colors flex items-center justify-start gap-2.5 no-underline">
-                  <Phone className="w-4 h-4 text-blue-600 shrink-0" />
-                  <span>Call Traveller</span>
-                </a>
-                <Link href={`/manager/messages?lead=${leadData.id}`} className="rounded-2xl border border-[#e7e1d5]/55 px-3 py-3.5 hover:bg-[#FAF8F5] transition-colors flex items-center justify-start gap-2.5 no-underline">
-                  <MessageSquare className="w-4 h-4 text-purple-600 shrink-0" />
-                  <span>Open Conversation</span>
-                </Link>
-                <a href={whatsAppHref} onClick={() => logInteraction("whatsapp")} target="_blank" rel="noopener noreferrer" className="rounded-2xl border border-[#e7e1d5]/55 px-3 py-3.5 hover:bg-[#FAF8F5] transition-colors flex items-center justify-start gap-2.5 no-underline">
-                  <MessageCircle className="w-4 h-4 text-emerald-600 shrink-0" />
-                  <span>WhatsApp</span>
-                </a>
-                <a href={gmailHref} onClick={() => logInteraction("email")} target="_blank" rel="noopener noreferrer" className="rounded-2xl border border-[#e7e1d5]/55 px-3 py-3.5 hover:bg-[#FAF8F5] transition-colors flex items-center justify-start gap-2.5 no-underline">
-                  <Mail className="w-4 h-4 text-red-500 shrink-0" />
-                  <span>Send Email</span>
-                </a>
-                <button onClick={handleScheduleCallDirect} className="rounded-2xl border border-[#e7e1d5]/55 px-3 py-3.5 hover:bg-[#FAF8F5] transition-colors cursor-pointer flex items-center justify-start gap-2.5 bg-white text-left border-slate-200">
-                  <CalendarDays className="w-4 h-4 text-blue-600 shrink-0" />
-                  <span>Schedule Call</span>
-                </button>
-                <button onClick={handleShareBrochureDirect} className="rounded-2xl border border-[#e7e1d5]/55 px-3 py-3.5 hover:bg-[#FAF8F5] transition-colors cursor-pointer flex items-center justify-start gap-2.5 bg-white text-left border-slate-200">
-                  <FileText className="w-4 h-4 text-[#FF5B26] shrink-0" />
-                  <span>Share Brochure</span>
-                </button>
-                <button onClick={handleAddNoteClick} className="rounded-2xl border border-[#e7e1d5]/55 px-3 py-3.5 hover:bg-[#FAF8F5] transition-colors cursor-pointer flex items-center justify-start gap-2.5 bg-white text-left border-slate-200">
-                  <FileText className="w-4 h-4 text-slate-500 shrink-0" />
-                  <span>Add Note</span>
-                </button>
-                <button onClick={handleMarkTaskCompleteDirect} className="rounded-2xl border border-[#e7e1d5]/55 px-3 py-3.5 hover:bg-[#FAF8F5] transition-colors cursor-pointer flex items-center justify-start gap-2.5 bg-white text-left border-slate-200">
-                  <CheckCircle2 className="w-4 h-4 text-emerald-600 shrink-0" />
-                  <span>Complete Task</span>
-                </button>
-              </div>
-            </div>
-
-            {/* Next Action Card */}
-            <div className="bg-[#FFF9F6] rounded-3xl border border-[#FF5B26]/10 shadow-xs p-6 text-left space-y-4">
-              <div className="flex items-center justify-between border-b border-slate-100/50 pb-2">
-                <h2 className="text-sm font-black uppercase tracking-wider text-slate-800">Next Action</h2>
-                <span className={`px-2 py-0.5 rounded-full text-[9px] font-black uppercase tracking-wide shrink-0 ${
-                  nextActionTask?.priority === "High" ? "bg-red-50 text-red-600 border border-red-100" :
-                  nextActionTask?.priority === "Medium" ? "bg-amber-50 text-amber-700 border border-amber-100" : "bg-emerald-50 text-emerald-700 border border-emerald-100"
-                }`}>
-                  {nextActionTask?.priority || "Medium"}
-                </span>
-              </div>
-              <div className="space-y-3.5">
-                <div className="space-y-1.5 text-xs">
-                  <div className="flex items-center gap-2">
-                    <span className="w-5 h-5 rounded-md bg-[#FFEFEA] text-[#FF5B26] flex items-center justify-center font-black text-xs shrink-0">
-                      🗂️
-                    </span>
-                    <span className="font-extrabold text-sm text-slate-800">{nextActionTask?.title || "No pending actions"}</span>
-                  </div>
-                  {nextActionTask && (
-                    <>
-                      <p className="text-slate-500 font-semibold leading-relaxed pl-7">{nextActionTask.description}</p>
-                      <div className="flex items-center gap-1.5 text-slate-400 font-bold pl-7 text-[10px]">
-                        <Clock3 className="w-3.5 h-3.5" />
-                        <span>Due: {formatDate(nextActionTask.due_date)}</span>
-                      </div>
-                    </>
-                  )}
-                </div>
-                {nextActionTask && (
-                  nextActionTask.step === 2 ? (
-                    <div className="pl-7 space-y-4 pt-2">
-                      <div className="space-y-1.5 text-left">
-                        <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest block">Upload Brochure PDF</label>
-                        <input
-                          type="file"
-                          accept="application/pdf"
-                          id="brochure-pdf-upload"
-                          className="hidden"
-                          onChange={(e) => {
-                            const file = e.target.files?.[0];
-                            if (file) {
-                              if (file.type !== "application/pdf") {
-                                alert("Please select a PDF file.");
-                                return;
-                              }
-                              if (file.size > 20 * 1024 * 1024) {
-                                alert("PDF file must be under 20MB.");
-                                return;
-                              }
-                              setBrochureFile(file);
-                            }
-                          }}
-                        />
-                        <div className="flex flex-col gap-2 pt-1">
-                          <div className="flex items-center">
-                            <label
-                              htmlFor="brochure-pdf-upload"
-                              className="px-4 py-2 border border-dashed border-[#e7e1d5] hover:border-[#FF5B26]/30 bg-white hover:bg-[#FAF8F5] text-slate-700 hover:text-slate-900 rounded-xl text-xs font-bold transition-all shadow-xs cursor-pointer inline-flex items-center gap-1.5"
-                            >
-                              <FileText className="w-3.5 h-3.5 text-[#FF5B26]" />
-                              {brochureFile ? "Change PDF" : "Choose PDF File"}
-                            </label>
+                            <span className={`px-2.5 py-0.5 rounded-full text-[9px] font-black uppercase ${t.status === "completed" ? "bg-emerald-50 text-emerald-700" : nextActionTask?.id === t.id ? "bg-[#FFEFEA] text-[#FF5B26]" : "bg-slate-100 text-slate-500"}`}>
+                              {t.status === "completed" ? "Done" : nextActionTask?.id === t.id ? "Active" : "Pending"}
+                            </span>
                           </div>
-                          {brochureFile && (
-                            <span className="text-xs font-semibold text-slate-600 truncate max-w-full">
-                              Selected: {brochureFile.name}
-                            </span>
-                          )}
-                          {!brochureFile && leadData?.trips?.brochure_url && (
-                            <span className="text-xs font-bold text-emerald-600">
-                              ✓ Brochure already attached
-                            </span>
-                          )}
-                        </div>
-                      </div>
+                        ))
+                      )}
+                    </div>
+                  </div>
+                )}
 
-                      <div className="space-y-1.5">
-                        <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest block">Custom Professional Message</label>
-                        <textarea
-                          rows={4}
-                          className="w-full rounded-xl border border-[#e7e1d5]/70 focus:border-[#FF5B26]/30 focus:ring-0 focus:outline-none p-3 text-xs font-semibold text-slate-700 bg-white"
-                          value={brochureMsg}
-                          onChange={(e) => setBrochureMsg(e.target.value)}
-                          placeholder="Enter a professional message to the traveler..."
-                        />
-                      </div>
-
-                      <div className="flex gap-2">
-                        <button
-                          disabled={uploadingBrochure}
-                          onClick={handleUploadAndShareBrochure}
-                          className="flex-1 py-2.5 bg-[#FF5B26] hover:bg-[#e04b1c] disabled:bg-slate-300 text-white text-xs font-bold rounded-xl transition-all shadow-xs cursor-pointer border-0 flex items-center justify-center gap-1.5"
-                        >
-                          {uploadingBrochure ? (
-                            <>
-                              <Loader2 className="w-3.5 h-3.5 animate-spin" />
-                              Uploading & Sending...
-                            </>
-                          ) : (
-                            <>
-                              <Send className="w-3.5 h-3.5" />
-                              Upload & Send Brochure
-                            </>
-                          )}
-                        </button>
-                        <button
-                          disabled={uploadingBrochure}
-                          onClick={() => handleRescheduleClick(nextActionTask)}
-                          className="px-4 py-2.5 bg-white hover:bg-slate-50 text-slate-700 border border-[#e7e1d5]/55 text-xs font-bold rounded-xl transition-all shadow-xs cursor-pointer"
-                        >
-                          Reschedule
+                {/* Notes */}
+                {activeTab === "Notes" && (
+                  <div className="space-y-4">
+                    <div className="flex items-center justify-between border-b border-slate-100 pb-2">
+                      <h2 className="text-xs font-black uppercase tracking-widest text-slate-400">Log Note</h2>
+                    </div>
+                    <form onSubmit={handleAddNoteSubmit} className="space-y-3">
+                      <textarea required rows={3} placeholder="Log a client interaction or note requirements..." value={newNoteText} onChange={(e) => setNewNoteText(e.target.value)} className="w-full px-4 py-3 bg-[#FAF8F4]/30 border border-[#e7e1d5]/55 rounded-2xl text-xs font-bold focus:outline-none focus:border-[#FF5B26]/30 transition-all resize-none text-slate-800 placeholder-slate-400" />
+                      <div className="flex justify-end">
+                        <button type="submit" disabled={addingNote || !newNoteText.trim()} className="flex items-center gap-2 px-5 py-2.5 bg-[#FF5B26] text-white text-xs font-bold rounded-xl hover:bg-[#FF5B26]/90 transition-all shadow-xs border-0 cursor-pointer">
+                          {addingNote ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Send className="w-3.5 h-3.5" />}
+                          Log Note
                         </button>
                       </div>
+                    </form>
+                    <div className="space-y-3 max-h-[220px] overflow-y-auto scrollbar-none">
+                      {!leadData.lead_notes || leadData.lead_notes.length === 0 ? (
+                        <div className="rounded-2xl border border-dashed border-[#e7e1d5]/50 bg-slate-50/50 px-4 py-6 text-xs text-slate-400 text-center font-semibold">No notes logged yet.</div>
+                      ) : (
+                        [...leadData.lead_notes].sort((a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime()).map((note) => {
+                          const noteText = note.note_text || "";
+                          const { title: noteTitle, description: noteDesc } = getLeadNoteDisplay(noteText);
+                          const { iconColor, Icon } = getLeadNoteVisual(noteText);
+                          const authorLabel = getLeadNoteAuthorLabel(note, usersById);
+                          return (
+                            <div key={note.id} className="rounded-2xl border border-[#e7e1d5]/55 bg-[#FAF8F5]/20 p-4 space-y-2 text-left text-xs">
+                              <div className="flex items-center justify-between text-slate-500 font-bold text-[10px]">
+                                <span className="inline-flex items-center gap-1"><Clock3 className="w-3 h-3 text-slate-400" />{formatDateTime(note.created_at)}</span>
+                                <span className="uppercase tracking-wider">{authorLabel}</span>
+                              </div>
+                              <div className={`inline-flex items-center gap-1 rounded-full border px-2.5 py-0.5 text-[8px] font-black uppercase tracking-widest ${iconColor}`}>
+                                <Icon className="w-3.5 h-3.5" />{noteTitle}
+                              </div>
+                              <p className="text-slate-700 font-semibold leading-relaxed break-all">{noteDesc}</p>
+                            </div>
+                          );
+                        })
+                      )}
                     </div>
-                  ) : (
-                    <div className="flex gap-2 pl-7">
-                      <button
-                        onClick={() => handleCompleteTask(nextActionTask.id)}
-                        className="flex-1 py-2 bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-bold rounded-xl transition-all shadow-xs cursor-pointer border-0"
-                      >
-                        Complete
-                      </button>
-                      <button
-                        onClick={() => handleRescheduleClick(nextActionTask)}
-                        className="flex-1 py-2 bg-white hover:bg-slate-50 text-slate-700 border border-[#e7e1d5]/55 text-xs font-bold rounded-xl transition-all shadow-xs cursor-pointer"
-                      >
-                        Reschedule
-                      </button>
+                  </div>
+                )}
+
+                {/* Activity */}
+                {activeTab === "Activity" && (
+                  <div className="space-y-4 text-left">
+                    <div className="border-b border-slate-100 pb-2"><h2 className="text-xs font-black uppercase tracking-widest text-slate-400">Activity History</h2></div>
+                    <div className="bg-[#FAF8F5]/30 border border-[#e7e1d5]/55 rounded-2xl p-4 max-h-[360px] overflow-y-auto">
+                      <div className="space-y-4">
+                        {timelineEvents.map((event, idx) => (
+                          <div key={idx} className="flex gap-3 text-xs">
+                            <div className={`h-7 w-7 rounded-full flex items-center justify-center shrink-0 border border-white ${event.iconBg}`}>
+                              <event.icon className="w-3.5 h-3.5" />
+                            </div>
+                            <div>
+                              <div className="font-extrabold text-slate-800">{event.title}</div>
+                              <div className="text-[10px] text-slate-400 font-bold mt-0.5">{event.date} · {event.subtitle}</div>
+                            </div>
+                          </div>
+                        ))}
+                      </div>
                     </div>
-                  )
+                  </div>
                 )}
               </div>
-            </div>
 
-            {/* Upcoming Follow-up Card */}
-            <div className="bg-white rounded-3xl border border-[#e7e1d5]/55 shadow-xs p-6 text-left">
-              <h2 className="text-sm font-black uppercase tracking-wider text-slate-800">Upcoming Follow-up</h2>
-              <div className="mt-4 flex items-center justify-between gap-3 text-xs">
-                <div className="flex items-center gap-3">
-                  <div className="w-10 h-10 rounded-full bg-blue-50 text-blue-600 flex items-center justify-center font-bold shrink-0">
-                    <Phone className="w-4 h-4" />
-                  </div>
-                  <div>
-                    <div className="font-extrabold text-slate-800">{upcomingFollowUp.title}</div>
-                    <div className="text-[10px] text-slate-400 font-semibold mt-0.5">{upcomingFollowUp.due}</div>
-                  </div>
+              {/* Activity Timeline Card */}
+              <div className="lg:col-span-5 bg-white rounded-3xl border border-[#e7e1d5]/55 shadow-xs p-6 text-left">
+                <div className="flex items-center justify-between border-b border-slate-100 pb-3 mb-4">
+                  <h2 className="text-sm font-black uppercase tracking-wider text-slate-800">Activity Timeline</h2>
+                  <Link href={`/manager/activity?search=${encodeURIComponent(leadData.name)}`} className="text-xs font-bold text-[#FF5B26] hover:underline no-underline">View All</Link>
                 </div>
-                <button
-                  onClick={() => {
-                    if (upcomingFollowUp.id) {
-                      handleRescheduleClick(tasks.find(t => t.id === upcomingFollowUp.id));
-                    } else {
-                      handleScheduleCallDirect();
-                    }
-                  }}
-                  className="rounded-xl border border-[#e7e1d5] px-3.5 py-1.5 text-xs font-bold text-slate-700 bg-white cursor-pointer hover:bg-slate-50 transition-all shadow-2xs"
-                >
-                  Reschedule
-                </button>
+                <div className="space-y-5 relative before:absolute before:left-3.5 before:top-2 before:bottom-2 before:w-[1.5px] before:bg-slate-100 pl-1 max-h-[380px] overflow-y-auto scrollbar-none">
+                  {timelineEvents.slice(0, 6).map((event, idx) => (
+                    <div key={idx} className="flex gap-3.5 relative z-10 text-xs items-start">
+                      <div className={`h-7 w-7 rounded-full flex items-center justify-center shrink-0 border border-white shadow-xs ${event.iconBg}`}>
+                        <event.icon className="w-3.5 h-3.5" />
+                      </div>
+                      <div className="pt-0.5 space-y-0.5 min-w-0 flex-1">
+                        <div className="text-xs font-black text-slate-800">{event.title}</div>
+                        <div className="text-[10px] text-slate-400 font-bold leading-normal break-all">{event.subtitle}</div>
+                        <div className="text-[8px] text-slate-400 font-medium">{event.date}</div>
+                      </div>
+                    </div>
+                  ))}
+                </div>
               </div>
-            </div>
-
-           </div>
-        </div>
-
-        {/* Inline Modal: Create Task Dialog */}
-        {taskCreateOpen && (
-          <div className="fixed inset-0 z-50 bg-slate-955/40 backdrop-blur-xs flex items-center justify-center px-4 animate-in fade-in duration-200">
-            <div className="w-full max-w-md rounded-3xl bg-white shadow-2xl border border-slate-150 overflow-hidden text-xs">
-              <div className="flex items-center justify-between px-6 py-4 border-b border-slate-100 text-left">
-                <div>
-                  <h2 className="text-sm font-extrabold text-slate-900">Create Task</h2>
-                  <p className="text-[10px] text-slate-400 mt-0.5">Add a workflow task for {leadData.name}.</p>
-                </div>
-                <button
-                  onClick={() => setTaskCreateOpen(false)}
-                  className="text-slate-300 hover:text-slate-500 font-bold border-0 bg-transparent cursor-pointer text-sm"
-                >
-                  ✕
-                </button>
-              </div>
-
-              <form onSubmit={handleCreateTask} className="p-6 space-y-4 text-left font-semibold">
-                <div className="space-y-1.5">
-                  <label className="text-[10px] font-black uppercase text-slate-400 tracking-wider">Task Title</label>
-                  <input
-                    type="text"
-                    required
-                    value={taskTitle}
-                    onChange={(e) => setTaskTitle(e.target.value)}
-                    placeholder="e.g. Call Rahul Sharma"
-                    className="w-full h-10 px-3 border border-slate-200 rounded-xl focus:outline-none focus:border-[#FF5B26] text-xs"
-                  />
-                </div>
-
-                <div className="grid grid-cols-2 gap-3">
-                  <div className="space-y-1.5">
-                    <label className="text-[10px] font-black uppercase text-slate-400 tracking-wider">Type</label>
-                    <select
-                      value={taskType}
-                      onChange={(e) => setTaskType(e.target.value)}
-                      className="w-full h-10 px-2 border border-slate-200 rounded-xl bg-white text-xs"
-                    >
-                      <option value="follow-up">Follow-up</option>
-                      <option value="communication">Call / Message</option>
-                    </select>
-                  </div>
-                  <div className="space-y-1.5">
-                    <label className="text-[10px] font-black uppercase text-slate-400 tracking-wider">Priority</label>
-                    <select
-                      value={taskPriority}
-                      onChange={(e) => setTaskPriority(e.target.value)}
-                      className="w-full h-10 px-2 border border-slate-200 rounded-xl bg-white text-xs"
-                    >
-                      <option value="High">High</option>
-                      <option value="Medium">Medium</option>
-                      <option value="Low">Low</option>
-                    </select>
-                  </div>
-                </div>
-
-                <div className="space-y-1.5">
-                  <label className="text-[10px] font-black uppercase text-slate-400 tracking-wider">Due Date</label>
-                  <input
-                    type="datetime-local"
-                    required
-                    value={taskDueDate}
-                    onChange={(e) => setTaskDueDate(e.target.value)}
-                    className="w-full h-10 px-3 border border-slate-200 rounded-xl focus:outline-none focus:border-[#FF5B26] text-xs"
-                  />
-                </div>
-
-                <div className="flex justify-end gap-2 pt-2 border-t border-slate-100">
-                  <button
-                    type="button"
-                    onClick={() => setTaskCreateOpen(false)}
-                    className="px-4 py-2 border border-slate-200 bg-white rounded-xl font-bold cursor-pointer hover:bg-slate-50 text-slate-600"
-                  >
-                    Cancel
-                  </button>
-                  <button
-                    type="submit"
-                    disabled={addingTask}
-                    className="px-4 py-2 bg-[#FF5B26] hover:bg-[#FF5B26]/90 text-white rounded-xl font-bold cursor-pointer shadow-xs border-0 disabled:opacity-50"
-                  >
-                    {addingTask ? "Creating..." : "Create Task"}
-                  </button>
-                </div>
-              </form>
             </div>
           </div>
-        )}
+        </div>
 
-        {/* Inline Modal: Reschedule Task Dialog */}
-        {rescheduleTask && (
-          <div className="fixed inset-0 z-50 bg-[#FAF8F5]/10 backdrop-blur-xs flex items-center justify-center px-4 animate-in fade-in duration-200">
-            <div className="w-full max-w-sm rounded-3xl bg-white shadow-2xl border border-slate-150 overflow-hidden text-xs">
-              <div className="flex items-center justify-between px-6 py-4 border-b border-slate-100 text-left">
-                <div>
-                  <h2 className="text-sm font-extrabold text-slate-900">Reschedule Action</h2>
-                  <p className="text-[10px] text-slate-400 mt-0.5">Select a new date/time for task.</p>
+        {/* Right sidebar */}
+        <div className="xl:col-span-4 space-y-6">
+
+          {/* Contact Info */}
+          <div className="bg-white rounded-3xl border border-[#e7e1d5]/55 shadow-xs p-6 text-left">
+            <h2 className="text-sm font-black uppercase tracking-wider text-slate-800">Contact</h2>
+            <div className="mt-5 space-y-4 text-xs font-semibold">
+              <div className="flex items-center justify-between gap-3 text-slate-700">
+                <div className="flex items-center gap-2.5"><Phone className="w-4 h-4 text-slate-400" /><span>{leadData.phone || "No phone"}</span></div>
+                <div className="flex items-center gap-1.5">
+                  <a href={callHref} onClick={() => logInteraction("call")} className="p-2 rounded-xl bg-blue-50 text-blue-600 hover:bg-blue-100 transition-colors border-0 flex items-center justify-center shrink-0 shadow-2xs" title="Call">
+                    <Phone className="w-3.5 h-3.5" />
+                  </a>
+                  <a href={whatsAppHref} onClick={() => logInteraction("whatsapp")} target="_blank" rel="noopener noreferrer" className="p-2 rounded-xl bg-emerald-50 text-emerald-600 hover:bg-emerald-100 transition-colors border-0 flex items-center justify-center shrink-0 shadow-2xs" title="WhatsApp">
+                    <MessageCircle className="w-3.5 h-3.5" />
+                  </a>
                 </div>
-                <button
-                  onClick={() => setRescheduleTask(null)}
-                  className="text-slate-300 hover:text-slate-500 font-bold border-0 bg-transparent cursor-pointer text-sm"
-                >
-                  ✕
-                </button>
               </div>
-
-              <form onSubmit={handleRescheduleSubmit} className="p-6 space-y-4 text-left font-semibold">
-                <div className="space-y-1.5">
-                  <label className="text-[10px] font-black uppercase text-slate-400 tracking-wider">New Date & Time</label>
-                  <input
-                    type="datetime-local"
-                    required
-                    value={rescheduleDate}
-                    onChange={(e) => setRescheduleDate(e.target.value)}
-                    className="w-full h-11 px-3.5 border border-slate-200 rounded-xl focus:outline-none focus:border-[#FF5B26] text-xs bg-white"
-                  />
-                </div>
-
-                <div className="flex justify-end gap-2 pt-2 border-t border-slate-100">
-                  <button
-                    type="button"
-                    onClick={() => setRescheduleTask(null)}
-                    className="px-4 py-2 border border-slate-200 bg-white rounded-xl font-bold cursor-pointer hover:bg-slate-50 text-slate-600"
-                  >
-                    Cancel
-                  </button>
-                  <button
-                    type="submit"
-                    disabled={rescheduling}
-                    className="px-4 py-2 bg-[#FF5B26] hover:bg-[#FF5B26]/90 text-white rounded-xl font-bold cursor-pointer shadow-xs border-0 disabled:opacity-50"
-                  >
-                    {rescheduling ? "Saving..." : "Reschedule"}
-                  </button>
-                </div>
-              </form>
+              <div className="flex items-center justify-between gap-3 text-slate-700 border-t border-slate-100 pt-4">
+                <div className="flex items-center gap-2.5 truncate max-w-[200px]"><Mail className="w-4 h-4 text-slate-400 shrink-0" /><span className="truncate">{leadData.email}</span></div>
+                <a href={gmailHref} onClick={() => logInteraction("email")} target="_blank" rel="noopener noreferrer" className="p-2 rounded-xl bg-red-50 text-red-600 hover:bg-red-100 transition-colors border-0 flex items-center justify-center shrink-0 shadow-2xs">
+                  <Mail className="w-3.5 h-3.5" />
+                </a>
+              </div>
+              <div className="flex items-center gap-2.5 text-slate-700 border-t border-slate-100 pt-4">
+                <MapPin className="w-4 h-4 text-slate-400" /><span>{leadLocation}</span>
+              </div>
             </div>
           </div>
-        )}
-      </section>
-    );
-  }
 
-  // Render workflow step helper
-  const renderWorkflowStep = (title: string, state: string, label: string, stepIndex: number) => {
-    let circleClass = "";
-    let icon = null;
-    let labelClass = "";
+          {/* Next Action */}
+          <div className="bg-[#FFF9F6] rounded-3xl border border-[#FF5B26]/15 shadow-xs p-6 text-left space-y-4">
+            <div className="flex items-center justify-between border-b border-orange-100/50 pb-3">
+              <div>
+                <h2 className="text-sm font-black uppercase tracking-wider text-slate-800">Next Action</h2>
+                {nextActionTask && (
+                  <p className="text-[10px] text-slate-400 font-bold mt-0.5">
+                    Step {nextActionTask.step} of 7 — {nextActionTask.title}
+                  </p>
+                )}
+              </div>
+              {nextActionTask && (
+                <span className={`px-2 py-0.5 rounded-full text-[9px] font-black uppercase tracking-wide shrink-0 border ${nextActionTask.priority === "High" ? "bg-red-50 text-red-600 border-red-100" : "bg-amber-50 text-amber-700 border-amber-100"}`}>
+                  {nextActionTask.priority || "Medium"}
+                </span>
+              )}
+            </div>
+            {renderNextActionContent()}
+          </div>
 
-    if (state === "completed") {
-      circleClass = "bg-emerald-50 text-emerald-600 border-emerald-200";
-      icon = <span className="font-extrabold text-xs">✓</span>;
-      labelClass = "text-slate-800";
-    } else if (state === "in-progress") {
-      circleClass = "bg-[#FFEFEA] text-[#FF5B26] border-[#FFD3C4] ring-4 ring-[#FFEFEA]/80";
-      icon = <span className="text-[10px]">⏳</span>;
-      labelClass = "text-[#FF5B26] font-bold";
-    } else {
-      circleClass = "bg-slate-50 text-slate-400 border-slate-200";
-      icon = <span className="text-[10px] font-black">•</span>;
-      labelClass = "text-slate-400";
-    }
-
-    return (
-      <div key={title} className="flex items-center gap-2.5 flex-1 min-w-[110px] lg:min-w-0 text-left">
-        <div className={`w-8 h-8 rounded-full border flex items-center justify-center shrink-0 ${circleClass}`}>
-          {icon}
-        </div>
-        <div>
-          <div className={`text-xs font-bold ${labelClass}`}>{title}</div>
-          <div className="text-[9px] text-slate-400 font-bold mt-0.5 capitalize">{state === "in-progress" ? "In Progress" : state}</div>
+          {/* Quick Actions */}
+          <div className="bg-white rounded-3xl border border-[#e7e1d5]/55 shadow-xs p-6 text-left">
+            <h2 className="text-sm font-black uppercase tracking-wider text-slate-800">Quick Actions</h2>
+            <div className="mt-4 grid grid-cols-2 gap-2 text-xs font-bold text-slate-700">
+              <a href={callHref} onClick={() => logInteraction("call")} className="rounded-2xl border border-[#e7e1d5]/55 px-3 py-3.5 hover:bg-[#FAF8F5] transition-colors flex items-center gap-2.5 no-underline">
+                <Phone className="w-4 h-4 text-blue-600 shrink-0" />Call Traveller
+              </a>
+              <a href={whatsAppHref} onClick={() => logInteraction("whatsapp")} target="_blank" rel="noopener noreferrer" className="rounded-2xl border border-[#e7e1d5]/55 px-3 py-3.5 hover:bg-[#FAF8F5] transition-colors flex items-center gap-2.5 no-underline">
+                <MessageCircle className="w-4 h-4 text-emerald-600 shrink-0" />WhatsApp
+              </a>
+              <a href={gmailHref} onClick={() => logInteraction("email")} target="_blank" rel="noopener noreferrer" className="rounded-2xl border border-[#e7e1d5]/55 px-3 py-3.5 hover:bg-[#FAF8F5] transition-colors flex items-center gap-2.5 no-underline">
+                <Mail className="w-4 h-4 text-red-500 shrink-0" />Send Email
+              </a>
+              <button onClick={handleAddNoteClick} className="rounded-2xl border border-[#e7e1d5]/55 px-3 py-3.5 hover:bg-[#FAF8F5] transition-colors cursor-pointer flex items-center gap-2.5 bg-white text-left">
+                <FileText className="w-4 h-4 text-slate-500 shrink-0" />Add Note
+              </button>
+              <Link href={`/manager/trips/${leadData.trips?.id || ""}`} className="rounded-2xl border border-[#e7e1d5]/55 px-3 py-3.5 hover:bg-[#FAF8F5] transition-colors flex items-center gap-2.5 no-underline col-span-2">
+                <CalendarDays className="w-4 h-4 text-purple-600 shrink-0" />View Trip Details
+              </Link>
+            </div>
+          </div>
         </div>
       </div>
-    );
-  };
+
+      {/* Reschedule Modal */}
+      {rescheduleTask && (
+        <div className="fixed inset-0 z-50 bg-[#FAF8F5]/10 backdrop-blur-xs flex items-center justify-center px-4 animate-in fade-in duration-200">
+          <div className="w-full max-w-sm rounded-3xl bg-white shadow-2xl border border-slate-150 overflow-hidden text-xs">
+            <div className="flex items-center justify-between px-6 py-4 border-b border-slate-100 text-left">
+              <div><h2 className="text-sm font-extrabold text-slate-900">Reschedule Task</h2><p className="text-[10px] text-slate-400 mt-0.5">Select a new date/time.</p></div>
+              <button onClick={() => setRescheduleTask(null)} className="text-slate-300 hover:text-slate-500 font-bold border-0 bg-transparent cursor-pointer text-sm">✕</button>
+            </div>
+            <form onSubmit={handleRescheduleSubmit} className="p-6 space-y-4 text-left font-semibold">
+              <div className="space-y-1.5">
+                <label className="text-[10px] font-black uppercase text-slate-400 tracking-wider">New Date & Time</label>
+                <input type="datetime-local" required value={rescheduleDate} onChange={(e) => setRescheduleDate(e.target.value)} className="w-full h-11 px-3.5 border border-slate-200 rounded-xl focus:outline-none focus:border-[#FF5B26] text-xs bg-white" />
+              </div>
+              <div className="flex justify-end gap-2 pt-2 border-t border-slate-100">
+                <button type="button" onClick={() => setRescheduleTask(null)} className="px-4 py-2 border border-slate-200 bg-white rounded-xl font-bold cursor-pointer hover:bg-slate-50 text-slate-600">Cancel</button>
+                <button type="submit" disabled={rescheduling} className="px-4 py-2 bg-[#FF5B26] hover:bg-[#FF5B26]/90 text-white rounded-xl font-bold cursor-pointer shadow-xs border-0 disabled:opacity-50">
+                  {rescheduling ? "Saving..." : "Reschedule"}
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
+    </section>
+  );
+}

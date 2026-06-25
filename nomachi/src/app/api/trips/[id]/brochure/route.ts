@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
 import { createClient } from "@supabase/supabase-js";
+import { verifyBrochureToken } from "@/lib/brochure-token";
 
 // Initialize Supabase Admin Client using the service role key to bypass RLS checks
 const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL || "";
@@ -26,11 +27,36 @@ export async function GET(
       return new Response("Brochure not found", { status: 404 });
     }
 
-    const brochureUrl = trip.brochure_url;
+    // Parse the requested index first (needed for token verification)
+    const requestUrl2 = new URL(request.url);
+    const indexStr2 = requestUrl2.searchParams.get("index") || "0";
+    const requestedIndex = parseInt(indexStr2, 10);
+
+    // Verify signed token — required for all brochure downloads
+    const token = requestUrl2.searchParams.get("token") || "";
+    if (!token || !verifyBrochureToken(id, requestedIndex, token)) {
+      return new Response("Unauthorized: Invalid or expired brochure link.", { status: 401 });
+    }
+
+    let targetUrl = trip.brochure_url;
+    let targetName = "brochure.pdf";
+
+    if (trip.brochure_url.startsWith("[")) {
+      try {
+        const brochures = JSON.parse(trip.brochure_url);
+        const item = brochures[requestedIndex] || brochures[0];
+        if (item) {
+          targetUrl = item.url || "";
+          targetName = item.name || `brochure_${requestedIndex + 1}.pdf`;
+        }
+      } catch (err) {
+        console.error("Failed to parse multiple brochures JSON:", err);
+      }
+    }
 
     // Check if it's a base64 data URI
-    if (brochureUrl.startsWith("data:")) {
-      const match = brochureUrl.match(/^data:([^;]+);base64,(.*)$/);
+    if (targetUrl.startsWith("data:")) {
+      const match = targetUrl.match(/^data:([^;]+);base64,(.*)$/);
       if (match) {
         const contentType = match[1];
         const base64Data = match[2];
@@ -40,20 +66,20 @@ export async function GET(
           headers: {
             "Content-Type": contentType,
             "Cache-Control": "public, max-age=31536000, immutable",
-            "Content-Disposition": "inline; filename=\"brochure.pdf\"",
+            "Content-Disposition": `inline; filename="${targetName}"`,
           },
         });
       }
     }
 
     // If it's a relative URL, redirect to absolute path
-    if (brochureUrl.startsWith("/")) {
+    if (targetUrl.startsWith("/")) {
       const requestUrl = new URL(request.url);
-      return NextResponse.redirect(`${requestUrl.origin}${brochureUrl}`);
+      return NextResponse.redirect(`${requestUrl.origin}${targetUrl}`);
     }
 
     // Otherwise redirect to the external/public URL directly
-    return NextResponse.redirect(brochureUrl);
+    return NextResponse.redirect(targetUrl);
   } catch (error: any) {
     console.error("Failed to serve trip brochure dynamically:", error);
     return new Response("Internal Server Error", { status: 500 });

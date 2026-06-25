@@ -108,6 +108,7 @@ export default function EnquiriesPage() {
       setIsSubmittingPromotion(true);
       
       // Update database row: set is_lead = true, status = 'new', and assigned_to
+      // Status advances to 'contacted' automatically when manager completes Contact Traveller task
       await leadService.updateLead(promotingEnquiry.id, {
         is_lead: true,
         status: "new",
