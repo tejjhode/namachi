@@ -265,6 +265,7 @@ export const taskService = {
       callResult?: string; vibeResult?: string; vibeNotes?: string;
       paymentStatus?: string; refId?: string; receiptAmt?: string;
       idDocRef?: string; departureId?: string;
+      brochureMsg?: string;
     }
   ): Promise<DBTask> {
     const { data, error } = await supabase
