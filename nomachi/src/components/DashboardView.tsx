@@ -22,6 +22,7 @@ import {
   Plane,
   Shield,
   ShieldCheck,
+  CreditCard,
   Tag,
   Calendar,
   CalendarDays,
@@ -329,6 +330,69 @@ export function DashboardView({ user, leads = [], trips = [], initialChatMessage
   // Bookings State & Logic for Traveler
   const [bookings, setBookings] = useState<any[]>([]);
   const [bookingsLoading, setBookingsLoading] = useState(true);
+
+  // Payment Modal State
+  const [paymentModalBooking, setPaymentModalBooking] = useState<any | null>(null);
+  const [paymentStep, setPaymentStep] = useState<"method" | "details" | "processing" | "success">("method");
+  const [paymentMethod, setPaymentMethod] = useState<"card" | "upi" | "netbanking" | null>(null);
+  const [cardForm, setCardForm] = useState({ number: "", name: "", expiry: "", cvv: "" });
+  const [upiId, setUpiId] = useState("");
+  const [selectedBank, setSelectedBank] = useState("");
+
+  // Invoice Modal State
+  const [invoiceModalBooking, setInvoiceModalBooking] = useState<any | null>(null);
+
+  const openPaymentModal = (booking: any) => {
+    setPaymentModalBooking(booking);
+    setPaymentStep("method");
+    setPaymentMethod(null);
+    setCardForm({ number: "", name: "", expiry: "", cvv: "" });
+    setUpiId("");
+    setSelectedBank("");
+  };
+
+  const closePaymentModal = () => {
+    setPaymentModalBooking(null);
+    setPaymentStep("method");
+    setPaymentMethod(null);
+  };
+
+  const handlePaymentProceed = () => {
+    if (!paymentMethod) return;
+    setPaymentStep("details");
+  };
+
+  const handlePaymentSubmit = async () => {
+    if (!paymentModalBooking) return;
+    setPaymentStep("processing");
+    try {
+      const completedPayments = (paymentModalBooking.payments || [])
+        .filter((p: any) => p.status === "completed")
+        .reduce((sum: number, p: any) => sum + Number(p.amount), 0);
+      const pendingAmount = Math.max(0, Number(paymentModalBooking.price || 0) - completedPayments);
+
+      const response = await fetch("/api/payments/complete", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          bookingId: paymentModalBooking.id,
+          amount: pendingAmount,
+          paymentMethod: paymentMethod,
+        }),
+      });
+
+      if (!response.ok) {
+        throw new Error("Payment API failed");
+      }
+
+      setPaymentStep("success");
+      await loadBookings();
+    } catch (err) {
+      console.error("Failed to submit payment:", err);
+      alert("Payment failed. Please try again.");
+      setPaymentStep("details");
+    }
+  };
 
   const loadBookings = async () => {
     try {
@@ -1479,7 +1543,7 @@ export function DashboardView({ user, leads = [], trips = [], initialChatMessage
   // Helper: relative time
   const getRelativeTime = (dateStr: string) => {
     const date = new Date(dateStr);
-    const now = new Date("2026-06-16T10:44:38+05:30");
+    const now = new Date();
     const diffMs = now.getTime() - date.getTime();
     
     if (isNaN(diffMs) || diffMs < 0) {
@@ -1716,13 +1780,16 @@ export function DashboardView({ user, leads = [], trips = [], initialChatMessage
       id: trip.id,
       title: trip.title,
       destination: trip.destination,
+      status: trip.status,
       type: type,
       duration: trip.duration || "7 Days",
       price: trip.price ? `₹${Number(trip.price).toLocaleString("en-IN")}` : "₹89,999",
       rating: trip.rating ? Number(trip.rating).toFixed(1) : "4.8",
       reviews: trip.reviews || 50,
       image: trip.image_url || "https://images.unsplash.com/photo-1506744038136-46273834b3fb?auto=format&fit=crop&w=300&q=80",
-      start_date: trip.start_date
+      start_date: trip.start_date,
+      end_date: trip.end_date,
+      seats_left: trip.seats_left,
     };
   });
 
@@ -1846,7 +1913,30 @@ export function DashboardView({ user, leads = [], trips = [], initialChatMessage
     .sort((a, b) => (b.sortTime || 0) - (a.sortTime || 0))
     .slice(0, 3);
 
+  const getTripStatusMeta = (status?: string | null) => {
+    const normalized = (status || "").toLowerCase();
+    if (normalized === "active") {
+      return {
+        label: "Active",
+        className: "bg-emerald-500/95 text-white border-emerald-500/30",
+      };
+    }
+
+    if (normalized === "open" || normalized === "open for enquiries" || normalized === "open for inquiry") {
+      return {
+        label: "Open For Enquiries",
+        className: "bg-[#EBF3FF] text-[#1E6BFF] border-[#D0E2FF]",
+      };
+    }
+
+    return {
+      label: status || "Trip",
+      className: "bg-white/85 text-nomichi-ink border-white/30",
+    };
+  };
+
   const renderTripCard = (rec: any) => {
+    const statusMeta = getTripStatusMeta(rec.status);
     return (
       <div 
         key={rec.id} 
@@ -1863,6 +1953,12 @@ export function DashboardView({ user, leads = [], trips = [], initialChatMessage
             alt={rec.title} 
             className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-500" 
           />
+          <div className="absolute top-3 left-3">
+            <span className={`inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full text-[10px] font-black uppercase tracking-wider border backdrop-blur-sm shadow-sm ${statusMeta.className}`}>
+              <span className="w-1.5 h-1.5 rounded-full bg-current" />
+              {statusMeta.label}
+            </span>
+          </div>
           {/* Wishlist toggle */}
           <button 
             onClick={() => toggleWishlist(rec.id)}
@@ -1891,6 +1987,18 @@ export function DashboardView({ user, leads = [], trips = [], initialChatMessage
                 <span className="truncate">{rec.destination.split(",")[0]}</span>
               </span>
             </div>
+            {(rec.status || "").toLowerCase().trim() === "active" ? (
+              <div className="mt-3 p-3 bg-emerald-50 border border-emerald-100 rounded-xl space-y-1.5 text-left text-[10px] font-bold text-emerald-800 animate-in fade-in duration-200">
+                <div className="flex items-center gap-1.5">
+                  <CalendarDays className="w-3.5 h-3.5 text-emerald-600 shrink-0" />
+                  <span>Dates: {rec.start_date ? formatDate(rec.start_date) : "TBC"} - {rec.end_date ? formatDate(rec.end_date) : "TBC"}</span>
+                </div>
+                <div className="flex items-center gap-1.5">
+                  <Users className="w-3.5 h-3.5 text-emerald-600 shrink-0" />
+                  <span>Seats Left: {rec.seats_left !== undefined && rec.seats_left !== null ? rec.seats_left : 12} seats</span>
+                </div>
+              </div>
+            ) : null}
           </div>
           
           {/* Bottom Row */}
@@ -2122,7 +2230,7 @@ export function DashboardView({ user, leads = [], trips = [], initialChatMessage
               </button>
 
               {notificationsOpen && (
-                <div className="absolute right-[-16px] sm:right-0 mt-2.5 w-[calc(100vw-32px)] sm:w-96 bg-white rounded-3xl border border-[#e7e1d5]/60 shadow-xl overflow-hidden z-50 animate-in fade-in slide-in-from-top-3 duration-200">
+                <div className="fixed sm:absolute top-[72px] sm:top-auto left-4 sm:left-auto right-4 sm:right-0 mt-2.5 w-auto sm:w-96 bg-white rounded-3xl border border-[#e7e1d5]/60 shadow-xl overflow-hidden z-50 animate-in fade-in slide-in-from-top-3 duration-200">
                   <div className="px-5 py-4 border-b border-[#e7e1d5]/30 flex items-center justify-between bg-[#FAF8F4]/30">
                     <span className="text-xs font-black uppercase tracking-wide text-nomichi-ink/50">
                       Notifications
@@ -2514,8 +2622,7 @@ export function DashboardView({ user, leads = [], trips = [], initialChatMessage
                 </button>
               </div>
 
-
-              {/* 3. RECOMMENDED FOR YOU (Only show the first 6 trips in horizontal slider) */}
+              {/* 4. RECOMMENDED FOR YOU (Only show the first 6 trips in horizontal slider) */}
               <div className="space-y-4">
                 <div className="flex justify-between items-end">
                   <h3 className="text-lg font-bold text-nomichi-ink tracking-tight">Recommended For You</h3>
@@ -2566,7 +2673,7 @@ export function DashboardView({ user, leads = [], trips = [], initialChatMessage
                 </div>
               </div>
 
-              {/* 4. BEIGE TRUST FOOTER (4 columns of trust benefits) */}
+              {/* 5. BEIGE TRUST FOOTER (4 columns of trust benefits) */}
               <div className="bg-[#F5F1E8] rounded-[24px] border border-[#e7e1d5]/50 p-6 lg:p-8 shadow-sm">
                 <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-6">
                   {/* Trust Column 1 */}
@@ -2800,217 +2907,272 @@ export function DashboardView({ user, leads = [], trips = [], initialChatMessage
               </div>
 
               {/* Table / List Container */}
-              <div className="bg-white border border-[#e7e1d5]/40 rounded-[24px] overflow-hidden shadow-sm">
-                
-                {/* Desktop View Table wrapper with scroll support for smaller devices */}
-                <div className="w-full overflow-x-auto">
-                  <div className="min-w-[850px]">
-                    
-                    {/* Table Header */}
-                    <div className="grid grid-cols-12 gap-4 bg-[#FAF8F4] px-6 py-4 border-b border-[#e7e1d5]/40 text-[11px] font-bold text-nomichi-ink/40 uppercase tracking-wider">
-                      <div className="col-span-4">Trip</div>
-                      <div className="col-span-2">Enquiry Details</div>
-                      <div className="col-span-2">Status</div>
-                      <div className="col-span-2">Last Updated</div>
-                      <div className="col-span-2 text-right">Action</div>
+              {/* Table / List Container */}
+              {(() => {
+                // Filters calculations
+                const filtered = leads.filter((lead) => {
+                  const trip = lead.trips;
+                  if (!trip) return false;
+
+                  if (enquirySearch) {
+                    const q = enquirySearch.toLowerCase();
+                    const matchTitle = trip.title?.toLowerCase().includes(q);
+                    const matchDest = trip.destination?.toLowerCase().includes(q);
+                    if (!matchTitle && !matchDest) return false;
+                  }
+
+                  if (enquiryStatus !== "All Status") {
+                    const badgeDetails = getStatusDetails(lead.status);
+                    if (badgeDetails.label.toLowerCase() !== enquiryStatus.toLowerCase()) {
+                      return false;
+                    }
+                  }
+
+                  if (enquiryTrip !== "All Trips") {
+                    if (trip.title !== enquiryTrip) return false;
+                  }
+
+                  if (enquiryFromDate) {
+                    const fromDate = new Date(enquiryFromDate);
+                    const leadDate = new Date(lead.created_at);
+                    fromDate.setHours(0, 0, 0, 0);
+                    leadDate.setHours(0, 0, 0, 0);
+                    if (leadDate < fromDate) return false;
+                  }
+
+                  if (enquiryToDate) {
+                    const toDate = new Date(enquiryToDate);
+                    const leadDate = new Date(lead.created_at);
+                    toDate.setHours(23, 59, 59, 999);
+                    leadDate.setHours(0, 0, 0, 0);
+                    if (leadDate > toDate) return false;
+                  }
+
+                  return true;
+                });
+
+                const sortedFiltered = [...filtered].sort((a, b) => {
+                  return new Date(b.created_at).getTime() - new Date(a.created_at).getTime();
+                });
+
+                const totalCount = sortedFiltered.length;
+                const totalPgs = Math.ceil(totalCount / 5);
+                const currPage = Math.max(1, Math.min(enquiryPage, totalPgs || 1));
+                const startIdx = (currPage - 1) * 5;
+                const endIdx = startIdx + 5;
+                const paginated = sortedFiltered.slice(startIdx, endIdx);
+
+                return (
+                  <div className="bg-white border border-[#e7e1d5]/40 rounded-[24px] overflow-hidden shadow-sm">
+                    {/* Desktop View Table */}
+                    <div className="hidden md:block w-full overflow-x-auto">
+                      <div className="min-w-[850px]">
+                        {/* Table Header */}
+                        <div className="grid grid-cols-12 gap-4 bg-[#FAF8F4] px-6 py-4 border-b border-[#e7e1d5]/40 text-[11px] font-bold text-nomichi-ink/40 uppercase tracking-wider">
+                          <div className="col-span-4">Trip</div>
+                          <div className="col-span-2">Enquiry Details</div>
+                          <div className="col-span-2">Status</div>
+                          <div className="col-span-2">Last Updated</div>
+                          <div className="col-span-2 text-right">Action</div>
+                        </div>
+
+                        {/* Table Body */}
+                        <div className="divide-y divide-[#e7e1d5]/30">
+                          {paginated.map((lead) => {
+                            const trip = lead.trips;
+                            if (!trip) return null;
+                            const statusObj = getStatusDetails(lead.status);
+                            const expertName = getExpertForLead(lead);
+
+                            const adultsStr = lead.group_size ? `${lead.group_size} ${lead.group_size === 1 ? 'Adult' : 'Adults'}` : '2 Adults';
+                            const typeStr = lead.group_type ? (lead.group_type.charAt(0).toUpperCase() + lead.group_type.slice(1)) : 'Couple';
+                            const groupDetails = `${adultsStr} • ${typeStr}`;
+                            const displayEnqId = lead.enquiry_id || `ENQ${lead.id ? String(lead.id).replace(/[^0-9]/g, '').slice(0, 5) || String(lead.id).slice(0, 5).toUpperCase() : '12345'}`;
+
+                            return (
+                              <div key={lead.id} className="grid grid-cols-12 gap-4 px-6 py-5 items-center hover:bg-[#FAF8F4]/30 transition-colors">
+                                <div className="col-span-4 flex items-center gap-4">
+                                  <img 
+                                    src={trip.image_url || "https://images.unsplash.com/photo-1469854523086-cc02fe5d8800?auto=format&fit=crop&w=150&q=80"} 
+                                    alt={trip.title} 
+                                    className="w-16 h-16 rounded-xl object-cover shrink-0 border border-[#e7e1d5]/30"
+                                  />
+                                  <div className="space-y-1 min-w-0">
+                                    <h4 className="font-display font-bold text-sm text-nomichi-ink truncate leading-tight">{trip.title}</h4>
+                                    <div className="flex items-center gap-1 text-[11px] text-nomichi-ink/50 font-medium">
+                                      <MapPin className="w-3.5 h-3.5 text-[#FF5B26]/65 shrink-0" />
+                                      <span className="truncate">{trip.destination}</span>
+                                    </div>
+                                    <div className="flex items-center gap-1 text-[11px] text-nomichi-ink/50 font-medium">
+                                      <Calendar className="w-3.5 h-3.5 text-[#FF5B26]/65 shrink-0" />
+                                      <span>{getTripDatesRange(trip)}</span>
+                                    </div>
+                                  </div>
+                                </div>
+
+                                <div className="col-span-2 space-y-1 min-w-0">
+                                  <span className="text-[10px] font-bold text-nomichi-ink/45 uppercase tracking-wider block">Enquiry ID</span>
+                                  <span className="font-display font-extrabold text-sm text-nomichi-ink block leading-none">{displayEnqId}</span>
+                                  <span className="text-[11px] text-nomichi-ink/60 font-semibold block">{groupDetails}</span>
+                                </div>
+
+                                <div className="col-span-2 space-y-2">
+                                  <div className={`inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-bold border ${statusObj.bgColor}`}>
+                                    <span className={`w-1.5 h-1.5 rounded-full ${statusObj.dotColor}`} />
+                                    {statusObj.label}
+                                  </div>
+                                  <span className="text-[11px] text-nomichi-ink/50 font-bold block pl-1">{expertName}</span>
+                                </div>
+
+                                <div className="col-span-2 space-y-1 min-w-0">
+                                  <span className="text-xs font-bold text-nomichi-ink block">{getRelativeTime(lead.created_at)}</span>
+                                  <span className="text-[11px] text-nomichi-ink/40 font-semibold block">{getAbsoluteDate(lead.created_at)}</span>
+                                </div>
+
+                                <div className="col-span-2 text-right">
+                                  <button 
+                                    onClick={() => navigateToView("enquiry_detail", lead.id)}
+                                    className="inline-flex items-center justify-center border border-[#FF5B26]/30 hover:bg-[#FF5B26]/5 text-[#FF5B26] font-bold text-xs px-4 py-2.5 rounded-xl transition-all shadow-sm shrink-0 whitespace-nowrap active:scale-[0.97]"
+                                  >
+                                    View Details →
+                                  </button>
+                                </div>
+                              </div>
+                            );
+                          })}
+                        </div>
+                      </div>
                     </div>
 
-                    {/* Table Body */}
-                    <div className="divide-y divide-[#e7e1d5]/30">
-                      {(() => {
-                        // Filters calculations
-                        const filtered = leads.filter((lead) => {
-                          const trip = lead.trips;
-                          if (!trip) return false;
+                    {/* Mobile View Grid Cards */}
+                    <div className="block md:hidden divide-y divide-[#e7e1d5]/30">
+                      {paginated.map((lead) => {
+                        const trip = lead.trips;
+                        if (!trip) return null;
+                        const statusObj = getStatusDetails(lead.status);
+                        const expertName = getExpertForLead(lead);
 
-                          if (enquirySearch) {
-                            const q = enquirySearch.toLowerCase();
-                            const matchTitle = trip.title?.toLowerCase().includes(q);
-                            const matchDest = trip.destination?.toLowerCase().includes(q);
-                            if (!matchTitle && !matchDest) return false;
-                          }
-
-                          if (enquiryStatus !== "All Status") {
-                            const badgeDetails = getStatusDetails(lead.status);
-                            if (badgeDetails.label.toLowerCase() !== enquiryStatus.toLowerCase()) {
-                              return false;
-                            }
-                          }
-
-                          if (enquiryTrip !== "All Trips") {
-                            if (trip.title !== enquiryTrip) return false;
-                          }
-
-                          if (enquiryFromDate) {
-                            const fromDate = new Date(enquiryFromDate);
-                            const leadDate = new Date(lead.created_at);
-                            fromDate.setHours(0, 0, 0, 0);
-                            leadDate.setHours(0, 0, 0, 0);
-                            if (leadDate < fromDate) return false;
-                          }
-
-                          if (enquiryToDate) {
-                            const toDate = new Date(enquiryToDate);
-                            const leadDate = new Date(lead.created_at);
-                            toDate.setHours(23, 59, 59, 999);
-                            leadDate.setHours(0, 0, 0, 0);
-                            if (leadDate > toDate) return false;
-                          }
-
-                          return true;
-                        });
-
-                        const totalCount = filtered.length;
-                        const totalPgs = Math.ceil(totalCount / 5);
-                        const currPage = Math.max(1, Math.min(enquiryPage, totalPgs || 1));
-                        const startIdx = (currPage - 1) * 5;
-                        const endIdx = startIdx + 5;
-                        const paginated = filtered.slice(startIdx, endIdx);
+                        const adultsStr = lead.group_size ? `${lead.group_size} ${lead.group_size === 1 ? 'Adult' : 'Adults'}` : '2 Adults';
+                        const typeStr = lead.group_type ? (lead.group_type.charAt(0).toUpperCase() + lead.group_type.slice(1)) : 'Couple';
+                        const groupDetails = `${adultsStr} • ${typeStr}`;
+                        const displayEnqId = lead.enquiry_id || `ENQ${lead.id ? String(lead.id).replace(/[^0-9]/g, '').slice(0, 5) || String(lead.id).slice(0, 5).toUpperCase() : '12345'}`;
 
                         return (
-                          <>
-                            {paginated.map((lead) => {
-                              const trip = lead.trips;
-                              if (!trip) return null;
-                              
-                              const statusObj = getStatusDetails(lead.status);
-                              const expertName = getExpertForLead(lead);
-
-                              // Formatted group details: e.g. "2 Adults • Couple"
-                              const adultsStr = lead.group_size ? `${lead.group_size} ${lead.group_size === 1 ? 'Adult' : 'Adults'}` : '2 Adults';
-                              const typeStr = lead.group_type ? (lead.group_type.charAt(0).toUpperCase() + lead.group_type.slice(1)) : 'Couple';
-                              const groupDetails = `${adultsStr} • ${typeStr}`;
-
-                              // Unique Enquiry ID representation: e.g. ENQ10001
-                              const displayEnqId = lead.enquiry_id || `ENQ${lead.id ? String(lead.id).replace(/[^0-9]/g, '').slice(0, 5) || String(lead.id).slice(0, 5).toUpperCase() : '12345'}`;
-
-                              return (
-                                <div key={lead.id} className="grid grid-cols-12 gap-4 px-6 py-5 items-center hover:bg-[#FAF8F4]/30 transition-colors">
-                                  
-                                  {/* Trip Info */}
-                                  <div className="col-span-4 flex items-center gap-4">
-                                    <img 
-                                      src={trip.image_url || "https://images.unsplash.com/photo-1469854523086-cc02fe5d8800?auto=format&fit=crop&w=150&q=80"} 
-                                      alt={trip.title} 
-                                      className="w-16 h-16 rounded-xl object-cover shrink-0 border border-[#e7e1d5]/30"
-                                    />
-                                    <div className="space-y-1 min-w-0">
-                                      <h4 className="font-display font-bold text-sm text-nomichi-ink truncate leading-tight">{trip.title}</h4>
-                                      <div className="flex items-center gap-1 text-[11px] text-nomichi-ink/50 font-medium">
-                                        <MapPin className="w-3.5 h-3.5 text-[#FF5B26]/65 shrink-0" />
-                                        <span className="truncate">{trip.destination}</span>
-                                      </div>
-                                      <div className="flex items-center gap-1 text-[11px] text-nomichi-ink/50 font-medium">
-                                        <Calendar className="w-3.5 h-3.5 text-[#FF5B26]/65 shrink-0" />
-                                        <span>{getTripDatesRange(trip)}</span>
-                                      </div>
-                                    </div>
-                                  </div>
-
-                                  {/* Enquiry Details */}
-                                  <div className="col-span-2 space-y-1 min-w-0">
-                                    <span className="text-[10px] font-bold text-nomichi-ink/45 uppercase tracking-wider block">Enquiry ID</span>
-                                    <span className="font-display font-extrabold text-sm text-nomichi-ink block leading-none">{displayEnqId}</span>
-                                    <span className="text-[11px] text-nomichi-ink/60 font-semibold block">{groupDetails}</span>
-                                  </div>
-
-                                  {/* Status */}
-                                  <div className="col-span-2 space-y-2">
-                                    <div className={`inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-bold border ${statusObj.bgColor}`}>
-                                      <span className={`w-1.5 h-1.5 rounded-full ${statusObj.dotColor}`} />
-                                      {statusObj.label}
-                                    </div>
-                                    <span className="text-[11px] text-nomichi-ink/50 font-bold block pl-1">{expertName}</span>
-                                  </div>
-
-                                  {/* Last Updated */}
-                                  <div className="col-span-2 space-y-1 min-w-0">
-                                    <span className="text-xs font-bold text-nomichi-ink block">{getRelativeTime(lead.created_at)}</span>
-                                    <span className="text-[11px] text-nomichi-ink/40 font-semibold block">{getAbsoluteDate(lead.created_at)}</span>
-                                  </div>
-
-                                  {/* Action */}
-                                  <div className="col-span-2 text-right">
-                                    <button 
-                                      onClick={() => navigateToView("enquiry_detail", lead.id)}
-                                      className="inline-flex items-center justify-center border border-[#FF5B26]/30 hover:bg-[#FF5B26]/5 text-[#FF5B26] font-bold text-xs px-4 py-2.5 rounded-xl transition-all shadow-sm shrink-0 whitespace-nowrap active:scale-[0.97]"
-                                    >
-                                      View Details →
-                                    </button>
-                                  </div>
-
+                          <div key={lead.id} className="p-5 space-y-4 bg-white hover:bg-[#FAF8F4]/20 transition-colors text-left">
+                            {/* Trip Info Header */}
+                            <div className="flex items-center gap-3">
+                              <img 
+                                src={trip.image_url || "https://images.unsplash.com/photo-1469854523086-cc02fe5d8800?auto=format&fit=crop&w=150&q=80"} 
+                                alt={trip.title} 
+                                className="w-14 h-14 rounded-xl object-cover shrink-0 border border-[#e7e1d5]/35"
+                              />
+                              <div className="space-y-0.5 min-w-0">
+                                <h4 className="font-display font-extrabold text-sm text-nomichi-ink leading-tight truncate">{trip.title}</h4>
+                                <div className="flex items-center gap-1 text-[10px] text-nomichi-ink/50 font-bold">
+                                  <MapPin className="w-3 h-3 text-[#FF5B26]/65 shrink-0" />
+                                  <span className="truncate">{trip.destination}</span>
                                 </div>
+                                <div className="flex items-center gap-1 text-[10px] text-nomichi-ink/50 font-bold">
+                                  <Calendar className="w-3 h-3 text-[#FF5B26]/65 shrink-0" />
+                                  <span className="truncate">{getTripDatesRange(trip)}</span>
+                                </div>
+                              </div>
+                            </div>
+
+                            {/* Details Grid */}
+                            <div className="grid grid-cols-2 gap-3 bg-[#FAF8F4]/55 border border-[#e7e1d5]/35 p-3 rounded-2xl text-[10px] font-bold text-nomichi-ink/75">
+                              <div>
+                                <span className="text-[9px] text-nomichi-ink/40 uppercase tracking-wide block">Enquiry ID</span>
+                                <span className="text-nomichi-ink font-extrabold block mt-0.5">{displayEnqId}</span>
+                              </div>
+                              <div>
+                                <span className="text-[9px] text-nomichi-ink/40 uppercase tracking-wide block">Status</span>
+                                <div className="flex flex-col items-start mt-0.5 gap-0.5">
+                                  <div className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[9px] font-extrabold border ${statusObj.bgColor}`}>
+                                    <span className={`w-1 h-1 rounded-full ${statusObj.dotColor}`} />
+                                    {statusObj.label}
+                                  </div>
+                                  <span className="text-[9px] text-nomichi-ink/40 font-bold pl-0.5">{expertName}</span>
+                                </div>
+                              </div>
+                              <div>
+                                <span className="text-[9px] text-nomichi-ink/40 uppercase tracking-wide block">Travellers</span>
+                                <span className="text-nomichi-ink font-semibold block mt-0.5">{groupDetails}</span>
+                              </div>
+                              <div>
+                                <span className="text-[9px] text-nomichi-ink/40 uppercase tracking-wide block">Last Updated</span>
+                                <span className="text-nomichi-ink font-extrabold block mt-0.5">{getRelativeTime(lead.created_at)}</span>
+                              </div>
+                            </div>
+
+                            {/* CTA Action button */}
+                            <button 
+                              onClick={() => navigateToView("enquiry_detail", lead.id)}
+                              className="w-full inline-flex items-center justify-center border border-[#FF5B26]/30 hover:bg-[#FF5B26]/5 text-[#FF5B26] font-bold text-xs py-3 rounded-xl transition-all shadow-xs active:scale-[0.98] cursor-pointer"
+                            >
+                              View Details →
+                            </button>
+                          </div>
+                        );
+                      })}
+                    </div>
+
+                    {/* Empty State */}
+                    {paginated.length === 0 && (
+                      <div className="text-center py-16 px-6">
+                        <ClipboardList className="w-12 h-12 text-[#FF5B26]/50 mx-auto mb-3" />
+                        <h4 className="font-display font-bold text-base text-nomichi-ink">No enquiries found</h4>
+                        <p className="text-xs text-nomichi-ink/50 mt-1 max-w-sm mx-auto leading-relaxed">
+                          No trip enquiries match your active filter settings. Try adjusting or clearing your filters to see more results!
+                        </p>
+                      </div>
+                    )}
+
+                    {/* Pagination Footer */}
+                    {totalCount > 0 && (
+                      <div className="bg-[#FAF8F4]/50 border-t border-[#e7e1d5]/40 px-6 py-4 flex flex-col sm:flex-row items-center justify-between gap-4">
+                        <span className="text-xs font-semibold text-nomichi-ink/50">
+                          Showing <span className="text-nomichi-ink font-bold">{startIdx + 1}</span> to <span className="text-nomichi-ink font-bold">{Math.min(endIdx, totalCount)}</span> of <span className="text-nomichi-ink font-bold">{totalCount}</span> {totalCount === 1 ? 'enquiry' : 'enquiries'}
+                        </span>
+
+                        {totalPgs > 1 && (
+                          <div className="flex items-center gap-1">
+                            <button 
+                              disabled={currPage === 1}
+                              onClick={() => setEnquiryPage(currPage - 1)}
+                              className="w-8 h-8 rounded-lg flex items-center justify-center text-nomichi-ink/50 hover:text-[#FF5B26] hover:bg-[#FF5B26]/5 disabled:opacity-30 disabled:hover:bg-transparent disabled:hover:text-nomichi-ink/50 transition-all"
+                            >
+                              <ChevronLeft className="w-4.5 h-4.5" />
+                            </button>
+
+                            {Array.from({ length: totalPgs }).map((_, idx) => {
+                              const pg = idx + 1;
+                              const isActive = pg === currPage;
+                              return (
+                                <button
+                                  key={pg}
+                                  onClick={() => setEnquiryPage(pg)}
+                                  className={`w-8 h-8 rounded-lg text-xs font-bold transition-all ${isActive ? 'bg-[#FFEFEA] text-[#FF5B26] border border-[#FF5B26]/20' : 'text-nomichi-ink/60 hover:bg-[#FAF8F4] hover:text-nomichi-ink'}`}
+                                >
+                                  {pg}
+                                </button>
                               );
                             })}
 
-                            {paginated.length === 0 && (
-                              <div className="text-center py-16 px-6">
-                                <ClipboardList className="w-12 h-12 text-[#FF5B26]/50 mx-auto mb-3" />
-                                <h4 className="font-display font-bold text-base text-nomichi-ink">No enquiries found</h4>
-                                <p className="text-xs text-nomichi-ink/50 mt-1 max-w-sm mx-auto leading-relaxed">
-                                  No trip enquiries match your active filter settings. Try adjusting or clearing your filters to see more results!
-                                </p>
-                              </div>
-                            )}
-
-                            {/* Pagination Footer */}
-                            {totalCount > 0 && (
-                              <div className="bg-[#FAF8F4]/50 border-t border-[#e7e1d5]/40 px-6 py-4 flex flex-col sm:flex-row items-center justify-between gap-4">
-                                
-                                {/* Item indicator */}
-                                <span className="text-xs font-semibold text-nomichi-ink/50">
-                                  Showing <span className="text-nomichi-ink font-bold">{startIdx + 1}</span> to <span className="text-nomichi-ink font-bold">{Math.min(endIdx, totalCount)}</span> of <span className="text-nomichi-ink font-bold">{totalCount}</span> {totalCount === 1 ? 'enquiry' : 'enquiries'}
-                                </span>
-
-                                {/* Page Numbers */}
-                                {totalPgs > 1 && (
-                                  <div className="flex items-center gap-1">
-                                    
-                                    {/* Prev */}
-                                    <button 
-                                      disabled={currPage === 1}
-                                      onClick={() => setEnquiryPage(currPage - 1)}
-                                      className="w-8 h-8 rounded-lg flex items-center justify-center text-nomichi-ink/50 hover:text-[#FF5B26] hover:bg-[#FF5B26]/5 disabled:opacity-30 disabled:hover:bg-transparent disabled:hover:text-nomichi-ink/50 transition-all"
-                                    >
-                                      <ChevronLeft className="w-4.5 h-4.5" />
-                                    </button>
-
-                                    {/* Page Links */}
-                                    {Array.from({ length: totalPgs }).map((_, idx) => {
-                                      const pg = idx + 1;
-                                      const isActive = pg === currPage;
-                                      return (
-                                        <button
-                                          key={pg}
-                                          onClick={() => setEnquiryPage(pg)}
-                                          className={`w-8 h-8 rounded-lg text-xs font-bold transition-all ${isActive ? 'bg-[#FFEFEA] text-[#FF5B26] border border-[#FF5B26]/20' : 'text-nomichi-ink/60 hover:bg-[#FAF8F4] hover:text-nomichi-ink'}`}
-                                        >
-                                          {pg}
-                                        </button>
-                                      );
-                                    })}
-
-                                    {/* Next */}
-                                    <button 
-                                      disabled={currPage === totalPgs}
-                                      onClick={() => setEnquiryPage(currPage + 1)}
-                                      className="w-8 h-8 rounded-lg flex items-center justify-center text-nomichi-ink/50 hover:text-[#FF5B26] hover:bg-[#FF5B26]/5 disabled:opacity-30 disabled:hover:bg-transparent disabled:hover:text-nomichi-ink/50 transition-all"
-                                    >
-                                      <ChevronRight className="w-4.5 h-4.5" />
-                                    </button>
-
-                                  </div>
-                                )}
-
-                              </div>
-                            )}
-                          </>
-                        );
-                      })()}
-                    </div>
+                            <button 
+                              disabled={currPage === totalPgs}
+                              onClick={() => setEnquiryPage(currPage + 1)}
+                              className="w-8 h-8 rounded-lg flex items-center justify-center text-nomichi-ink/50 hover:text-[#FF5B26] hover:bg-[#FF5B26]/5 disabled:opacity-30 disabled:hover:bg-transparent disabled:hover:text-nomichi-ink/50 transition-all"
+                            >
+                              <ChevronRight className="w-4.5 h-4.5" />
+                            </button>
+                          </div>
+                        )}
+                      </div>
+                    )}
                   </div>
-                </div>
-              </div>
+                );
+              })()}
             </div>
 
           ) : currentView === "enquiry_detail" ? (
@@ -3055,12 +3217,13 @@ export function DashboardView({ user, leads = [], trips = [], initialChatMessage
                   ? `₹${(rawPrice * (lead.group_size || 2)).toLocaleString("en-IN")}` 
                   : "₹1,24,500";
 
-                // Timeline step configuration — 5 user-facing stages
+                // Timeline step configuration — 6 user-facing stages
                 const steps = [
                   { label: "Enquiry Submitted", statusKey: "new", icon: Check },
                   { label: "Trip Expert Assigned", statusKey: "contacted", icon: UserIcon },
                   { label: "Vibe Check Completed", statusKey: "negotiating", icon: Heart },
                   { label: "Itinerary Shared", statusKey: "qualified", icon: FileText },
+                  { label: "Payment Received", statusKey: "converted", icon: CreditCard },
                   { label: "Booking Confirmed", statusKey: "confirmed", icon: Calendar }
                 ];
 
@@ -3075,43 +3238,71 @@ export function DashboardView({ user, leads = [], trips = [], initialChatMessage
                   if (s === "negotiating" || s === "vibe_check_sent" || s === "vibe check sent") return 2;
                   // Stage 3: Itinerary Shared
                   if (s === "qualified") return 3;
-                  // Stage 4: Booking Confirmed
-                  if (s === "converted" || s === "confirmed") return 4;
+                  // Stage 4: Payment Received
+                  if (s === "converted") return 4;
+                  // Stage 5: Booking Confirmed
+                  if (s === "confirmed") return 5;
                   // Lost leads — show at last reached stage
-                  if (s === "lost" || s === "not_a_fit" || s === "closed") return 4;
+                  if (s === "lost" || s === "not_a_fit" || s === "closed") return 5;
                   return 0;
                 };
 
                 const renderBrochureButtons = (brochureUrl?: string | null, customClass?: string) => {
                   if (!brochureUrl) return null;
+
+                  let brochures: Array<{ name: string; url: string }> = [];
                   if (brochureUrl.startsWith("[")) {
                     try {
-                      const brochures = JSON.parse(brochureUrl);
-                      return brochures.map((b: any, index: number) => (
-                        <button
-                          key={index}
-                          onClick={() => {
-                            if (b.url) {
-                              window.open(b.url.startsWith("data:") ? `/api/trips/${trip.id}/brochure?index=${index}` : b.url, "_blank");
-                            }
-                          }}
-                          className={customClass || "bg-[#16A34A] hover:bg-[#16A34A]/90 text-white font-bold text-xs px-4 py-2.5 rounded-xl transition-all shadow-sm cursor-pointer inline-flex items-center gap-1.5 border-0"}
-                        >
-                          <FileText className="w-3.5 h-3.5" />
-                          <span>{b.name || `Brochure ${index + 1}`}</span>
-                        </button>
-                      ));
+                      brochures = JSON.parse(brochureUrl);
                     } catch (e) {
                       console.error(e);
                     }
+                  } else {
+                    brochures = [{ name: "Itinerary Brochure.pdf", url: brochureUrl }];
                   }
+
                   return (
-                    <button
-                      onClick={() => window.open(brochureUrl.startsWith("data:") ? `/api/trips/${trip.id}/brochure` : brochureUrl, "_blank")}
-                      className={customClass || "bg-[#16A34A] hover:bg-[#16A34A]/90 text-white font-bold text-xs px-5 py-2.5 rounded-xl transition-all shadow-sm border-0 cursor-pointer"}
-                    >
-                      View Itinerary &rarr;
-                    </button>
+                    <div className="space-y-2 mt-2 w-full text-left">
+                      <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest block mb-1">Shared PDF Brochures</p>
+                      <div className="flex flex-col gap-2">
+                        {brochures.map((b: any, index: number) => {
+                          const viewLink = b.url.startsWith("data:") 
+                            ? `/api/trips/${trip.id}/brochure?index=${index}` 
+                            : b.url;
+                          const downloadLink = b.url.startsWith("data:")
+                            ? `/api/trips/${trip.id}/brochure?index=${index}&download=true`
+                            : b.url;
+
+                          return (
+                            <div key={index} className="flex items-center justify-between p-3 rounded-xl border border-slate-100 bg-[#FAF8F5] gap-4">
+                              <div className="flex items-center gap-2 min-w-0">
+                                <FileText className="w-4 h-4 text-[#FF5B26] shrink-0" />
+                                <span className="text-xs font-bold text-slate-700 truncate">{b.name || `Itinerary Brochure ${index + 1}`}</span>
+                              </div>
+                              <div className="flex items-center gap-2 shrink-0">
+                                <a
+                                  href={viewLink}
+                                  target="_blank"
+                                  rel="noopener noreferrer"
+                                  className="p-1.5 hover:bg-slate-200 rounded-lg text-slate-500 hover:text-slate-700 transition-all inline-flex items-center justify-center cursor-pointer border-0 bg-transparent"
+                                  title="View"
+                                >
+                                  <Eye className="w-3.5 h-3.5" />
+                                </a>
+                                <a
+                                  href={downloadLink}
+                                  className="p-1.5 hover:bg-slate-200 rounded-lg text-[#FF5B26] hover:text-[#e04b1c] transition-all inline-flex items-center justify-center cursor-pointer border-0 bg-transparent"
+                                  title="Download"
+                                  download={b.name || `brochure_${index + 1}.pdf`}
+                                >
+                                  <Download className="w-3.5 h-3.5" />
+                                </a>
+                              </div>
+                            </div>
+                          );
+                        })}
+                      </div>
+                    </div>
                   );
                 };
 
@@ -3184,7 +3375,7 @@ const firstName = lead.name ? lead.name.split(" ")[0] : "Traveler";
                         {/* Horizontal Line Completed Progress */}
                         <div 
                           className="absolute left-[10%] top-6 h-0.5 bg-emerald-500 transition-all duration-500 -z-0"
-                          style={{ width: `${(Math.min(currentStatusIdx, 4) / 4) * 80}%` }}
+                          style={{ width: `${(Math.min(currentStatusIdx, 5) / 5) * 80}%` }}
                         />
 
                         {/* Steps list */}
@@ -3207,6 +3398,7 @@ const firstName = lead.name ? lead.name.split(" ")[0] : "Traveler";
                             else if (idx === 2) dateLabel = new Date(d.getTime() + 24 * 60 * 60 * 1000).toLocaleDateString("en-IN", { day: 'numeric', month: 'short' });
                             else if (idx === 3) dateLabel = new Date(d.getTime() + 48 * 60 * 60 * 1000).toLocaleDateString("en-IN", { day: 'numeric', month: 'short' });
                             else if (idx === 4) dateLabel = new Date(d.getTime() + 72 * 60 * 60 * 1000).toLocaleDateString("en-IN", { day: 'numeric', month: 'short' });
+                            else if (idx === 5) dateLabel = new Date(d.getTime() + 96 * 60 * 60 * 1000).toLocaleDateString("en-IN", { day: 'numeric', month: 'short' });
                           }
 
                           const StepIcon = st.icon;
@@ -3256,14 +3448,16 @@ const firstName = lead.name ? lead.name.split(" ")[0] : "Traveler";
                             {currentStatusIdx === 1 && "Great news! Your Trip Expert has been assigned."}
                             {currentStatusIdx === 2 && "Vibe Check Completed!"}
                             {currentStatusIdx === 3 && "Your personalised itinerary is ready!"}
-                            {currentStatusIdx === 4 && "Congratulations! Your booking is confirmed."}
+                            {currentStatusIdx === 4 && "Payment Completed Successfully!"}
+                            {currentStatusIdx === 5 && "Congratulations! Your booking is confirmed."}
                           </h4>
                           <p className="text-xs text-nomichi-ink/50 leading-relaxed font-semibold">
                             {currentStatusIdx === 0 && "We've received your enquiry and are reviewing your travel preferences. Our team will get back to you within 24 hours."}
                             {currentStatusIdx === 1 && `${assignedExpert?.full_name || 'Your Trip Expert'} will be your dedicated travel expert and will work with you to craft the perfect journey.`}
                             {currentStatusIdx === 2 && "Thanks for the great conversation! We've aligned on your preferences and finalized the perfect experience for you."}
                             {currentStatusIdx === 3 && "We've crafted a memorable experience just for you. Please review the itinerary and let us know your thoughts."}
-                            {currentStatusIdx === 4 && "Your adventure is all set! We can't wait to host you on an unforgettable journey."}
+                            {currentStatusIdx === 4 && "Thank you! Your payment has been received and your booking is confirmed."}
+                            {currentStatusIdx === 5 && "Your adventure is all set! We can't wait to host you on an unforgettable journey."}
                           </p>
                         </div>
                       </div>
@@ -3524,8 +3718,82 @@ const firstName = lead.name ? lead.name.split(" ")[0] : "Traveler";
                           </div>
                         )}
 
-                        {/* Stage 5: Booking Confirmation Card */}
+                        {/* Stage 4: Payment Received Card */}
                         {currentStatusIdx === 4 && (
+                          <div className="bg-white border border-[#e7e1d5]/50 rounded-[24px] p-6 shadow-sm space-y-5 text-left animate-in slide-in-from-bottom duration-250">
+                            <div className="flex justify-between items-center border-b border-[#e7e1d5]/30 pb-3">
+                              <h3 className="text-sm font-bold text-nomichi-ink">Payment Details</h3>
+                              <span className="px-2.5 py-0.5 bg-emerald-50 border border-emerald-200 text-emerald-700 text-[10px] font-black uppercase rounded-full">
+                                ✓ PAID ON {new Date(new Date(lead.created_at).getTime() + 72 * 60 * 60 * 1000).toLocaleDateString("en-GB", { day: "numeric", month: "short", year: "numeric" }).toUpperCase()}
+                              </span>
+                            </div>
+
+                            <div className="grid grid-cols-2 md:grid-cols-4 gap-4 bg-[#FAF8F4]/50 border border-[#e7e1d5]/35 p-5 rounded-2xl">
+                              <div>
+                                <span className="text-[10px] font-bold text-nomichi-ink/40 uppercase block tracking-wide">Booking ID</span>
+                                <span className="text-xs font-black text-emerald-600 block mt-1">NMCH-{displayEnqId}</span>
+                              </div>
+                              <div>
+                                <span className="text-[10px] font-bold text-nomichi-ink/40 uppercase block tracking-wide">Payment ID</span>
+                                <span className="text-xs font-black text-nomichi-ink block mt-1">
+                                  PAY-{new Date(lead.created_at).getFullYear()}{String(new Date(lead.created_at).getMonth() + 1).padStart(2, '0')}{String(new Date(lead.created_at).getDate() + 3).padStart(2, '0')}-0012
+                                </span>
+                              </div>
+                              <div>
+                                <span className="text-[10px] font-bold text-nomichi-ink/40 uppercase block tracking-wide">Payment Method</span>
+                                <span className="text-xs font-black text-nomichi-ink block mt-1">Razorpay (UPI)</span>
+                              </div>
+                              <div>
+                                <span className="text-[10px] font-bold text-nomichi-ink/40 uppercase block tracking-wide">Total Amount</span>
+                                <span className="text-xs font-black text-[#FF5B26] block mt-1">{totalPriceStr}</span>
+                              </div>
+                            </div>
+
+                            <div className="flex flex-col md:flex-row gap-6 items-stretch justify-between pt-2">
+                              {/* Price Breakdown Table */}
+                              <div className="flex-1 border border-[#e7e1d5]/35 rounded-2xl overflow-hidden text-xs">
+                                <div className="grid grid-cols-2 bg-[#FAF8F4] px-4 py-2 font-bold text-nomichi-ink/40 uppercase tracking-wider text-[10px] border-b border-[#e7e1d5]/35">
+                                  <div>Description</div>
+                                  <div className="text-right">Amount</div>
+                                </div>
+                                <div className="divide-y divide-[#e7e1d5]/20 font-semibold text-nomichi-ink">
+                                  <div className="grid grid-cols-2 px-4 py-3">
+                                    <div>Trip Package Amount</div>
+                                    <div className="text-right">₹{Math.round(rawPrice * (lead.group_size || 2) * 0.95).toLocaleString("en-IN")}</div>
+                                  </div>
+                                  <div className="grid grid-cols-2 px-4 py-3">
+                                    <div>Taxes & Fees</div>
+                                    <div className="text-right">₹{Math.round(rawPrice * (lead.group_size || 2) * 0.05).toLocaleString("en-IN")}</div>
+                                  </div>
+                                  <div className="grid grid-cols-2 bg-[#FAF8F4]/55 px-4 py-3 font-bold text-nomichi-ink">
+                                    <div>Total Paid</div>
+                                    <div className="text-right">{totalPriceStr}</div>
+                                  </div>
+                                </div>
+                              </div>
+
+                              {/* Receipt Download Box */}
+                              <div className="w-full md:w-56 bg-emerald-50/30 border border-emerald-100/60 rounded-2xl p-4 flex flex-col justify-between text-left">
+                                <div className="space-y-1">
+                                  <h4 className="text-xs font-bold text-nomichi-ink">Payment Receipt</h4>
+                                  <p className="text-[10px] text-nomichi-ink/50 leading-relaxed font-semibold">
+                                    A receipt has been sent to <span className="font-extrabold text-nomichi-ink/75">{lead.email}</span>
+                                  </p>
+                                </div>
+                                <button
+                                  onClick={() => alert("Downloading payment receipt...")}
+                                  className="w-full h-9 bg-white border border-[#e7e1d5] hover:bg-[#FAF8F4] text-nomichi-ink font-bold text-xs rounded-xl transition-all shadow-xs flex items-center justify-center gap-1.5 cursor-pointer mt-4"
+                                >
+                                  <Download className="w-4 h-4 text-nomichi-sand shrink-0" />
+                                  Download Receipt
+                                </button>
+                              </div>
+                            </div>
+                          </div>
+                        )}
+
+                        {/* Stage 5: Booking Confirmation Card */}
+                        {currentStatusIdx === 5 && (
                           <div className="bg-white border border-[#e7e1d5]/50 rounded-[24px] p-6 shadow-sm space-y-5 text-left animate-in slide-in-from-bottom duration-250">
                             <div className="flex justify-between items-center border-b border-[#e7e1d5]/30 pb-3">
                               <h3 className="text-sm font-bold text-nomichi-ink">Booking Confirmation</h3>
@@ -3906,8 +4174,40 @@ const firstName = lead.name ? lead.name.split(" ")[0] : "Traveler";
                                     <Check className="w-3.5 h-3.5 stroke-[2.5px]" />
                                   </div>
                                   <div>
-                                    <strong className="block text-nomichi-ink">Get Ready!</strong>
-                                    <span className="text-nomichi-ink/50 text-[11px] block mt-0.5">We'll share all trip details and documents.</span>
+                                    <strong className="block text-nomichi-ink">Payment Completed</strong>
+                                    <span className="text-nomichi-ink/50 text-[11px] block mt-0.5">We have received your payment successfully.</span>
+                                  </div>
+                                </div>
+                                <div className="flex gap-3 items-start text-xs leading-relaxed font-semibold">
+                                  <div className="w-5.5 h-5.5 rounded-full bg-emerald-50 text-emerald-600 border border-emerald-100 flex items-center justify-center shrink-0 ring-4 ring-emerald-100 animate-pulse">
+                                    <Check className="w-3.5 h-3.5 stroke-[2.5px]" />
+                                  </div>
+                                  <div>
+                                    <strong className="block text-nomichi-ink">Documents & Permits</strong>
+                                    <span className="text-nomichi-ink/50 text-[11px] block mt-0.5">Our team will help you with the required documents.</span>
+                                  </div>
+                                </div>
+                                <div className="flex gap-3 items-start text-xs leading-relaxed font-semibold">
+                                  <div className="w-5.5 h-5.5 rounded-full bg-zinc-100 text-zinc-400 flex items-center justify-center shrink-0">
+                                    <span className="w-1.5 h-1.5 rounded-full bg-zinc-400" />
+                                  </div>
+                                  <div>
+                                    <strong className="block text-nomichi-ink/45">Pre-Departure Briefing</strong>
+                                    <span className="text-nomichi-ink/30 text-[11px] block mt-0.5">You will receive all trip details before departure.</span>
+                                  </div>
+                                </div>
+                              </>
+                            )}
+
+                            {currentStatusIdx === 5 && (
+                              <>
+                                <div className="flex gap-3 items-start text-xs leading-relaxed font-semibold">
+                                  <div className="w-5.5 h-5.5 rounded-full bg-emerald-50 text-emerald-600 border border-emerald-100 flex items-center justify-center shrink-0">
+                                    <Check className="w-3.5 h-3.5 stroke-[2.5px]" />
+                                  </div>
+                                  <div>
+                                    <strong className="block text-nomichi-ink">Payment Completed</strong>
+                                    <span className="text-nomichi-ink/50 text-[11px] block mt-0.5">We have received your payment successfully.</span>
                                   </div>
                                 </div>
                                 <div className="flex gap-3 items-start text-xs leading-relaxed font-semibold">
@@ -3915,17 +4215,17 @@ const firstName = lead.name ? lead.name.split(" ")[0] : "Traveler";
                                     <Check className="w-3.5 h-3.5 stroke-[2.5px]" />
                                   </div>
                                   <div>
-                                    <strong className="block text-nomichi-ink">Departure Prep</strong>
-                                    <span className="text-nomichi-ink/50 text-[11px] block mt-0.5">We'll assist you with visa, packing & more.</span>
+                                    <strong className="block text-nomichi-ink">Documents Verified</strong>
+                                    <span className="text-nomichi-ink/50 text-[11px] block mt-0.5">All required travel documents have been approved.</span>
                                   </div>
                                 </div>
                                 <div className="flex gap-3 items-start text-xs leading-relaxed font-semibold">
-                                  <div className="w-5.5 h-5.5 rounded-full bg-emerald-50 text-emerald-600 border border-emerald-100 flex items-center justify-center shrink-0">
-                                    <Check className="w-3.5 h-3.5 stroke-[2.5px]" />
+                                  <div className="w-5.5 h-5.5 rounded-full bg-[#FFF1EA] text-[#FF5B26] border border-[#FFD3C4] flex items-center justify-center shrink-0 ring-4 ring-orange-100 animate-pulse">
+                                    <span className="w-1.5 h-1.5 rounded-full bg-[#FF5B26]" />
                                   </div>
                                   <div>
-                                    <strong className="block text-nomichi-ink">Your Journey Begins</strong>
-                                    <span className="text-nomichi-ink/50 text-[11px] block mt-0.5">Sit back and enjoy. We've got you covered!</span>
+                                    <strong className="block text-nomichi-ink">Pre-Departure Briefing</strong>
+                                    <span className="text-nomichi-ink/50 text-[11px] block mt-0.5">We will share all final trip briefings soon.</span>
                                   </div>
                                 </div>
                               </>
@@ -4524,11 +4824,12 @@ const firstName = lead.name ? lead.name.split(" ")[0] : "Traveler";
               )}
             </div>
           ) : currentView === "bookings" ? (
-            <div className="space-y-6 text-left animate-in fade-in duration-300">
-              <div className="flex flex-col gap-2">
-                <h2 className="text-2xl font-display font-extrabold text-nomichi-ink tracking-tight">My Bookings</h2>
-                <p className="text-xs text-nomichi-ink/50 font-medium">Manage your active bookings, view invoices, and complete payments.</p>
-              </div>
+            <>
+              <div className="space-y-6 text-left animate-in fade-in duration-300">
+                <div className="flex flex-col gap-2">
+                  <h2 className="text-2xl font-display font-extrabold text-nomichi-ink tracking-tight">My Bookings</h2>
+                  <p className="text-xs text-nomichi-ink/50 font-medium">Manage your active bookings, view invoices, and complete payments.</p>
+                </div>
 
               {bookingsLoading ? (
                 <div className="flex justify-center py-20">
@@ -4537,6 +4838,7 @@ const firstName = lead.name ? lead.name.split(" ")[0] : "Traveler";
               ) : bookings.length > 0 ? (
                 <div className="grid grid-cols-1 gap-6">
                   {bookings.map((booking) => {
+
                     const departureMeta = parseDepartureStatus(booking.trip_departures?.status);
                     const formattedStartDate = formatDate(booking.trip_departures?.start_date);
                     const formattedEndDate = formatDate(booking.trip_departures?.end_date);
@@ -4606,18 +4908,14 @@ const firstName = lead.name ? lead.name.split(" ")[0] : "Traveler";
                         <div className="flex flex-col sm:flex-row gap-3 w-full lg:w-auto shrink-0 pt-4 lg:pt-0 border-t lg:border-t-0 border-[#e7e1d5]/20">
                           {booking.payment_status !== "paid" && (
                             <button
-                              onClick={() => {
-                                alert(`Redirecting to payment gateway for Booking #${booking.id.slice(0, 8).toUpperCase()}`);
-                              }}
+                              onClick={() => openPaymentModal(booking)}
                               className="px-5 py-2.5 bg-[#FF5B26] hover:bg-[#b04b1e] text-white text-xs font-bold rounded-xl transition-all shadow-md cursor-pointer border-0 w-full sm:w-auto"
                             >
                               Pay Balance
                             </button>
                           )}
                           <button
-                            onClick={() => {
-                              alert(`Generating invoice for Booking #${booking.id.slice(0, 8).toUpperCase()}...`);
-                            }}
+                            onClick={() => setInvoiceModalBooking(booking)}
                             className="px-5 py-2.5 border border-[#e7e1d5] hover:bg-[#FAF8F4] text-nomichi-ink/80 text-xs font-bold rounded-xl transition-all cursor-pointer bg-white w-full sm:w-auto"
                           >
                             View Invoice
@@ -4644,7 +4942,416 @@ const firstName = lead.name ? lead.name.split(" ")[0] : "Traveler";
                   </button>
                 </div>
               )}
-            </div>
+              </div>
+
+              {/* PAYMENT MODAL */}
+            {paymentModalBooking && (
+              <div className="fixed inset-0 z-50 flex items-center justify-center bg-nomichi-ink/60 backdrop-blur-sm p-4 animate-in fade-in duration-200">
+                <div className="bg-white rounded-3xl shadow-2xl border border-[#e7e1d5]/40 w-full max-w-lg overflow-hidden animate-in zoom-in-95 duration-200">
+
+                  {/* Header */}
+                  <div className="flex items-center justify-between px-6 py-5 border-b border-[#e7e1d5]/30 bg-gradient-to-r from-[#FFF5F2] to-white">
+                    <div>
+                      <h3 className="text-base font-display font-extrabold text-nomichi-ink">Complete Payment</h3>
+                      <p className="text-[10px] text-nomichi-ink/50 mt-0.5 font-medium">
+                        Booking #{paymentModalBooking.id.slice(0, 8).toUpperCase()} · {paymentModalBooking.trips?.title}
+                      </p>
+                    </div>
+                    {paymentStep !== "processing" && paymentStep !== "success" && (
+                      <button onClick={closePaymentModal} className="text-nomichi-ink/40 hover:text-nomichi-ink/80 transition-colors">
+                        <X className="w-5 h-5" />
+                      </button>
+                    )}
+                  </div>
+
+                  {/* Amount Banner */}
+                  {paymentStep !== "success" && (
+                    <div className="mx-6 mt-5 rounded-2xl bg-gradient-to-r from-[#FF5B26]/10 to-[#FF8C5A]/10 border border-[#FF5B26]/20 px-4 py-3 flex items-center justify-between">
+                      <span className="text-xs font-bold text-nomichi-ink/70">Balance Due</span>
+                      <span className="text-xl font-display font-extrabold text-[#FF5B26]">
+                        ₹{Math.max(0, Number(paymentModalBooking.price || 0) - (paymentModalBooking.payments || []).filter((p: any) => p.status === "completed").reduce((s: number, p: any) => s + Number(p.amount), 0)).toLocaleString("en-IN")}
+                      </span>
+                    </div>
+                  )}
+
+                  <div className="px-6 py-5">
+
+                    {/* STEP 1 — Choose Method */}
+                    {paymentStep === "method" && (
+                      <div className="space-y-4">
+                        <p className="text-xs font-bold text-nomichi-ink/60 uppercase tracking-wider">Select Payment Method</p>
+                        <div className="space-y-2">
+                          {([
+                            { id: "card", label: "Credit / Debit Card", sub: "Visa, Mastercard, RuPay", icon: "💳" },
+                            { id: "upi", label: "UPI", sub: "GPay, PhonePe, Paytm, BHIM", icon: "⚡" },
+                            { id: "netbanking", label: "Net Banking", sub: "All major Indian banks", icon: "🏦" },
+                          ] as const).map((opt) => (
+                            <button
+                              key={opt.id}
+                              onClick={() => setPaymentMethod(opt.id)}
+                              className={`w-full flex items-center gap-4 px-4 py-3.5 rounded-2xl border-2 transition-all text-left ${
+                                paymentMethod === opt.id
+                                  ? "border-[#FF5B26] bg-[#FFF5F2]"
+                                  : "border-[#e7e1d5] bg-[#FAF8F4] hover:border-[#FF5B26]/40"
+                              }`}
+                            >
+                              <span className="text-2xl">{opt.icon}</span>
+                              <div>
+                                <span className="text-xs font-extrabold text-nomichi-ink block">{opt.label}</span>
+                                <span className="text-[10px] text-nomichi-ink/50 font-medium">{opt.sub}</span>
+                              </div>
+                              {paymentMethod === opt.id && (
+                                <Check className="w-4 h-4 text-[#FF5B26] ml-auto" />
+                              )}
+                            </button>
+                          ))}
+                        </div>
+                        <button
+                          disabled={!paymentMethod}
+                          onClick={handlePaymentProceed}
+                          className="w-full py-3 bg-[#FF5B26] hover:bg-[#b04b1e] disabled:opacity-40 disabled:cursor-not-allowed text-white text-xs font-extrabold rounded-xl transition-all shadow-md mt-2"
+                        >
+                          Proceed →
+                        </button>
+                      </div>
+                    )}
+
+                    {/* STEP 2 — Enter Details */}
+                    {paymentStep === "details" && (
+                      <div className="space-y-4">
+                        <button
+                          onClick={() => setPaymentStep("method")}
+                          className="flex items-center gap-1 text-[10px] font-bold text-nomichi-ink/50 hover:text-nomichi-ink transition-colors mb-1 cursor-pointer"
+                        >
+                          <ChevronLeft className="w-3 h-3" /> Change method
+                        </button>
+
+                        {paymentMethod === "card" && (
+                          <div className="space-y-3">
+                            <div className="relative">
+                              <label className="text-[10px] font-extrabold text-nomichi-ink/60 uppercase tracking-wider block mb-1">Card Number</label>
+                              <input
+                                type="text"
+                                maxLength={19}
+                                placeholder="4242 4242 4242 4242"
+                                value={cardForm.number}
+                                onChange={e => {
+                                  const val = e.target.value.replace(/\D/g, "").slice(0, 16);
+                                  const formatted = val.match(/.{1,4}/g)?.join(" ") || val;
+                                  setCardForm(f => ({ ...f, number: formatted }));
+                                }}
+                                className="w-full border border-[#e7e1d5]/60 bg-[#FAF8F4] px-4 py-3 rounded-xl text-sm font-mono font-bold text-nomichi-ink focus:outline-none focus:border-[#FF5B26] tracking-widest"
+                              />
+                            </div>
+                            <div>
+                              <label className="text-[10px] font-extrabold text-nomichi-ink/60 uppercase tracking-wider block mb-1">Name on Card</label>
+                              <input
+                                type="text"
+                                placeholder="Tejaswa Jhode"
+                                value={cardForm.name}
+                                onChange={e => setCardForm(f => ({ ...f, name: e.target.value }))}
+                                className="w-full border border-[#e7e1d5]/60 bg-[#FAF8F4] px-4 py-3 rounded-xl text-sm font-semibold text-nomichi-ink focus:outline-none focus:border-[#FF5B26]"
+                              />
+                            </div>
+                            <div className="grid grid-cols-2 gap-3">
+                              <div>
+                                <label className="text-[10px] font-extrabold text-nomichi-ink/60 uppercase tracking-wider block mb-1">Expiry</label>
+                                <input
+                                  type="text"
+                                  maxLength={5}
+                                  placeholder="MM/YY"
+                                  value={cardForm.expiry}
+                                  onChange={e => {
+                                    let val = e.target.value.replace(/\D/g, "");
+                                    if (val.length > 2) val = val.slice(0, 2) + "/" + val.slice(2, 4);
+                                    setCardForm(f => ({ ...f, expiry: val }));
+                                  }}
+                                  className="w-full border border-[#e7e1d5]/60 bg-[#FAF8F4] px-4 py-3 rounded-xl text-sm font-mono font-bold text-nomichi-ink focus:outline-none focus:border-[#FF5B26]"
+                                />
+                              </div>
+                              <div>
+                                <label className="text-[10px] font-extrabold text-nomichi-ink/60 uppercase tracking-wider block mb-1">CVV</label>
+                                <input
+                                  type="password"
+                                  maxLength={4}
+                                  placeholder="•••"
+                                  value={cardForm.cvv}
+                                  onChange={e => setCardForm(f => ({ ...f, cvv: e.target.value.replace(/\D/g, "").slice(0, 4) }))}
+                                  className="w-full border border-[#e7e1d5]/60 bg-[#FAF8F4] px-4 py-3 rounded-xl text-sm font-mono font-bold text-nomichi-ink focus:outline-none focus:border-[#FF5B26]"
+                                />
+                              </div>
+                            </div>
+                          </div>
+                        )}
+
+                        {paymentMethod === "upi" && (
+                          <div className="space-y-3">
+                            <div className="flex gap-2 flex-wrap">
+                              {["GPay", "PhonePe", "Paytm", "BHIM"].map(app => (
+                                <span key={app} className="px-3 py-1.5 bg-[#FAF8F4] border border-[#e7e1d5] rounded-lg text-[10px] font-bold text-nomichi-ink/70">{app}</span>
+                              ))}
+                            </div>
+                            <div>
+                              <label className="text-[10px] font-extrabold text-nomichi-ink/60 uppercase tracking-wider block mb-1">UPI ID</label>
+                              <input
+                                type="text"
+                                placeholder="yourname@okaxis"
+                                value={upiId}
+                                onChange={e => setUpiId(e.target.value)}
+                                className="w-full border border-[#e7e1d5]/60 bg-[#FAF8F4] px-4 py-3 rounded-xl text-sm font-semibold text-nomichi-ink focus:outline-none focus:border-[#FF5B26]"
+                              />
+                            </div>
+                          </div>
+                        )}
+
+                        {paymentMethod === "netbanking" && (
+                          <div className="space-y-3">
+                            <p className="text-[10px] font-extrabold text-nomichi-ink/60 uppercase tracking-wider">Select Your Bank</p>
+                            <div className="grid grid-cols-2 gap-2">
+                              {["State Bank of India", "HDFC Bank", "ICICI Bank", "Axis Bank", "Kotak Bank", "Yes Bank"].map(bank => (
+                                <button
+                                  key={bank}
+                                  onClick={() => setSelectedBank(bank)}
+                                  className={`px-3 py-2.5 rounded-xl border-2 text-[10px] font-bold text-left transition-all ${
+                                    selectedBank === bank
+                                      ? "border-[#FF5B26] bg-[#FFF5F2] text-nomichi-ink"
+                                      : "border-[#e7e1d5] bg-[#FAF8F4] text-nomichi-ink/70 hover:border-[#FF5B26]/40"
+                                  }`}
+                                >
+                                  {bank}
+                                </button>
+                              ))}
+                            </div>
+                          </div>
+                        )}
+
+                        <div className="flex items-center gap-2 text-[10px] text-nomichi-ink/40 font-medium pt-1">
+                          <Shield className="w-3.5 h-3.5 text-emerald-500" />
+                          256-bit SSL encrypted · PCI DSS compliant
+                        </div>
+
+                        <button
+                          onClick={handlePaymentSubmit}
+                          className="w-full py-3 bg-[#FF5B26] hover:bg-[#b04b1e] text-white text-xs font-extrabold rounded-xl transition-all shadow-md"
+                        >
+                          Pay Now ₹{Math.max(0, Number(paymentModalBooking.price || 0) - (paymentModalBooking.payments || []).filter((p: any) => p.status === "completed").reduce((s: number, p: any) => s + Number(p.amount), 0)).toLocaleString("en-IN")}
+                        </button>
+                      </div>
+                    )}
+
+                    {/* STEP 3 — Processing */}
+                    {paymentStep === "processing" && (
+                      <div className="flex flex-col items-center py-10 gap-5">
+                        <div className="relative">
+                          <div className="w-20 h-20 rounded-full bg-[#FFF5F2] flex items-center justify-center">
+                            <Loader2 className="w-10 h-10 text-[#FF5B26] animate-spin" />
+                          </div>
+                        </div>
+                        <div className="text-center">
+                          <p className="text-base font-display font-extrabold text-nomichi-ink">Processing Payment…</p>
+                          <p className="text-xs text-nomichi-ink/50 mt-1 font-medium">Please don't close this window</p>
+                        </div>
+                        <div className="w-full bg-[#e7e1d5]/30 rounded-full h-1.5 overflow-hidden">
+                          <div className="h-full bg-gradient-to-r from-[#FF5B26] to-[#FF8C5A] rounded-full" style={{ width: "0", transition: "width 2.4s ease-in-out" }} ref={el => { if (el) setTimeout(() => { el.style.width = "100%"; }, 50); }} />
+                        </div>
+                      </div>
+                    )}
+
+                    {/* STEP 4 — Success */}
+                    {paymentStep === "success" && (
+                      <div className="flex flex-col items-center py-8 gap-4 text-center">
+                        <div className="w-20 h-20 rounded-full bg-emerald-50 border-4 border-emerald-200 flex items-center justify-center animate-in zoom-in duration-300">
+                          <Check className="w-10 h-10 text-emerald-500" />
+                        </div>
+                        <div>
+                          <p className="text-xl font-display font-extrabold text-nomichi-ink">Payment Successful!</p>
+                          <p className="text-xs text-nomichi-ink/50 mt-1 font-medium">Your booking balance has been cleared</p>
+                        </div>
+                        <div className="w-full bg-[#FAF8F4] rounded-2xl border border-[#e7e1d5]/40 px-4 py-3 text-left space-y-1.5">
+                          <div className="flex justify-between text-[10px]">
+                            <span className="text-nomichi-ink/50 font-semibold">Transaction ID</span>
+                            <span className="font-mono font-bold text-nomichi-ink">TXN{Date.now().toString().slice(-8)}</span>
+                          </div>
+                          <div className="flex justify-between text-[10px]">
+                            <span className="text-nomichi-ink/50 font-semibold">Booking Ref</span>
+                            <span className="font-mono font-bold text-nomichi-ink">{paymentModalBooking.id.slice(0, 8).toUpperCase()}</span>
+                          </div>
+                          <div className="flex justify-between text-[10px]">
+                            <span className="text-nomichi-ink/50 font-semibold">Amount Paid</span>
+                            <span className="font-bold text-emerald-600">₹{Math.max(0, Number(paymentModalBooking.price || 0) - (paymentModalBooking.payments || []).filter((p: any) => p.status === "completed").reduce((s: number, p: any) => s + Number(p.amount), 0)).toLocaleString("en-IN")}</span>
+                          </div>
+                          <div className="flex justify-between text-[10px]">
+                            <span className="text-nomichi-ink/50 font-semibold">Status</span>
+                            <span className="font-bold text-emerald-600">✓ COMPLETED</span>
+                          </div>
+                        </div>
+                        <p className="text-[10px] text-nomichi-ink/40 font-medium">A confirmation has been sent to {user.email}</p>
+                        <button
+                          onClick={closePaymentModal}
+                          className="w-full py-3 bg-[#FF5B26] hover:bg-[#b04b1e] text-white text-xs font-extrabold rounded-xl transition-all shadow-md"
+                        >
+                          Done
+                        </button>
+                      </div>
+                    )}
+                  </div>
+                </div>
+              </div>
+            )}
+
+              {/* INVOICE MODAL */}
+            {invoiceModalBooking && (() => {
+              const inv = invoiceModalBooking;
+              const completedPaid = (inv.payments || []).filter((p: any) => p.status === "completed").reduce((s: number, p: any) => s + Number(p.amount), 0);
+              const pendingAmt = Math.max(0, Number(inv.price || 0) - completedPaid);
+              const invoiceNumber = `NMC-${inv.id.slice(0, 8).toUpperCase()}`;
+              const invoiceDate = new Date(inv.created_at).toLocaleDateString("en-IN", { day: "2-digit", month: "short", year: "numeric" });
+              const deptMeta = parseDepartureStatus(inv.trip_departures?.status);
+              return (
+                <div className="fixed inset-0 z-50 flex items-center justify-center bg-nomichi-ink/60 backdrop-blur-sm p-4 animate-in fade-in duration-200">
+                  <div className="bg-white rounded-3xl shadow-2xl border border-[#e7e1d5]/40 w-full max-w-xl max-h-[90vh] overflow-y-auto animate-in zoom-in-95 duration-200">
+
+                    {/* Invoice Header */}
+                    <div className="bg-gradient-to-br from-[#1A1208] to-[#2D1F0A] px-8 py-6 rounded-t-3xl flex items-start justify-between">
+                      <div>
+                        <div className="flex items-center gap-2 mb-3">
+                          <div className="w-8 h-8 rounded-lg bg-[#FF5B26] flex items-center justify-center">
+                            <Plane className="w-4 h-4 text-white" />
+                          </div>
+                          <span className="text-white font-display font-extrabold text-sm tracking-wide">Nomachi</span>
+                        </div>
+                        <h2 className="text-white font-display font-extrabold text-2xl">INVOICE</h2>
+                        <p className="text-white/50 text-[10px] font-mono mt-0.5">{invoiceNumber}</p>
+                      </div>
+                      <div className="text-right">
+                        <button onClick={() => setInvoiceModalBooking(null)} className="text-white/40 hover:text-white transition-colors mb-4 block ml-auto">
+                          <X className="w-5 h-5" />
+                        </button>
+                        <div className={`inline-flex items-center px-3 py-1 rounded-full text-[10px] font-extrabold uppercase tracking-wider ${
+                          inv.payment_status === "paid"
+                            ? "bg-emerald-400/20 text-emerald-300 border border-emerald-400/30"
+                            : inv.payment_status === "partial"
+                            ? "bg-amber-400/20 text-amber-300 border border-amber-400/30"
+                            : "bg-red-400/20 text-red-300 border border-red-400/30"
+                        }`}>
+                          {inv.payment_status}
+                        </div>
+                        <p className="text-white/40 text-[9px] font-medium mt-2">Issued: {invoiceDate}</p>
+                      </div>
+                    </div>
+
+                    <div className="px-8 py-6 space-y-6">
+
+                      {/* Billed To / Trip Info */}
+                      <div className="grid grid-cols-2 gap-6">
+                        <div>
+                          <p className="text-[9px] font-extrabold text-nomichi-ink/40 uppercase tracking-widest mb-2">Billed To</p>
+                          <p className="text-sm font-bold text-nomichi-ink">{formatFullName(user.fullName)}</p>
+                          <p className="text-[10px] text-nomichi-ink/50 font-medium">{user.email}</p>
+                        </div>
+                        <div>
+                          <p className="text-[9px] font-extrabold text-nomichi-ink/40 uppercase tracking-widest mb-2">Trip Details</p>
+                          <p className="text-xs font-bold text-nomichi-ink">{inv.trips?.title || "—"}</p>
+                          <p className="text-[10px] text-nomichi-ink/50 font-medium">{inv.trips?.destination || "—"}</p>
+                          {deptMeta.code && deptMeta.code !== "—" && (
+                            <p className="text-[9px] font-mono text-nomichi-ink/40 mt-0.5">Batch: {deptMeta.code}</p>
+                          )}
+                        </div>
+                      </div>
+
+                      {/* Line Items */}
+                      <div>
+                        <div className="bg-[#FAF8F4] rounded-2xl overflow-hidden border border-[#e7e1d5]/40">
+                          <div className="grid grid-cols-3 px-4 py-2.5 bg-[#F0EDE6]">
+                            <span className="text-[9px] font-extrabold text-nomichi-ink/50 uppercase tracking-wider">Description</span>
+                            <span className="text-[9px] font-extrabold text-nomichi-ink/50 uppercase tracking-wider text-center">Travelers</span>
+                            <span className="text-[9px] font-extrabold text-nomichi-ink/50 uppercase tracking-wider text-right">Amount</span>
+                          </div>
+                          <div className="grid grid-cols-3 px-4 py-4">
+                            <div>
+                              <p className="text-xs font-bold text-nomichi-ink">{inv.trips?.title || "Trip Package"}</p>
+                              <p className="text-[9px] text-nomichi-ink/50 font-medium mt-0.5">{inv.trips?.destination || ""}</p>
+                            </div>
+                            <p className="text-xs font-bold text-nomichi-ink text-center self-center">{inv.travelers?.length || 1}</p>
+                            <p className="text-xs font-bold text-nomichi-ink text-right self-center">₹{Number(inv.price || 0).toLocaleString("en-IN")}</p>
+                          </div>
+                          <div className="border-t border-[#e7e1d5]/40 px-4 py-3 space-y-2">
+                            <div className="flex justify-between text-[10px]">
+                              <span className="text-nomichi-ink/50 font-semibold">Subtotal</span>
+                              <span className="font-bold text-nomichi-ink">₹{Number(inv.price || 0).toLocaleString("en-IN")}</span>
+                            </div>
+                            <div className="flex justify-between text-[10px]">
+                              <span className="text-nomichi-ink/50 font-semibold">GST (5%)</span>
+                              <span className="font-bold text-nomichi-ink">Included</span>
+                            </div>
+                            <div className="flex justify-between text-[10px]">
+                              <span className="text-nomichi-ink/50 font-semibold">Amount Paid</span>
+                              <span className="font-bold text-emerald-600">- ₹{completedPaid.toLocaleString("en-IN")}</span>
+                            </div>
+                            <div className="flex justify-between border-t border-[#e7e1d5]/40 pt-2">
+                              <span className="text-xs font-extrabold text-nomichi-ink">Balance Due</span>
+                              <span className={`text-sm font-extrabold ${pendingAmt > 0 ? "text-[#FF5B26]" : "text-emerald-600"}`}>
+                                {pendingAmt > 0 ? `₹${pendingAmt.toLocaleString("en-IN")}` : "✓ PAID IN FULL"}
+                              </span>
+                            </div>
+                          </div>
+                        </div>
+                      </div>
+
+                      {/* Payment History */}
+                      {(inv.payments || []).length > 0 && (
+                        <div>
+                          <p className="text-[9px] font-extrabold text-nomichi-ink/40 uppercase tracking-widest mb-2">Payment History</p>
+                          <div className="space-y-2">
+                            {(inv.payments || []).map((p: any, i: number) => (
+                              <div key={i} className="flex items-center justify-between bg-[#FAF8F4] rounded-xl px-4 py-2.5 border border-[#e7e1d5]/30">
+                                <div>
+                                  <p className="text-[10px] font-bold text-nomichi-ink">{p.payment_method || "Payment"}</p>
+                                  <p className="text-[9px] text-nomichi-ink/40 font-medium">{new Date(p.created_at || Date.now()).toLocaleDateString("en-IN", { day: "2-digit", month: "short", year: "numeric" })}</p>
+                                </div>
+                                <div className="text-right">
+                                  <p className="text-xs font-extrabold text-emerald-600">₹{Number(p.amount).toLocaleString("en-IN")}</p>
+                                  <span className={`text-[9px] font-bold px-1.5 py-0.5 rounded-full ${
+                                    p.status === "completed" ? "bg-emerald-50 text-emerald-600" : "bg-amber-50 text-amber-600"
+                                  }`}>{p.status}</span>
+                                </div>
+                              </div>
+                            ))}
+                          </div>
+                        </div>
+                      )}
+
+                      {/* Footer */}
+                      <div className="text-center space-y-2">
+                        <p className="text-[9px] text-nomichi-ink/30 font-medium">Nomachi Travel Pvt. Ltd. · nomachi.in · hello@nomachi.in</p>
+                        <p className="text-[9px] text-nomichi-ink/25">This is a computer-generated invoice and does not require a signature.</p>
+                      </div>
+
+                      {/* Actions */}
+                      <div className="flex gap-3">
+                        {pendingAmt > 0 && (
+                          <button
+                            onClick={() => { setInvoiceModalBooking(null); openPaymentModal(inv); }}
+                            className="flex-1 py-3 bg-[#FF5B26] hover:bg-[#b04b1e] text-white text-xs font-extrabold rounded-xl transition-all shadow-md"
+                          >
+                            Pay Balance ₹{pendingAmt.toLocaleString("en-IN")}
+                          </button>
+                        )}
+                        <button
+                          onClick={() => setInvoiceModalBooking(null)}
+                          className="flex-1 py-3 border border-[#e7e1d5] hover:bg-[#FAF8F4] text-nomichi-ink/70 text-xs font-bold rounded-xl transition-all"
+                        >
+                          Close
+                        </button>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+              );
+            })()}
+
+            </>
+
           ) : currentView === "profile" ? (
             <div className="space-y-8 animate-in fade-in duration-300 relative">
               <input 

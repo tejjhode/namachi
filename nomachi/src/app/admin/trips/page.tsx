@@ -153,8 +153,14 @@ export default function AllTripsPage() {
       if (!startDate || !totalSeats) {
         throw new Error("Please fill in all required fields (Start Date and Total Seats).");
       }
+      if (!tripLeaderId) {
+        throw new Error("Please assign a trip manager before activating the trip.");
+      }
 
       const selectedLeader = users.find((p) => p.id === tripLeaderId);
+      if (!selectedLeader) {
+        throw new Error("Selected trip manager could not be found.");
+      }
 
       await tripService.activateTrip(activeTripForActivation, {
         startDate,
@@ -719,8 +725,9 @@ export default function AllTripsPage() {
         const isBrochureOk = !!activeTripForActivation.brochure_url;
         const isPriceOk = !!(activeTripForActivation.price && activeTripForActivation.price > 0);
         const isHighlightsOk = !!(activeTripForActivation.highlights && activeTripForActivation.highlights.length > 0);
+        const isManagerOk = !!activationForm.tripLeaderId;
 
-        const isReadyToActivate = isImageOk && isDescriptionOk && isItineraryOk && isBrochureOk && isPriceOk && isHighlightsOk;
+        const isReadyToActivate = isImageOk && isDescriptionOk && isItineraryOk && isBrochureOk && isPriceOk && isHighlightsOk && isManagerOk;
 
         return (
           <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
@@ -792,7 +799,7 @@ export default function AllTripsPage() {
                         />
                       </div>
                       <div>
-                        <label className="block text-[9px] font-bold text-nomichi-ink/50 uppercase tracking-wider mb-1">Trip Leader</label>
+                        <label className="block text-[9px] font-bold text-nomichi-ink/50 uppercase tracking-wider mb-1">Trip Leader *</label>
                         <div className="relative">
                           <button
                             type="button"
@@ -862,6 +869,9 @@ export default function AllTripsPage() {
                             </div>
                           )}
                         </div>
+                        <p className="mt-1 text-[10px] text-nomichi-ink/40 font-semibold">
+                          Assigning a manager will activate the trip and make it visible to travelers.
+                        </p>
                       </div>
                     </div>
 
@@ -941,6 +951,14 @@ export default function AllTripsPage() {
                         )}
                         <span className={isHighlightsOk ? "text-nomichi-ink" : "text-nomichi-ink/40 line-through"}>Highlights added</span>
                       </li>
+                      <li className="flex items-center gap-2">
+                        {isManagerOk ? (
+                          <span className="text-emerald-500 font-bold">✓</span>
+                        ) : (
+                          <span className="text-rose-500 font-bold">✗</span>
+                        )}
+                        <span className={isManagerOk ? "text-nomichi-ink" : "text-nomichi-ink/40 line-through"}>Manager assigned</span>
+                      </li>
                     </ul>
 
                     {/* Pre-activation Status Box */}
@@ -965,6 +983,7 @@ export default function AllTripsPage() {
                           {!isBrochureOk && <div className="flex items-center gap-1.5"><span>⚠</span> <span>Brochure missing</span></div>}
                           {!isPriceOk && <div className="flex items-center gap-1.5"><span>⚠</span> <span>Price missing</span></div>}
                           {!isHighlightsOk && <div className="flex items-center gap-1.5"><span>⚠</span> <span>Highlights missing</span></div>}
+                          {!isManagerOk && <div className="flex items-center gap-1.5"><span>⚠</span> <span>Trip manager not assigned</span></div>}
                         </div>
                       </div>
                     )}

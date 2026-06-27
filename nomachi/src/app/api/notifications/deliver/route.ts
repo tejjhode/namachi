@@ -13,7 +13,7 @@ const supabaseAdmin = createClient(supabaseUrl, supabaseServiceKey);
 export async function POST(request: Request) {
   try {
     const body = await request.json();
-    const { email, phone, title, body: contentText, priority, type, source_id } = body;
+    const { email, phone, title, body: contentText, priority, type, source_id, paymentContext } = body;
 
     let emailSent = false;
     let waSent = false;
@@ -25,7 +25,7 @@ export async function POST(request: Request) {
     // 1. Compile the rich HTML template
     let htmlContent = "";
     if (email) {
-      htmlContent = await compileHtmlTemplate({ type, title, contentText, source_id, origin });
+      htmlContent = await compileHtmlTemplate({ type, title, contentText, source_id, origin, paymentContext });
     }
 
     // Load the user's custom email banner as an inline attachment
@@ -72,7 +72,8 @@ export async function POST(request: Request) {
                   attachments.push({
                     filename: item.name || `brochure_${idx + 1}.pdf`,
                     content: buffer,
-                    contentType: contentType
+                    contentType: contentType,
+                    disposition: "attachment"
                   });
                 }
               }
@@ -86,7 +87,8 @@ export async function POST(request: Request) {
               attachments.push({
                 filename: "brochure.pdf",
                 content: buffer,
-                contentType: contentType
+                contentType: contentType,
+                disposition: "attachment"
               });
             }
           }
@@ -134,14 +136,16 @@ async function compileHtmlTemplate(params: {
   contentText: string;
   source_id?: string;
   origin?: string;
+  paymentContext?: Record<string, string>;
 }): Promise<string> {
-  const { type, source_id, title, origin, contentText } = params;
+  const { type, source_id, title, origin, contentText, paymentContext } = params;
   
   let travelerName = "Traveler";
   let tripTitle = "";
   let enquiryId = "";
   let managerName = "";
   let brochureUrl = "";
+  let brochuresListHtml = "";
   let leadData: any = null;
 
   // Fetch data from Supabase based on the notification event category
@@ -186,7 +190,24 @@ async function compileHtmlTemplate(params: {
             tripTitle = lead.trips.title;
             if (lead.trips.brochure_url) {
               const bUrl = lead.trips.brochure_url;
-              if (bUrl.startsWith("data:") || bUrl.startsWith("[")) {
+              if (bUrl.startsWith("[")) {
+                try {
+                  const brochures = JSON.parse(bUrl);
+                  const links = [];
+                  for (let idx = 0; idx < brochures.length; idx++) {
+                    const token = generateBrochureToken(lead.trips.id || lead.trip_id, idx);
+                    const signedUrl = `${origin}/api/trips/${lead.trips.id || lead.trip_id}/brochure?index=${idx}&token=${token}`;
+                    links.push(`
+                      <div style="text-align: center; margin: 15px 0;">
+                        <a href="${signedUrl}" target="_blank" style="background-color: #FF5B26; color: #ffffff; padding: 12px 24px; border-radius: 12px; font-weight: bold; text-decoration: none; display: inline-block; font-size: 13px; box-shadow: 0 4px 10px rgba(255,91,38,0.25); text-transform: capitalize;">View: ${brochures[idx].name || `Brochure ${idx + 1}`} &rarr;</a>
+                      </div>
+                    `);
+                  }
+                  brochuresListHtml = links.join("");
+                } catch (e) {
+                  console.warn("Failed to parse brochure JSON in template compile:", e);
+                }
+              } else if (bUrl.startsWith("data:")) {
                 const token = generateBrochureToken(lead.trips.id || lead.trip_id, 0);
                 brochureUrl = `${origin}/api/trips/${lead.trips.id || lead.trip_id}/brochure?index=0&token=${token}`;
               } else {
@@ -215,6 +236,14 @@ async function compileHtmlTemplate(params: {
   // Resolve brochure relative URL to absolute URL
   if (brochureUrl && brochureUrl.startsWith("/") && origin) {
     brochureUrl = `${origin}${brochureUrl}`;
+  }
+
+  if (!brochuresListHtml && brochureUrl) {
+    brochuresListHtml = `
+      <div style="text-align: center; margin: 30px 0;">
+        <a href="${brochureUrl}" target="_blank" style="background-color: #FF5B26; color: #ffffff; padding: 14px 28px; border-radius: 14px; font-weight: bold; text-decoration: none; display: inline-block; font-size: 13px; box-shadow: 0 4px 10px rgba(255,91,38,0.25);">View Itinerary Brochure &rarr;</a>
+      </div>
+    `;
   }
 
   // We now use a static custom email banner for all emails, so tripImageUrl resolution is skipped.
@@ -369,15 +398,7 @@ async function compileHtmlTemplate(params: {
         <li>💳 <strong>Pricing details:</strong> Flexible payment schedule and slots overview.</li>
       </ul>
 
-      ${
-        brochureUrl
-          ? `
-      <div style="text-align: center; margin: 30px 0;">
-        <a href="${brochureUrl}" target="_blank" style="background-color: #FF5B26; color: #ffffff; padding: 14px 28px; border-radius: 14px; font-weight: bold; text-decoration: none; display: inline-block; font-size: 13px; box-shadow: 0 4px 10px rgba(255,91,38,0.25);">View Itinerary Brochure &rarr;</a>
-      </div>
-      `
-          : ""
-      }
+      ${brochuresListHtml}
 
       <p>If you have any questions or want to customize dates/activities, simply reply to this email or contact your assigned Trip Expert, <strong>${managerName || "Team Nomichi"}</strong>.</p>
       <p>Adventure awaits!</p>
@@ -657,6 +678,136 @@ async function compileHtmlTemplate(params: {
         Thank you for traveling with Nomichi. Wander &bull; Connect &bull; Belong!
       </p>
     `;
+  } else if (type === "Payment Reminder" && paymentContext) {
+    const pc = paymentContext;
+    bodyContent = `
+      <p>Hi ${pc.travelerName?.split(" ")[0] || "Traveler"},</p>
+      <p>This is a formal reminder that the payment balance for your upcoming journey to <strong>${pc.tripTitle}</strong> is currently due.</p>
+
+      <div style="background-color: #FAF8F4; border: 1.5px solid #e7e1d5; padding: 22px; border-radius: 18px; margin: 24px 0;">
+        <h4 style="margin: 0 0 14px 0; font-size: 13px; font-weight: 900; color: #b04b1e; text-transform: uppercase; letter-spacing: 0.06em; display: flex; align-items: center; gap: 6px;">
+          ⚠️ Payment Details
+        </h4>
+        <table style="width:100%; font-size: 13px; line-height: 1.9; color: #1e1e1e; border-collapse: collapse;">
+          <tr><td style="width:45%; color:#777; font-weight:600;">Booking Reference</td><td style="font-weight:700;">${pc.bookingRef}</td></tr>
+          <tr><td style="color:#777; font-weight:600;">Trip Package</td><td style="font-weight:700;">${pc.tripTitle}${pc.tripDestination ? ` (${pc.tripDestination})` : ""}</td></tr>
+          <tr><td style="color:#777; font-weight:600;">Balance Amount Due</td><td style="font-weight:900; font-size:15px; color:#c2410c;">${pc.totalFormatted}</td></tr>
+          <tr><td style="color:#777; font-weight:600;">Payment Due Date</td><td style="font-weight:700; color:#b91c1c;">${pc.dueDateStr}</td></tr>
+          <tr><td style="color:#777; font-weight:600;">Status</td><td><span style="background:#fef3c7; color:#d97706; padding:2px 10px; border-radius:20px; font-size:11px; font-weight:800;">PENDING PAYMENT</span></td></tr>
+        </table>
+      </div>
+
+      <p>Please secure your booking slot at your earliest convenience by completing the payment online. Failure to clear the balance before the due date may result in slot cancellation or release of holds.</p>
+
+      <div style="text-align: center; margin: 30px 0;">
+        <a href="${origin || 'https://nomichii.vercel.app'}/?view=bookings" style="background-color: #FF5B26; color: #ffffff; padding: 14px 28px; border-radius: 14px; font-weight: bold; text-decoration: none; display: inline-block; font-size: 13px; box-shadow: 0 4px 10px rgba(255,91,38,0.25);">Complete Payment Online &rarr;</a>
+      </div>
+
+      <p style="font-style: italic; color: #555; font-size: 12px; border-top: 1px dashed #e7e1d5; padding-top: 15px; margin-bottom: 0;">
+        If you have already processed the payment or have any queries regarding billing, please reply to this email or get in touch with your assigned Trip Expert.
+      </p>
+    `;
+  } else if (type === "Payment Received - Traveler" && paymentContext) {
+    const pc = paymentContext;
+    bodyContent = `
+      <p>Hi ${pc.travelerName?.split(" ")[0] || "Traveler"},</p>
+      <p>Great news — your payment has been <strong>successfully received</strong> and your booking is now fully confirmed! 🎉</p>
+
+      <div style="background: linear-gradient(135deg, #fff5f2 0%, #fff 100%); border: 1.5px solid #FF5B26; padding: 22px; border-radius: 18px; margin: 24px 0;">
+        <h4 style="margin: 0 0 14px 0; font-size: 13px; font-weight: 900; color: #b04b1e; text-transform: uppercase; letter-spacing: 0.06em;">✅ Payment Receipt</h4>
+        <table style="width:100%; font-size: 13px; line-height: 1.9; color: #1e1e1e; border-collapse: collapse;">
+          <tr><td style="width:45%; color:#777; font-weight:600;">Transaction ID</td><td style="font-weight:800; font-family:monospace; color:#FF5B26;">${pc.transactionId}</td></tr>
+          <tr><td style="color:#777; font-weight:600;">Booking Reference</td><td style="font-weight:700;">${pc.bookingRef}</td></tr>
+          <tr><td style="color:#777; font-weight:600;">Trip</td><td style="font-weight:700;">${pc.tripTitle}${pc.tripDestination ? ` <span style="color:#888;font-size:11px;">(${pc.tripDestination})</span>` : ""}</td></tr>
+          <tr><td style="color:#777; font-weight:600;">Amount Paid</td><td style="font-weight:900; font-size:15px; color:#16a34a;">${pc.amountFormatted}</td></tr>
+          <tr><td style="color:#777; font-weight:600;">Payment Method</td><td style="font-weight:700;">${pc.paymentMethodLabel}</td></tr>
+          <tr><td style="color:#777; font-weight:600;">Date &amp; Time</td><td style="font-weight:700;">${pc.paidAtFormatted} IST</td></tr>
+          <tr><td style="color:#777; font-weight:600;">Status</td><td><span style="background:#dcfce7; color:#16a34a; padding:2px 10px; border-radius:20px; font-size:11px; font-weight:800;">✓ PAID IN FULL</span></td></tr>
+        </table>
+      </div>
+
+      <p style="margin-top:18px;">Your journey to <strong>${pc.tripTitle}</strong> is now <strong>officially confirmed</strong>. Our team will reach out with pre-departure details, packing lists, and cohort information closer to the travel date.</p>
+
+      <div style="background-color: #FAF8F4; border: 1px solid #e7e1d5; padding: 16px 20px; border-radius: 14px; margin: 20px 0; font-size: 13px; line-height: 1.7;">
+        <strong>🧳 What happens next?</strong><br/>
+        <ul style="padding-left: 18px; margin: 10px 0;">
+          <li>You'll receive a detailed itinerary &amp; day plan</li>
+          <li>Your trip leader will connect with you on WhatsApp</li>
+          <li>A cohort group will be created to introduce fellow travelers</li>
+          <li>Pre-departure briefing call details will be shared 1 week before</li>
+        </ul>
+      </div>
+
+      <div style="text-align: center; margin: 28px 0;">
+        <a href="${origin || 'https://nomichii.vercel.app'}/?view=bookings" style="background-color: #FF5B26; color: #ffffff; padding: 14px 28px; border-radius: 14px; font-weight: bold; text-decoration: none; display: inline-block; font-size: 13px; box-shadow: 0 4px 10px rgba(255,91,38,0.25);">View My Bookings &rarr;</a>
+      </div>
+
+      <p style="font-size: 11px; color: #888; text-align:center;">This is your official payment confirmation. Please save this email for your records.<br/>Booking Ref: <strong>${pc.bookingRef}</strong> &bull; TxnID: <strong>${pc.transactionId}</strong></p>
+    `;
+  } else if (type === "Payment Received - Admin" && paymentContext) {
+    const pc = paymentContext;
+    bodyContent = `
+      <p><strong>A payment has been successfully received</strong> from the following traveler. The booking has been automatically marked as <span style="background:#dcfce7; color:#16a34a; padding:2px 8px; border-radius:12px; font-size:11px; font-weight:800;">PAID</span> in the system.</p>
+
+      <div style="background-color: #FAF8F4; border: 1px solid #e7e1d5; padding: 22px; border-radius: 16px; margin: 22px 0;">
+        <h4 style="margin: 0 0 14px 0; font-size: 13px; font-weight: 900; color: #b04b1e; text-transform: uppercase; letter-spacing: 0.06em;">💳 Payment Summary</h4>
+        <table style="width:100%; font-size: 13px; line-height: 1.9; color: #1e1e1e; border-collapse: collapse;">
+          <tr><td style="width:40%; color:#777; font-weight:600;">Transaction ID</td><td style="font-weight:800; font-family:monospace; color:#FF5B26;">${pc.transactionId}</td></tr>
+          <tr><td style="color:#777; font-weight:600;">Booking Reference</td><td style="font-weight:700;">${pc.bookingRef}</td></tr>
+          <tr><td style="color:#777; font-weight:600;">Amount Received</td><td style="font-weight:900; font-size:15px; color:#16a34a;">${pc.amountFormatted}</td></tr>
+          <tr><td style="color:#777; font-weight:600;">Total Booking Value</td><td style="font-weight:700;">${pc.totalFormatted}</td></tr>
+          <tr><td style="color:#777; font-weight:600;">Payment Method</td><td style="font-weight:700;">${pc.paymentMethodLabel}</td></tr>
+          <tr><td style="color:#777; font-weight:600;">Paid At</td><td style="font-weight:700;">${pc.paidAtFormatted} IST</td></tr>
+        </table>
+      </div>
+
+      <div style="background-color: #FAF8F4; border: 1px solid #e7e1d5; padding: 22px; border-radius: 16px; margin: 22px 0;">
+        <h4 style="margin: 0 0 14px 0; font-size: 13px; font-weight: 900; color: #b04b1e; text-transform: uppercase; letter-spacing: 0.06em;">👤 Traveler Details</h4>
+        <table style="width:100%; font-size: 13px; line-height: 1.9; color: #1e1e1e; border-collapse: collapse;">
+          <tr><td style="width:40%; color:#777; font-weight:600;">Name</td><td style="font-weight:700;">${pc.travelerName}</td></tr>
+          <tr><td style="color:#777; font-weight:600;">Email</td><td style="font-weight:700;">${pc.travelerEmail}</td></tr>
+          <tr><td style="color:#777; font-weight:600;">Phone</td><td style="font-weight:700;">${pc.travelerPhone || '—'}</td></tr>
+          <tr><td style="color:#777; font-weight:600;">Trip</td><td style="font-weight:700;">${pc.tripTitle}${pc.tripDestination ? ` (${pc.tripDestination})` : ""}</td></tr>
+          <tr><td style="color:#777; font-weight:600;">Assigned Manager</td><td style="font-weight:700;">${pc.managerName || 'Unassigned'}</td></tr>
+        </table>
+      </div>
+
+      <div style="text-align: center; margin: 28px 0;">
+        <a href="${origin || 'https://nomichii.vercel.app'}/admin/bookings" style="background-color: #1A1208; color: #ffffff; padding: 14px 28px; border-radius: 14px; font-weight: bold; text-decoration: none; display: inline-block; font-size: 13px;">View in Admin Dashboard &rarr;</a>
+      </div>
+
+      <p style="font-size:11px; color:#888; text-align:center;">This is an automated system notification. No action required.<br/>Nomichi Admin Team</p>
+    `;
+  } else if (type === "Payment Received - Manager" && paymentContext) {
+    const pc = paymentContext;
+    bodyContent = `
+      <p>Hi ${pc.managerName?.split(" ")[0] || "there"},</p>
+      <p>Your client <strong>${pc.travelerName}</strong> has successfully completed their payment for the trip booking assigned to you. The booking status has been <strong>automatically updated to Paid</strong> — no action is required on your end.</p>
+
+      <div style="background: linear-gradient(135deg, #f0fdf4 0%, #fff 100%); border: 1.5px solid #16a34a; padding: 22px; border-radius: 18px; margin: 24px 0;">
+        <h4 style="margin: 0 0 14px 0; font-size: 13px; font-weight: 900; color: #15803d; text-transform: uppercase; letter-spacing: 0.06em;">🎯 Booking Update</h4>
+        <table style="width:100%; font-size: 13px; line-height: 1.9; color: #1e1e1e; border-collapse: collapse;">
+          <tr><td style="width:45%; color:#777; font-weight:600;">Client Name</td><td style="font-weight:700;">${pc.travelerName}</td></tr>
+          <tr><td style="color:#777; font-weight:600;">Client Email</td><td style="font-weight:700;">${pc.travelerEmail}</td></tr>
+          <tr><td style="color:#777; font-weight:600;">Trip</td><td style="font-weight:700;">${pc.tripTitle}${pc.tripDestination ? ` (${pc.tripDestination})` : ""}</td></tr>
+          <tr><td style="color:#777; font-weight:600;">Booking Ref</td><td style="font-weight:800; font-family:monospace;">${pc.bookingRef}</td></tr>
+          <tr><td style="color:#777; font-weight:600;">Amount Paid</td><td style="font-weight:900; font-size:15px; color:#16a34a;">${pc.amountFormatted}</td></tr>
+          <tr><td style="color:#777; font-weight:600;">Transaction ID</td><td style="font-family:monospace; font-size:12px; color:#FF5B26;">${pc.transactionId}</td></tr>
+          <tr><td style="color:#777; font-weight:600;">Paid At</td><td style="font-weight:700;">${pc.paidAtFormatted} IST</td></tr>
+          <tr><td style="color:#777; font-weight:600;">Status</td><td><span style="background:#dcfce7; color:#16a34a; padding:2px 10px; border-radius:20px; font-size:11px; font-weight:800;">✓ PAID IN FULL</span></td></tr>
+        </table>
+      </div>
+
+      <div style="background-color: #FAF8F4; border-left: 4px solid #FF5B26; padding: 14px 18px; border-radius: 8px; margin: 20px 0; font-size: 13px;">
+        <strong>✅ No action required.</strong> The payment has been automatically recorded in the Nomichi system. The traveler has also received a payment confirmation email.
+      </div>
+
+      <div style="text-align: center; margin: 28px 0;">
+        <a href="${origin || 'https://nomichii.vercel.app'}/manager/bookings" style="background-color: #FF5B26; color: #ffffff; padding: 14px 28px; border-radius: 14px; font-weight: bold; text-decoration: none; display: inline-block; font-size: 13px; box-shadow: 0 4px 10px rgba(255,91,38,0.25);">View in Manager Dashboard &rarr;</a>
+      </div>
+
+      <p style="font-size:11px; color:#888; text-align:center;">Automated notification from Nomichi &bull; Wander &bull; Connect &bull; Belong</p>
+    `;
   } else {
     bodyContent = `
       <p>Hi ${firstName},</p>
@@ -751,7 +902,11 @@ async function compileHtmlTemplate(params: {
   <div style="display: none; max-height: 0px; overflow: hidden; opacity: 0; font-size: 1px; color: #ffffff; line-height: 1px;">
     ${type === "Welcome to Nomichi" ? "Your profile is ready. Adventure, connection, and unforgettable experiences await." : 
       type === "Enquiry Submitted" ? "Your Nomichi journey is one step closer." :
-      type === "New Enquiry" ? "A new enquiry has been submitted." : title}
+      type === "New Enquiry" ? "A new enquiry has been submitted." :
+      type === "Payment Reminder" ? "Important: Your booking payment balance is currently due. Please complete it to secure your slots." :
+      type === "Payment Received - Traveler" ? "Your payment is confirmed. Your adventure is now officially booked!" :
+      type === "Payment Received - Admin" ? "A new payment has been received and recorded in the system." :
+      type === "Payment Received - Manager" ? "Your client has completed payment. Booking is now fully paid." : title}
   </div>
   <div class="wrapper">
     <div class="container">

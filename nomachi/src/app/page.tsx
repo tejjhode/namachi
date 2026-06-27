@@ -60,7 +60,7 @@ export default async function Home({ searchParams }: PageProps) {
   const { data: allTrips } = await supabaseServer
     .from("trips")
     .select("destination")
-    .in("status", ["Open", "Open for Enquiries", "active"]);
+    .in("status", ["Open", "Open for Enquiries", "Active", "active"]);
   const uniqueDestinations = Array.from(
     new Set(allTrips?.map((t) => t.destination).filter(Boolean) || [])
   ) as string[];
@@ -68,8 +68,8 @@ export default async function Home({ searchParams }: PageProps) {
   // Fetch filtered public trips from Supabase
   let tripsQuery = supabaseServer
     .from("trips")
-    .select("*")
-    .in("status", ["Open", "Open for Enquiries", "active"]);
+    .select("id, title, destination, status, duration, price, rating, reviews, image_url, start_date, end_date, seats_left")
+    .in("status", ["Open", "Open for Enquiries", "Active", "active"]);
 
   const destinationQuery = searchParams?.destination;
   if (destinationQuery) {
@@ -88,7 +88,7 @@ export default async function Home({ searchParams }: PageProps) {
   if (user) {
     const { data: leads } = await supabaseServer
       .from("leads")
-      .select("*, trips(*), lead_notes(*)")
+      .select("*, trips(id, title, destination, price, start_date, end_date, brochure_url, image_url, status), lead_notes(*)")
       .eq("email", user.email);
     if (leads) {
       userLeads = leads;

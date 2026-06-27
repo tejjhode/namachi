@@ -44,13 +44,13 @@ const ITEMS_PER_PAGE = 10;
 export default function EnquiriesPage() {
   const router = useRouter();
   
-  // Fetch both leads and enquiries (isLead: null) so we can do accurate tab calculations
+  // Fetch only non-lead enquiries (isLead: false)
   const {
     leads: allRecords,
     loading: loadingEnquiries,
     error: errorEnquiries,
     refresh: refreshEnquiries
-  } = useLeads({ isLead: null });
+  } = useLeads({ isLead: false });
 
   const { users, loading: loadingUsers } = useUsers();
 
@@ -60,9 +60,7 @@ export default function EnquiriesPage() {
   const [sourceVal, setSourceVal] = useState("all");
   const [dateRangeVal, setDateRangeVal] = useState("01 May - 31 May 2026");
   
-  const [activeTab, setActiveTab] = useState<"all" | "new" | "reviewed" | "converted" | "closed">("all");
-  const [selectedEnquiryId, setSelectedEnquiryId] = useState<string | null>(null);
-  const [isDetailsOpen, setIsDetailsOpen] = useState(true);
+  const [activeTab, setActiveTab] = useState<"all" | "new" | "reviewed" | "closed">("all");
   const [selectedRowIds, setSelectedRowIds] = useState<Set<string>>(new Set());
   const [currentPage, setCurrentPage] = useState(1);
   const [currentUser, setCurrentUser] = useState<any>(null);
@@ -96,13 +94,17 @@ export default function EnquiriesPage() {
     });
   }, []);
 
+  const isTripActive = (enquiry?: Lead | null) => {
+    return (enquiry?.trips?.status || "").toLowerCase() === "active";
+  };
+
   const triggerToast = (text: string, type: "success" | "error" = "success") => {
     setToastMessage({ text, type });
     setTimeout(() => setToastMessage(null), 4000);
   };
 
   const handlePromoteToLead = async () => {
-    if (!promotingEnquiry || !selectedManagerId) return;
+    if (!promotingEnquiry || !selectedManagerId || !isTripActive(promotingEnquiry)) return;
 
     try {
       setIsSubmittingPromotion(true);
@@ -205,10 +207,7 @@ export default function EnquiriesPage() {
   };
 
   // Helper mapping function to group DB status into UI categories
-  const getEnquiryCategory = (enq: Lead): "new" | "reviewed" | "converted" | "closed" => {
-    if (enq.is_lead) {
-      return "converted";
-    }
+  const getEnquiryCategory = (enq: Lead): "new" | "reviewed" | "closed" => {
     const status = (enq.status || "").toLowerCase();
     if (status === "closed" || status === "rejected" || status === "lost") {
       return "closed";
@@ -223,12 +222,12 @@ export default function EnquiriesPage() {
   const managers = users.filter(
     (u) => u.role?.toLowerCase() === "manager" || u.role?.toLowerCase() === "admin"
   );
+  const usersById = new Map(users.map((user) => [user.id, user]));
 
   // Compute stats dynamically from loaded records
   const totalCount = allRecords.length;
   const newCount = allRecords.filter(e => getEnquiryCategory(e) === "new").length;
   const reviewedCount = allRecords.filter(e => getEnquiryCategory(e) === "reviewed").length;
-  const convertedCount = allRecords.filter(e => getEnquiryCategory(e) === "converted").length;
   const closedCount = allRecords.filter(e => getEnquiryCategory(e) === "closed").length;
 
   // Filter list based on active tab and search/dropdown selections
@@ -282,11 +281,6 @@ export default function EnquiriesPage() {
     }
   }, [filteredEnquiries.length, totalPages, currentPage]);
 
-  // Selected enquiry for details sidebar
-  const activeEnquiry = isDetailsOpen
-    ? (filteredEnquiries.find(e => e.id === selectedEnquiryId) || filteredEnquiries[0] || null)
-    : null;
-
   // Multi-row selection handlers
   const handleSelectAll = (checked: boolean) => {
     if (checked) {
@@ -305,11 +299,6 @@ export default function EnquiriesPage() {
       next.delete(id);
     }
     setSelectedRowIds(next);
-  };
-
-  const handleCopyEnquiryId = (id: string) => {
-    navigator.clipboard.writeText(id);
-    triggerToast(`Enquiry ID ${id} copied to clipboard!`);
   };
 
   const handleResetFilters = () => {
@@ -521,15 +510,6 @@ export default function EnquiriesPage() {
               icon: Eye
             },
             {
-              label: "CONVERTED",
-              value: convertedCount,
-              trend: "↑ 16%",
-              trendLabel: "vs last 30 days",
-              trendUp: true,
-              color: "text-emerald-600 bg-emerald-50 border-emerald-100",
-              icon: CheckCircle2
-            },
-            {
               label: "CLOSED",
               value: closedCount,
               trend: "↓ 5%",
@@ -593,7 +573,6 @@ export default function EnquiriesPage() {
               <option value="all">Status: All</option>
               <option value="new">New</option>
               <option value="reviewed">Reviewed</option>
-              <option value="converted">Converted</option>
               <option value="closed">Closed</option>
             </select>
             <ChevronDown className="w-3.5 h-3.5 text-nomichi-ink/40 absolute right-4.5 top-1/2 -translate-y-1/2 pointer-events-none" />
@@ -658,7 +637,6 @@ export default function EnquiriesPage() {
             { id: "all", label: "All Enquiries", count: totalCount },
             { id: "new", label: "New", count: newCount },
             { id: "reviewed", label: "Reviewed", count: reviewedCount },
-            { id: "converted", label: "Converted", count: convertedCount },
             { id: "closed", label: "Closed", count: closedCount }
           ].map((tab) => (
             <button
@@ -718,14 +696,11 @@ export default function EnquiriesPage() {
                 <tbody className="divide-y divide-[#e7e1d5]/20">
                   {paginatedEnquiries.map((enq) => {
                     const category = getEnquiryCategory(enq);
-                    const isSelected = activeEnquiry?.id === enq.id;
                     return (
                       <tr
                         key={enq.id}
-                        onClick={() => { setSelectedEnquiryId(enq.id); setIsDetailsOpen(true); }}
-                        className={`hover:bg-[#FAF8F4]/20 transition-colors cursor-pointer ${
-                          isSelected ? "bg-[#FAF8F4]/40" : ""
-                        }`}
+                        onClick={() => router.push(`/admin/enquiries/${enq.id}`)}
+                        className="hover:bg-[#FAF8F4]/20 transition-colors cursor-pointer"
                       >
                         {/* Checkbox column */}
                         <td className="px-6 py-4 text-center" onClick={(e) => e.stopPropagation()}>
@@ -787,11 +762,7 @@ export default function EnquiriesPage() {
                               Reviewed
                             </span>
                           )}
-                          {category === "converted" && (
-                            <span className="text-[9px] font-black text-emerald-600 bg-emerald-50 border border-emerald-100 px-2.5 py-1 rounded-full uppercase tracking-wider shadow-sm">
-                              Converted
-                            </span>
-                          )}
+
                           {category === "closed" && (
                             <span className="text-[9px] font-black text-slate-500 bg-slate-100 border border-slate-200/50 px-2.5 py-1 rounded-full uppercase tracking-wider shadow-sm">
                               Closed
@@ -823,7 +794,10 @@ export default function EnquiriesPage() {
                         <td className="px-6 py-4.5 whitespace-nowrap text-right" onClick={(e) => e.stopPropagation()}>
                           <div className="flex items-center justify-end gap-2 text-nomichi-ink/50">
                             <button
-                              onClick={() => { setSelectedEnquiryId(enq.id); setIsDetailsOpen(true); }}
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                router.push(`/admin/enquiries/${enq.id}`);
+                              }}
                               className="p-1.5 rounded-lg bg-transparent hover:bg-nomichi-sand/10 hover:text-nomichi-ink transition-colors border-0 cursor-pointer"
                               title="View details"
                             >
@@ -885,226 +859,6 @@ export default function EnquiriesPage() {
 
       </div>
 
-      {/* ===================== RIGHT SIDEBAR: DETAILS PANEL ===================== */}
-      {activeEnquiry && (
-        <div className="lg:sticky lg:top-0 w-full lg:w-[380px] shrink-0 bg-white border border-[#e7e1d5]/40 rounded-3xl p-6 shadow-sm space-y-6 text-left max-h-[calc(100vh-140px)] overflow-y-auto scrollbar-none">
-          
-          {/* Header section with Enquiry ID and copy option */}
-          <div className="flex items-start justify-between border-b border-[#e7e1d5]/35 pb-4">
-            <div className="space-y-1 text-left">
-              <div className="flex items-center gap-2">
-                <h2 className="text-base font-display font-black text-nomichi-ink">
-                  Enquiry Details
-                </h2>
-                {getEnquiryCategory(activeEnquiry) === "new" && (
-                  <span className="text-[9px] font-black text-emerald-600 bg-emerald-50 px-2 py-0.5 rounded-md uppercase tracking-wider">
-                    New
-                  </span>
-                )}
-                {getEnquiryCategory(activeEnquiry) === "reviewed" && (
-                  <span className="text-[9px] font-black text-blue-600 bg-blue-50 px-2 py-0.5 rounded-md uppercase tracking-wider">
-                    Reviewed
-                  </span>
-                )}
-                {getEnquiryCategory(activeEnquiry) === "converted" && (
-                  <span className="text-[9px] font-black text-emerald-600 bg-emerald-50 px-2 py-0.5 rounded-md uppercase tracking-wider">
-                    Converted
-                  </span>
-                )}
-                {getEnquiryCategory(activeEnquiry) === "closed" && (
-                  <span className="text-[9px] font-black text-slate-500 bg-slate-100 px-2 py-0.5 rounded-md uppercase tracking-wider">
-                    Closed
-                  </span>
-                )}
-              </div>
-              <div className="flex items-center gap-1.5 text-xs text-nomichi-ink/40 font-bold">
-                <span>Enquiry ID: {activeEnquiry.enquiry_id || "ENQ-1024"}</span>
-                <button
-                  onClick={() => handleCopyEnquiryId(activeEnquiry.enquiry_id || "ENQ-1024")}
-                  className="bg-transparent border-0 p-0 text-nomichi-ink/40 hover:text-nomichi-ink cursor-pointer transition-colors"
-                >
-                  <Copy className="w-3.5 h-3.5" />
-                </button>
-              </div>
-            </div>
-            <button
-              onClick={() => setIsDetailsOpen(false)}
-              className="w-7 h-7 rounded-full bg-nomichi-sand/5 hover:bg-nomichi-sand/15 border-0 flex items-center justify-center text-nomichi-ink transition-colors cursor-pointer"
-            >
-              <X className="w-4 h-4 opacity-50 hover:opacity-100" />
-            </button>
-          </div>
-
-          {/* Traveller Information Card */}
-          <div className="space-y-3.5">
-            <h3 className="text-xs font-black text-nomichi-ink/35 uppercase tracking-widest flex items-center gap-2">
-              <User className="w-3.5 h-3.5" />
-              Traveller Information
-            </h3>
-            <div className="space-y-2 text-xs text-left">
-              <div className="flex justify-between border-b border-[#e7e1d5]/20 py-1">
-                <span className="font-semibold text-nomichi-ink/45">Name</span>
-                <span className="font-extrabold text-nomichi-ink">{activeEnquiry.name}</span>
-              </div>
-              <div className="flex justify-between border-b border-[#e7e1d5]/20 py-1">
-                <span className="font-semibold text-nomichi-ink/45">Email</span>
-                <span className="font-extrabold text-nomichi-ink truncate max-w-[200px]" title={activeEnquiry.email}>
-                  {activeEnquiry.email}
-                </span>
-              </div>
-              <div className="flex justify-between border-b border-[#e7e1d5]/20 py-1">
-                <span className="font-semibold text-nomichi-ink/45">Phone</span>
-                <span className="font-extrabold text-nomichi-ink">{activeEnquiry.phone || "-"}</span>
-              </div>
-              <div className="flex justify-between border-b border-[#e7e1d5]/20 py-1">
-                <span className="font-semibold text-nomichi-ink/45">Location</span>
-                <span className="font-extrabold text-nomichi-ink">
-                  {activeEnquiry.nationality 
-                    ? (activeEnquiry.nationality === "Indian" ? "India" : activeEnquiry.nationality)
-                    : getTravelerLocation(activeEnquiry.name)}
-                </span>
-              </div>
-            </div>
-          </div>
-
-          {/* Trip Interest Card */}
-          <div className="space-y-3.5">
-            <h3 className="text-xs font-black text-nomichi-ink/35 uppercase tracking-widest flex items-center gap-2">
-              <Compass className="w-3.5 h-3.5" />
-              Trip Interest
-            </h3>
-            <div className="space-y-2 text-xs text-left">
-              <div className="flex justify-between border-b border-[#e7e1d5]/20 py-1">
-                <span className="font-semibold text-nomichi-ink/45">Trip</span>
-                <span className="font-extrabold text-[#FF5B26] truncate max-w-[200px]">
-                  {activeEnquiry.trips?.title || activeEnquiry.trip_interest || "Selected Trip"}
-                </span>
-              </div>
-              <div className="flex justify-between border-b border-[#e7e1d5]/20 py-1">
-                <span className="font-semibold text-nomichi-ink/45">Preferred Dates</span>
-                <span className="font-extrabold text-nomichi-ink">
-                  {formatTripDates(activeEnquiry.trips?.start_date, activeEnquiry.trips?.end_date, activeEnquiry.preferred_month)}
-                </span>
-              </div>
-              <div className="flex justify-between border-b border-[#e7e1d5]/20 py-1">
-                <span className="font-semibold text-nomichi-ink/45">No. of Travellers</span>
-                <span className="font-extrabold text-nomichi-ink">
-                  {activeEnquiry.group_size || 1} {activeEnquiry.group_type || "Adults"}
-                </span>
-              </div>
-              <div className="flex justify-between border-b border-[#e7e1d5]/20 py-1">
-                <span className="font-semibold text-nomichi-ink/45">Budget Range</span>
-                <span className="font-extrabold text-nomichi-ink">
-                  {activeEnquiry.trips?.price 
-                    ? `₹${activeEnquiry.trips.price - 10000} - ₹${activeEnquiry.trips.price + 10000} / person`
-                    : "₹75,000 - ₹1,00,000 / person"}
-                </span>
-              </div>
-              <div className="py-1">
-                <span className="font-semibold text-nomichi-ink/45 block mb-1">Message</span>
-                <p className="text-nomichi-ink/75 bg-[#FAF8F4]/55 border border-[#e7e1d5]/30 p-2.5 rounded-xl leading-relaxed italic">
-                  "{activeEnquiry.message || "Hi, we are a group of friends looking for a wildlife and nature experience. Please share the details."}"
-                </p>
-              </div>
-            </div>
-          </div>
-
-          {/* Enquiry Information Card */}
-          <div className="space-y-3.5">
-            <h3 className="text-xs font-black text-nomichi-ink/35 uppercase tracking-widest flex items-center gap-2">
-              <AlertCircle className="w-3.5 h-3.5" />
-              Enquiry Information
-            </h3>
-            <div className="space-y-2 text-xs text-left">
-              <div className="flex justify-between border-b border-[#e7e1d5]/20 py-1">
-                <span className="font-semibold text-nomichi-ink/45">Source</span>
-                <span className="font-extrabold text-nomichi-ink tracking-wide capitalize">{activeEnquiry.source || "Website"}</span>
-              </div>
-              <div className="flex justify-between border-b border-[#e7e1d5]/20 py-1">
-                <span className="font-semibold text-nomichi-ink/45">Received On</span>
-                <span className="font-extrabold text-nomichi-ink">
-                  {activeEnquiry.created_at ? new Date(activeEnquiry.created_at).toLocaleDateString("en-US", {
-                    day: "numeric",
-                    month: "short",
-                    year: "numeric"
-                  }) : "-"} at {activeEnquiry.created_at ? new Date(activeEnquiry.created_at).toLocaleTimeString("en-US", {
-                    hour: "numeric",
-                    minute: "2-digit"
-                  }) : ""}
-                </span>
-              </div>
-              <div className="flex justify-between border-b border-[#e7e1d5]/20 py-1 items-center">
-                <span className="font-semibold text-nomichi-ink/45">Status</span>
-                <div className="relative">
-                  <select
-                    value={getEnquiryCategory(activeEnquiry)}
-                    onChange={(e) => {
-                      const selectedVal = e.target.value;
-                      if (selectedVal === "closed") {
-                        setRejectingEnquiry(activeEnquiry);
-                      } else if (selectedVal === "reviewed") {
-                        handleMarkAsReviewed(activeEnquiry);
-                      }
-                    }}
-                    disabled={activeEnquiry.is_lead}
-                    className="bg-[#FAF8F4]/30 border border-[#e7e1d5]/55 text-[11px] font-black text-nomichi-ink px-2.5 py-1 rounded-lg focus:outline-none transition-all cursor-pointer appearance-none pr-8 disabled:bg-slate-50 disabled:text-slate-400"
-                  >
-                    <option value="new">New</option>
-                    <option value="reviewed">Reviewed</option>
-                    <option value="converted" disabled>Converted</option>
-                    <option value="closed">Closed</option>
-                  </select>
-                  <ChevronDown className="w-3.5 h-3.5 text-nomichi-ink/40 absolute right-2.5 top-1/2 -translate-y-1/2 pointer-events-none" />
-                </div>
-              </div>
-            </div>
-          </div>
-
-          {/* Action buttons */}
-          <div className="space-y-2.5 pt-4 border-t border-[#e7e1d5]/35 flex flex-col">
-            {activeEnquiry.is_lead ? (
-              <div className="bg-emerald-50 border border-emerald-100 rounded-2xl p-3.5 text-center text-xs font-bold text-emerald-800 flex items-center justify-center gap-2">
-                <CheckCircle2 className="w-4 h-4 text-emerald-600" />
-                This enquiry is converted to a CRM Lead.
-              </div>
-            ) : (
-              <>
-                <button
-                  onClick={() => setPromotingEnquiry(activeEnquiry)}
-                  className="w-full bg-[#FF5B26] hover:bg-[#b04b1e] border-0 text-white font-extrabold py-3 rounded-2xl cursor-pointer shadow-sm hover:shadow transition-all text-xs tracking-wide"
-                >
-                  Convert to Lead
-                </button>
-                
-                <button
-                  onClick={() => setPromotingEnquiry(activeEnquiry)}
-                  className="w-full bg-white hover:bg-[#FAF8F4] text-nomichi-ink border border-[#e7e1d5] font-extrabold py-3 rounded-2xl cursor-pointer shadow-sm transition-all text-xs flex items-center justify-center gap-1.5"
-                >
-                  <UserCheck className="w-4 h-4 opacity-70" />
-                  Assign to Manager
-                </button>
-                
-                <button
-                  onClick={() => handleMarkAsReviewed(activeEnquiry)}
-                  disabled={getEnquiryCategory(activeEnquiry) === "reviewed"}
-                  className="w-full bg-white hover:bg-[#FAF8F4] text-nomichi-ink border border-[#e7e1d5] font-extrabold py-3 rounded-2xl cursor-pointer shadow-sm transition-all text-xs disabled:opacity-40 disabled:cursor-not-allowed"
-                >
-                  Mark as Reviewed
-                </button>
-                
-                <button
-                  onClick={() => setRejectingEnquiry(activeEnquiry)}
-                  className="w-full bg-white hover:bg-rose-50 text-rose-600 border border-rose-200/50 hover:border-rose-300 font-extrabold py-3 rounded-2xl cursor-pointer shadow-sm transition-all text-xs"
-                >
-                  Close Enquiry
-                </button>
-              </>
-            )}
-          </div>
-
-        </div>
-      )}
-
       {/* ===================== CONVERT TO LEAD MODAL ===================== */}
       {promotingEnquiry && (
         <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm animate-in fade-in duration-200">
@@ -1129,18 +883,30 @@ export default function EnquiriesPage() {
 
             {/* Modal Body */}
             <div className="p-6 space-y-4">
-              <div className="bg-[#FAF8F4] p-4.5 rounded-2xl border border-[#e7e1d5]/40 space-y-2.5 text-xs text-nomichi-ink">
-                <div className="flex justify-between">
-                  <span className="font-semibold text-nomichi-ink/40">Traveler:</span>
-                  <span className="font-extrabold text-nomichi-ink">{promotingEnquiry.name}</span>
-                </div>
-                <div className="flex justify-between">
-                  <span className="font-semibold text-[#FF5B26]">Trip Interest:</span>
-                  <span className="font-extrabold text-[#FF5B26] truncate max-w-[200px]">
-                    {promotingEnquiry.trips?.title || promotingEnquiry.trip_interest || "No Trip Assigned"}
-                  </span>
-                </div>
+            <div className="bg-[#FAF8F4] p-4.5 rounded-2xl border border-[#e7e1d5]/40 space-y-2.5 text-xs text-nomichi-ink">
+              <div className="flex justify-between">
+                <span className="font-semibold text-nomichi-ink/40">Traveler:</span>
+                <span className="font-extrabold text-nomichi-ink">{promotingEnquiry.name}</span>
               </div>
+              <div className="flex justify-between">
+                <span className="font-semibold text-[#FF5B26]">Trip Interest:</span>
+                <span className="font-extrabold text-[#FF5B26] truncate max-w-[200px]">
+                  {promotingEnquiry.trips?.title || promotingEnquiry.trip_interest || "No Trip Assigned"}
+                </span>
+              </div>
+              <div className="flex justify-between">
+                <span className="font-semibold text-nomichi-ink/40">Trip Status:</span>
+                <span className={`font-extrabold ${isTripActive(promotingEnquiry) ? "text-emerald-600" : "text-amber-600"}`}>
+                  {promotingEnquiry.trips?.status || "Draft"}
+                </span>
+              </div>
+            </div>
+
+              {!isTripActive(promotingEnquiry) && (
+                <div className="rounded-2xl border border-amber-200 bg-amber-50 px-4 py-3 text-xs font-semibold text-amber-800">
+                  Activate this trip first before assigning a manager. Ask the admin team to move the trip to <strong>Active</strong>.
+                </div>
+              )}
 
               {/* Assign Manager Dropdown */}
               <div className="space-y-2 text-left">
@@ -1175,7 +941,7 @@ export default function EnquiriesPage() {
               </button>
               <button
                 onClick={handlePromoteToLead}
-                disabled={!selectedManagerId || isSubmittingPromotion}
+                disabled={!selectedManagerId || isSubmittingPromotion || !isTripActive(promotingEnquiry)}
                 className="bg-[#FF5B26] hover:bg-[#b04b1e] text-white text-xs font-bold px-5 py-2.5 rounded-xl transition-all border-0 cursor-pointer shadow-md disabled:opacity-40 disabled:cursor-not-allowed flex items-center gap-1.5 h-[38px]"
               >
                 {isSubmittingPromotion && <Loader2 className="w-3.5 h-3.5 animate-spin" />}

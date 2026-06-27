@@ -17,7 +17,7 @@ export const leadService = {
     tripId?: string | null;
     isLead?: boolean | null;
   }): Promise<Lead[]> {
-    let query = supabase.from("leads").select("*, trips(id, title, destination, price)").order("created_at", { ascending: false });
+    let query = supabase.from("leads").select("*, trips(id, title, destination, status, price)").order("created_at", { ascending: false });
 
     if (params?.isLead !== null) {
       const isLeadFilter = params?.isLead !== undefined ? params.isLead : true;
@@ -77,7 +77,7 @@ export const leadService = {
   async getLeadById(id: string): Promise<Lead> {
     let queryWithAuthor = await supabase
       .from("leads")
-      .select("*, trips(id, title, destination, image_url, price, seats_left, total_seats, brochure_url), lead_notes(id, lead_id, content, created_at, created_by)")
+      .select("*, trips(id, title, destination, status, image_url, price, seats_left, total_seats, brochure_url), lead_notes(id, lead_id, content, created_at, created_by)")
       .eq("id", id)
       .single();
 
@@ -87,7 +87,7 @@ export const leadService = {
     if (error && isSchemaCacheColumnError(error, "created_by")) {
       queryWithAuthor = await supabase
         .from("leads")
-        .select("*, trips(id, title, destination, image_url, price, seats_left, total_seats, brochure_url), lead_notes(id, lead_id, content, created_at)")
+        .select("*, trips(id, title, destination, status, image_url, price, seats_left, total_seats, brochure_url), lead_notes(id, lead_id, content, created_at)")
         .eq("id", id)
         .single();
 

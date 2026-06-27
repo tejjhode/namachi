@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { createClient } from "@supabase/supabase-js";
 import { verifyBrochureToken } from "@/lib/brochure-token";
+import { createSupabaseServerClient } from "@/lib/supabase/server";
 
 // Initialize Supabase Admin Client using the service role key to bypass RLS checks
 const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL || "";
@@ -32,10 +33,25 @@ export async function GET(
     const indexStr2 = requestUrl2.searchParams.get("index") || "0";
     const requestedIndex = parseInt(indexStr2, 10);
 
-    // Verify signed token — required for all brochure downloads
+    // Verify signed token OR check Supabase user session cookie
     const token = requestUrl2.searchParams.get("token") || "";
-    if (!token || !verifyBrochureToken(id, requestedIndex, token)) {
-      return new Response("Unauthorized: Invalid or expired brochure link.", { status: 401 });
+    let isAuthorized = false;
+    if (token && verifyBrochureToken(id, requestedIndex, token)) {
+      isAuthorized = true;
+    } else {
+      try {
+        const supabase = await createSupabaseServerClient();
+        const { data: { user } } = await supabase.auth.getUser();
+        if (user) {
+          isAuthorized = true;
+        }
+      } catch (err) {
+        console.warn("Failed to verify session cookie in brochure route:", err);
+      }
+    }
+
+    if (!isAuthorized) {
+      return new Response("Unauthorized: Invalid link or session expired.", { status: 401 });
     }
 
     let targetUrl = trip.brochure_url;
@@ -61,12 +77,14 @@ export async function GET(
         const contentType = match[1];
         const base64Data = match[2];
         const buffer = Buffer.from(base64Data, "base64");
+        
+        const isDownload = requestUrl2.searchParams.get("download") === "true";
 
         return new Response(buffer, {
           headers: {
             "Content-Type": contentType,
             "Cache-Control": "public, max-age=31536000, immutable",
-            "Content-Disposition": `inline; filename="${targetName}"`,
+            "Content-Disposition": `${isDownload ? "attachment" : "inline"}; filename="${targetName}"`,
           },
         });
       }

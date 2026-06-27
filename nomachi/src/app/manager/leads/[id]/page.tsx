@@ -127,16 +127,8 @@ export default function ManagerLeadDetailPage({ params }: ManagerLeadDetailPageP
   const [receiptAmt, setReceiptAmt] = useState("");
   const [refId, setRefId] = useState("");
   const [completingPayment, setCompletingPayment] = useState(false);
+  const [sendingReminder, setSendingReminder] = useState(false);
 
-  // ── Step 6: Collect Documents ──
-  const [docChecklist, setDocChecklist] = useState({
-    passport: false,
-    visa: false,
-    id_proof: false,
-    emergency_contact: false,
-  });
-  const [idDocRef, setIdDocRef] = useState("");
-  const [approvingDocs, setApprovingDocs] = useState(false);
 
   // ── Step 7: Confirm Booking ──
   const [confirmingBooking, setConfirmingBooking] = useState(false);
@@ -205,6 +197,43 @@ export default function ManagerLeadDetailPage({ params }: ManagerLeadDetailPageP
   useEffect(() => {
     if (lead) fetchLeadTasks();
   }, [lead, fetchLeadTasks]);
+
+  // Real-time listener for tasks & leads updates
+  useEffect(() => {
+    if (!params.id) return;
+    const channel = supabase
+      .channel(`manager-lead-sync-${params.id}`)
+      .on(
+        "postgres_changes",
+        {
+          event: "*",
+          schema: "public",
+          table: "tasks",
+          filter: `source_id=eq.${params.id}`,
+        },
+        () => {
+          fetchLeadTasks();
+          refresh();
+        }
+      )
+      .on(
+        "postgres_changes",
+        {
+          event: "*",
+          schema: "public",
+          table: "leads",
+          filter: `id=eq.${params.id}`,
+        },
+        () => {
+          refresh();
+        }
+      )
+      .subscribe();
+
+    return () => {
+      supabase.removeChannel(channel);
+    };
+  }, [params.id, fetchLeadTasks, refresh]);
 
   // The current active (first non-completed) task
   const nextActionTask = useMemo(() => {
@@ -455,19 +484,64 @@ export default function ManagerLeadDetailPage({ params }: ManagerLeadDetailPageP
   };
 
   // ── Step 5 handler: Payment Follow-up ──
-  const handleSendPaymentLink = () => {
-    const phoneDigits = (leadData?.phone || "").replace(/[^0-9]/g, "");
-    const tripTitle = leadData?.trips?.title || "your trip";
-    const link = paymentLinkUrl || "https://your-payment-portal.com/pay";
-    const waText = `Hello ${leadData?.name || "there"}, here is your payment link for "${tripTitle}":\n${link}\n\nPlease complete the payment at your earliest convenience.`;
-    if (phoneDigits) window.open(`https://wa.me/${phoneDigits}?text=${encodeURIComponent(waText)}`, "_blank");
-    const emailSubject = `Payment Link — ${tripTitle}`;
-    if (leadData?.email) {
-      const gmailHref = `https://mail.google.com/mail/?view=cm&fs=1&to=${leadData.email}&su=${encodeURIComponent(emailSubject)}&body=${encodeURIComponent(waText)}`;
-      window.open(gmailHref, "_blank");
+  const handleSendPaymentReminder = async () => {
+    if (!leadData?.email) {
+      alert("No email address available for this traveler.");
+      return;
     }
-    if (currentUser) {
-      addNote(`Payment Follow-up: Payment link sent — ${link}`, currentUser.id).catch(console.error);
+    setSendingReminder(true);
+    try {
+      const tripTitle = leadData?.trips?.title || "your trip";
+      const origin = window.location.origin;
+      const portalLink = `${origin}/?view=bookings`;
+      const customLink = paymentLinkUrl || portalLink;
+
+      // Send formal payment reminder email via background deliver API
+      const response = await fetch("/api/notifications/deliver", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          email: leadData.email,
+          title: `⚠️ Payment Due Reminder — ${tripTitle}`,
+          body: `This is a formal reminder that the payment balance for your upcoming journey to ${tripTitle} is currently due. Please complete it to secure your slots.`,
+          type: "Payment Reminder",
+          priority: "High",
+          source_id: leadData.id,
+          paymentContext: {
+            travelerName: leadData.name,
+            tripTitle,
+            tripDestination: leadData?.trips?.destination || "",
+            totalFormatted: `₹${Number(leadData?.trips?.price || 0).toLocaleString("en-IN")}`,
+            bookingRef: `LEAD-${leadData.id.slice(0, 6).toUpperCase()}`,
+            dueDateStr: new Date(Date.now() + 3 * 24 * 60 * 60 * 1000).toLocaleDateString("en-IN", {
+              day: "2-digit", month: "short", year: "numeric"
+            })
+          }
+        }),
+      });
+
+      if (!response.ok) {
+        throw new Error("Payment reminder API call failed.");
+      }
+
+      if (currentUser) {
+        await addNote(`Payment Reminder: Formal payment due email sent to traveler (${leadData.email}).`, currentUser.id);
+      }
+
+      // WhatsApp link opens
+      const phoneDigits = (leadData?.phone || "").replace(/[^0-9]/g, "");
+      if (phoneDigits) {
+        const waText = `Hello ${leadData?.name || "there"}, this is a formal reminder that the payment balance for your trip to "${tripTitle}" is currently due. Please login to your dashboard to complete the payment: ${customLink}`;
+        window.open(`https://wa.me/${phoneDigits}?text=${encodeURIComponent(waText)}`, "_blank");
+      }
+
+      alert("Formal payment reminder email sent successfully!");
+      refresh();
+    } catch (err: any) {
+      console.error("Failed to send payment reminder:", err);
+      alert("Failed to send payment reminder: " + (err.message || err));
+    } finally {
+      setSendingReminder(false);
     }
   };
 
@@ -493,24 +567,6 @@ export default function ManagerLeadDetailPage({ params }: ManagerLeadDetailPageP
     }
   };
 
-  // ── Step 6 handler: Collect Documents ──
-  const handleApproveDocuments = async () => {
-    const allChecked = Object.values(docChecklist).every(Boolean);
-    if (!allChecked) { alert("Please verify all documents before approving."); return; }
-    if (!nextActionTask) return;
-    setApprovingDocs(true);
-    try {
-      await taskService.updateTaskStatus(nextActionTask.id, "completed", { idDocRef });
-      setDocChecklist({ passport: false, visa: false, id_proof: false, emergency_contact: false });
-      setIdDocRef("");
-      await fetchLeadTasks();
-      await refresh();
-    } catch (err) {
-      console.error("Step 6 completion failed:", err);
-    } finally {
-      setApprovingDocs(false);
-    }
-  };
 
   // ── Step 7 handler: Confirm Booking ──
   const handleConfirmBooking = async () => {
@@ -582,7 +638,7 @@ export default function ManagerLeadDetailPage({ params }: ManagerLeadDetailPageP
     const isTaskDone = (stepNum: number) => tasks.some((t) => t.step === stepNum && t.status === "completed");
     const isTaskPending = (stepNum: number) => tasks.some((t) => t.step === stepNum && t.status !== "completed");
 
-    const steps = [1, 2, 3, 4, 5, 6, 7];
+    const steps = [1, 2, 3, 4, 5, 6];
     return steps.map((s) => ({
       step: s,
       state: isTaskDone(s) ? "completed" : isTaskPending(s) ? "in-progress" : "pending",
@@ -594,8 +650,7 @@ export default function ManagerLeadDetailPage({ params }: ManagerLeadDetailPageP
     "Schedule Vibe Check",
     "Conduct Vibe Check",
     "Share Brochure",
-    "Payment Follow-up",
-    "Collect Documents",
+    "Payment Received",
     "Confirm Booking",
   ];
 
@@ -927,118 +982,29 @@ export default function ManagerLeadDetailPage({ params }: ManagerLeadDetailPageP
     if (step === 5) {
       return (
         <div className="space-y-4">
-          <p className="text-xs text-slate-500 font-semibold leading-relaxed">
-            Send the payment link and confirm deposit receipt from the traveler.
-          </p>
-          <div className="space-y-1">
-            <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest block">Payment Link URL</label>
-            <input
-              type="url"
-              placeholder="https://payment.example.com/..."
-              value={paymentLinkUrl}
-              onChange={(e) => setPaymentLinkUrl(e.target.value)}
-              className="w-full h-9 px-3 border border-[#e7e1d5]/70 rounded-xl text-xs font-semibold focus:outline-none focus:border-[#FF5B26]/40 bg-white"
-            />
-          </div>
           <button
-            onClick={handleSendPaymentLink}
-            className="w-full py-2 bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-bold rounded-xl cursor-pointer border-0 flex items-center justify-center gap-1.5"
+            disabled={sendingReminder}
+            onClick={handleSendPaymentReminder}
+            className="w-full py-2.5 bg-[#FF5B26] hover:bg-[#e04b1c] disabled:bg-slate-200 disabled:text-slate-400 text-white text-xs font-bold rounded-xl transition-all shadow-xs cursor-pointer border-0 flex items-center justify-center gap-1.5"
           >
-            <Send className="w-3.5 h-3.5" /> Send Payment Link
+            {sendingReminder ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Mail className="w-3.5 h-3.5" />}
+            {sendingReminder ? "Sending Reminder..." : "Send Payment Reminder"}
           </button>
           <div className="border-t border-slate-100 pt-3 space-y-2">
-            <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest block">Payment Status</label>
-            {[
-              { value: "paid", label: "✅ Paid — Deposit Received" },
-              { value: "waiting", label: "⏳ Waiting — Payment Pending" },
-              { value: "declined", label: "❌ Declined — Traveler Opted Out" },
-            ].map((opt) => (
-              <label key={opt.value} className={`flex items-center gap-3 p-3 rounded-xl border cursor-pointer transition-all ${paymentResult === opt.value ? "bg-[#FFEFEA] border-[#FF5B26]/40 text-[#FF5B26]" : "border-[#e7e1d5]/55 hover:bg-slate-50 text-slate-700"}`}>
-                <input
-                  type="radio"
-                  name="paymentResult"
-                  value={opt.value}
-                  checked={paymentResult === opt.value}
-                  onChange={(e) => setPaymentResult(e.target.value)}
-                  className="accent-[#FF5B26]"
-                />
-                <span className="text-xs font-bold">{opt.label}</span>
-              </label>
-            ))}
-          </div>
-          {paymentResult === "paid" && (
-            <div className="grid grid-cols-2 gap-2">
-              <div className="space-y-1">
-                <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest block">Amount (₹)</label>
-                <input type="text" placeholder="25,000" value={receiptAmt} onChange={(e) => setReceiptAmt(e.target.value)} className="w-full h-9 px-3 border border-[#e7e1d5]/70 rounded-xl text-xs font-semibold focus:outline-none bg-white" />
-              </div>
-              <div className="space-y-1">
-                <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest block">Transaction Ref</label>
-                <input type="text" placeholder="TXN123" value={refId} onChange={(e) => setRefId(e.target.value)} className="w-full h-9 px-3 border border-[#e7e1d5]/70 rounded-xl text-xs font-semibold focus:outline-none bg-white" />
-              </div>
+            <div className="bg-[#FAF8F4] border border-[#e7e1d5]/70 rounded-xl p-4 text-center">
+              <Clock3 className="w-5 h-5 text-amber-500 mx-auto mb-2 animate-pulse" />
+              <p className="text-xs font-bold text-slate-700">Awaiting Online Payment</p>
+              <p className="text-[10px] text-slate-500 mt-1 leading-relaxed">
+                The traveler must complete the payment from their personal dashboard bookings portal. Once paid, the system will automatically confirm the receipt and advance this workflow to Document Collection.
+              </p>
             </div>
-          )}
-          <button
-            disabled={completingPayment}
-            onClick={handleCompletePayment}
-            className="w-full py-2.5 bg-[#FF5B26] hover:bg-[#e04b1c] disabled:bg-slate-200 disabled:text-slate-400 text-white text-xs font-bold rounded-xl transition-all shadow-xs cursor-pointer border-0 flex items-center justify-center gap-1.5"
-          >
-            {completingPayment ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <CheckCircle2 className="w-3.5 h-3.5" />}
-            {completingPayment ? "Updating..." : "Confirm Payment Status"}
-          </button>
+          </div>
         </div>
       );
     }
 
-    // ── Step 6: Collect Documents ──
+    // ── Step 6: Confirm Booking ──
     if (step === 6) {
-      return (
-        <div className="space-y-4">
-          <p className="text-xs text-slate-500 font-semibold leading-relaxed">
-            Verify that all required travel documents have been received from the traveler.
-          </p>
-          <div className="space-y-2">
-            <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest block">Document Checklist</label>
-            {[
-              { key: "passport", label: "🛂 Passport / Visa Copy" },
-              { key: "id_proof", label: "🪪 ID Proof (Aadhaar / PAN)" },
-              { key: "emergency_contact", label: "🚨 Emergency Contact Details" },
-            ].map((doc) => (
-              <label key={doc.key} className={`flex items-center gap-3 p-3 rounded-xl border cursor-pointer transition-all ${docChecklist[doc.key as keyof typeof docChecklist] ? "bg-emerald-50 border-emerald-200 text-emerald-700" : "border-[#e7e1d5]/55 hover:bg-slate-50 text-slate-700"}`}>
-                <input
-                  type="checkbox"
-                  checked={docChecklist[doc.key as keyof typeof docChecklist]}
-                  onChange={(e) => setDocChecklist((prev) => ({ ...prev, [doc.key]: e.target.checked }))}
-                  className="accent-emerald-600"
-                />
-                <span className="text-xs font-bold">{doc.label}</span>
-              </label>
-            ))}
-          </div>
-          <div className="space-y-1">
-            <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest block">ID Document Reference (optional)</label>
-            <input
-              type="text"
-              placeholder="Passport no. or Aadhaar no."
-              value={idDocRef}
-              onChange={(e) => setIdDocRef(e.target.value)}
-              className="w-full h-9 px-3 border border-[#e7e1d5]/70 rounded-xl text-xs font-semibold focus:outline-none focus:border-[#FF5B26]/40 bg-white"
-            />
-          </div>
-          <button
-            disabled={approvingDocs}
-            onClick={handleApproveDocuments}
-            className="w-full py-2.5 bg-[#FF5B26] hover:bg-[#e04b1c] disabled:bg-slate-200 disabled:text-slate-400 text-white text-xs font-bold rounded-xl transition-all shadow-xs cursor-pointer border-0 flex items-center justify-center gap-1.5"
-          >
-            {approvingDocs ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <CheckSquare className="w-3.5 h-3.5" />}
-            {approvingDocs ? "Approving..." : "Approve Documents"}
-          </button>
-        </div>
-      );
-    }
-
-    // ── Step 7: Confirm Booking ──
-    if (step === 7) {
       const completedSteps = tasks.filter((t) => t.status === "completed").map((t) => t.step);
       const SUMMARY_STEPS = [
         { step: 1, label: "Call Completed" },
@@ -1046,7 +1012,6 @@ export default function ManagerLeadDetailPage({ params }: ManagerLeadDetailPageP
         { step: 3, label: "Brochure Shared" },
         { step: 4, label: "Vibe Check Conducted" },
         { step: 5, label: "Payment Received" },
-        { step: 6, label: "Documents Verified" },
       ];
       return (
         <div className="space-y-4">

@@ -78,6 +78,7 @@ export interface Lead {
     id: string;
     title: string;
     destination?: string;
+    status?: string;
     start_date?: string;
     end_date?: string;
     price?: number;

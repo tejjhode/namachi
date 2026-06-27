@@ -110,6 +110,7 @@ export function TripEnquiryView({ user, leads = [], trip }: TripEnquiryViewProps
   const [hopeFeelsLike, setHopeFeelsLike] = useState("");
   const [anythingElse, setAnythingElse] = useState("");
   const [agreeTerms, setAgreeTerms] = useState(false);
+  const [withdrawn, setWithdrawn] = useState(false);
 
   // Submission / validation states
   const [errors, setErrors] = useState<Record<string, string>>({});
@@ -117,6 +118,7 @@ export function TripEnquiryView({ user, leads = [], trip }: TripEnquiryViewProps
   const [success, setSuccess] = useState(false);
   const [submitError, setSubmitError] = useState("");
 
+  const existingEnquiry = !withdrawn ? leads.find((l) => l.trip_id === trip.id) : null;
   const firstName = formatFriendlyName(user.fullName);
   const avatarLetter = firstName.charAt(0).toUpperCase() || "T";
 
@@ -566,8 +568,75 @@ export function TripEnquiryView({ user, leads = [], trip }: TripEnquiryViewProps
           {/* Grid Columns */}
           <div className="grid grid-cols-1 lg:grid-cols-12 gap-8 items-start">
             
-            {/* Left Main Form Column */}
-            <form onSubmit={handleSubmit} className="lg:col-span-9 space-y-8">
+            {/* Left Column (Form or Already Submitted) */}
+            {existingEnquiry ? (
+              <div className="lg:col-span-9 bg-white border border-[#e7e1d5]/40 rounded-[24px] p-6 md:p-8 shadow-sm space-y-6 text-left">
+                <div className="flex items-center gap-2 border-b border-[#e7e1d5]/30 pb-3">
+                  <div className="w-8 h-8 rounded-full bg-orange-50 flex items-center justify-center text-[#FF5B26] shrink-0">
+                    <Check className="w-4 h-4" />
+                  </div>
+                  <h3 className="text-sm font-extrabold text-nomichi-ink tracking-tight">Already Submitted</h3>
+                </div>
+
+                <div className="space-y-4">
+                  <p className="text-xs text-nomichi-ink/75 leading-relaxed font-semibold">
+                    You have already submitted an enquiry for <strong className="text-nomichi-ink">{trip.title}</strong>.
+                  </p>
+
+                  <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 bg-[#FAF8F4]/60 border border-[#e7e1d5]/20 p-4 rounded-2xl text-xs font-bold text-slate-700">
+                    <div>
+                      <span className="text-[10px] text-slate-400 uppercase tracking-wide block">Enquiry ID</span>
+                      <span className="text-nomichi-ink font-extrabold mt-0.5 block">{existingEnquiry.enquiry_id || "—"}</span>
+                    </div>
+                    <div>
+                      <span className="text-[10px] text-slate-400 uppercase tracking-wide block">Preferred Month</span>
+                      <span className="text-nomichi-ink font-extrabold mt-0.5 block">{existingEnquiry.preferred_month || "—"}</span>
+                    </div>
+                    <div>
+                      <span className="text-[10px] text-slate-400 uppercase tracking-wide block">Group Size</span>
+                      <span className="text-nomichi-ink font-extrabold mt-0.5 block">{existingEnquiry.group_size || 1} people</span>
+                    </div>
+                  </div>
+
+                  {existingEnquiry.is_lead ? (
+                    <div className="p-4 bg-blue-50 border border-blue-100 rounded-2xl text-xs text-blue-700 font-bold leading-relaxed">
+                      Your enquiry has been converted into a lead and is currently being processed by our Trip Manager. You cannot withdraw this enquiry now.
+                    </div>
+                  ) : (
+                    <div className="space-y-4 pt-2">
+                      <p className="text-[11px] text-nomichi-ink/50 leading-relaxed font-semibold">
+                        Since your enquiry has not been processed yet, you can choose to withdraw it. This will permanently delete your enquiry from our records.
+                      </p>
+                      <button
+                        type="button"
+                        onClick={async () => {
+                          try {
+                            setSubmitting(true);
+                            const { error } = await supabase
+                              .from("leads")
+                              .delete()
+                              .eq("id", existingEnquiry.id);
+                            if (error) throw error;
+                            
+                            setWithdrawn(true);
+                            router.refresh();
+                          } catch (err: any) {
+                            alert("Failed to withdraw enquiry: " + err.message);
+                          } finally {
+                            setSubmitting(false);
+                          }
+                        }}
+                        disabled={submitting}
+                        className="bg-rose-50 border border-rose-200 hover:bg-rose-100 text-rose-700 font-bold text-xs px-4 py-2.5 rounded-xl transition-all cursor-pointer disabled:opacity-50 border-solid"
+                      >
+                        {submitting ? "Withdrawing..." : "Withdraw Enquiry"}
+                      </button>
+                    </div>
+                  )}
+                </div>
+              </div>
+            ) : (
+              <form onSubmit={handleSubmit} className="lg:col-span-9 space-y-8">
               
               {/* Your Details */}
               <div className="bg-nomichi-white border border-[#e7e1d5]/40 rounded-[24px] p-6 md:p-8 shadow-sm space-y-6">
@@ -802,6 +871,7 @@ export function TripEnquiryView({ user, leads = [], trip }: TripEnquiryViewProps
               )}
 
             </form>
+          )}
 
             {/* Right Summary Column (Col Span 3) */}
             <div className="lg:col-span-3 space-y-6">

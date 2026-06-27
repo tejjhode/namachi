@@ -196,32 +196,13 @@ export const taskService = {
       );
     }
 
-    // ── Step 6: Collect Documents — after Step 5 (paid) ──
+    // ── Step 6: Confirm Booking — after Step 5 (paid) ──
     if (isStepComplete(5) && ["converted", "confirmed"].includes(leadStatus)) {
       await createWorkflowTask(6,
-        "Collect Documents",
-        `Request and verify required travel documents from ${lead.name}.`,
-        "document", "High", 2,
-        ["Request Passport / Visa copy", "Collect ID proof", "Collect emergency contact details", "Verify and approve all documents"]
-      );
-      try {
-        await notificationService.notifyTraveler(
-          lead.email, "Document Required",
-          "Please upload your ID and emergency contact details to complete your booking.",
-          "Document Required", lead.id, "High"
-        );
-      } catch (err) {
-        console.error("Failed to send document required notification:", err);
-      }
-    }
-
-    // ── Step 7: Confirm Booking — after Step 6 ──
-    if (isStepComplete(6)) {
-      await createWorkflowTask(7,
         "Confirm Booking",
         `All tasks complete. Confirm the booking for ${lead.name} to finalize their trip registration.`,
         "booking", "High", 0,
-        ["Verify all tasks completed", "Confirm payment received", "Confirm documents verified", "Click Confirm Booking to finalize"]
+        ["Verify all tasks completed", "Confirm payment received", "Click Confirm Booking to finalize"]
       );
     }
   },
@@ -405,6 +386,51 @@ export const taskService = {
               created_by: task.assigned_to
             });
 
+            // Create booking and traveler records immediately so traveler can view/pay balance
+            try {
+              const { data: leadData } = await supabase.from("leads")
+                .select("name, email, assigned_to, user_id, trip_id, phone")
+                .eq("id", task.source_id).single();
+
+              if (leadData) {
+                let price = 0;
+                let departureId: string | null = null;
+                if (leadData.trip_id) {
+                  const { data: trip } = await supabase.from("trips").select("price").eq("id", leadData.trip_id).single();
+                  if (trip?.price) price = Number(trip.price);
+                  const { data: departures } = await supabase.from("trip_departures").select("id, price, status").eq("trip_id", leadData.trip_id);
+                  if (departures?.length) {
+                    const activeDep = departures.find((d: any) => {
+                      try { return typeof d.status === "string" && d.status.startsWith("{") ? JSON.parse(d.status).status === "active" : d.status === "active"; } catch { return false; }
+                    });
+                    const targetDep = activeDep || departures[0];
+                    if (targetDep) { departureId = targetDep.id; if (targetDep.price) price = Number(targetDep.price); }
+                  }
+                }
+                const booking = await bookingService.createBooking({
+                  lead_id: task.source_id, user_id: leadData.user_id,
+                  trip_id: leadData.trip_id, departure_id: departureId,
+                  price, payment_status: "pending",
+                });
+                // Decrement seats
+                if (departureId) {
+                  const { data: depData } = await supabase.from("trip_departures").select("seats_left").eq("id", departureId).maybeSingle();
+                  if (depData?.seats_left != null) await supabase.from("trip_departures").update({ seats_left: Math.max(0, depData.seats_left - 1) }).eq("id", departureId);
+                }
+                if (leadData.trip_id) {
+                  const { data: tripData } = await supabase.from("trips").select("seats_left").eq("id", leadData.trip_id).maybeSingle();
+                  if (tripData?.seats_left != null) await supabase.from("trips").update({ seats_left: Math.max(0, tripData.seats_left - 1) }).eq("id", leadData.trip_id);
+                }
+                await travelerService.createTraveler({
+                  booking_id: booking.id, user_id: leadData.user_id,
+                  full_name: leadData.name, email: leadData.email,
+                  phone: leadData.phone, visa_status: "not_required",
+                });
+              }
+            } catch (err) {
+              console.error("Failed to pre-create booking on sharing brochure:", err);
+            }
+
             try {
               const { data: leadData } = await supabase
                 .from("leads")
@@ -440,46 +466,12 @@ export const taskService = {
                   created_by: task.assigned_to
                 });
               }
-              // Create booking
               try {
                 const { data: leadData } = await supabase.from("leads")
-                  .select("name, email, assigned_to, user_id, trip_id, phone")
+                  .select("name, email, assigned_to")
                   .eq("id", task.source_id).single();
 
                 if (leadData) {
-                  let price = 0;
-                  let departureId: string | null = null;
-                  if (leadData.trip_id) {
-                    const { data: trip } = await supabase.from("trips").select("price").eq("id", leadData.trip_id).single();
-                    if (trip?.price) price = Number(trip.price);
-                    const { data: departures } = await supabase.from("trip_departures").select("id, price, status").eq("trip_id", leadData.trip_id);
-                    if (departures?.length) {
-                      const activeDep = departures.find((d: any) => {
-                        try { return typeof d.status === "string" && d.status.startsWith("{") ? JSON.parse(d.status).status === "active" : d.status === "active"; } catch { return false; }
-                      });
-                      const targetDep = activeDep || departures[0];
-                      if (targetDep) { departureId = targetDep.id; if (targetDep.price) price = Number(targetDep.price); }
-                    }
-                  }
-                  const booking = await bookingService.createBooking({
-                    lead_id: task.source_id, user_id: leadData.user_id,
-                    trip_id: leadData.trip_id, departure_id: departureId,
-                    price, payment_status: "pending",
-                  });
-                  // Decrement seats
-                  if (departureId) {
-                    const { data: depData } = await supabase.from("trip_departures").select("seats_left").eq("id", departureId).maybeSingle();
-                    if (depData?.seats_left != null) await supabase.from("trip_departures").update({ seats_left: Math.max(0, depData.seats_left - 1) }).eq("id", departureId);
-                  }
-                  if (leadData.trip_id) {
-                    const { data: tripData } = await supabase.from("trips").select("seats_left").eq("id", leadData.trip_id).maybeSingle();
-                    if (tripData?.seats_left != null) await supabase.from("trips").update({ seats_left: Math.max(0, tripData.seats_left - 1) }).eq("id", leadData.trip_id);
-                  }
-                  await travelerService.createTraveler({
-                    booking_id: booking.id, user_id: leadData.user_id,
-                    full_name: leadData.name, email: leadData.email,
-                    phone: leadData.phone, visa_status: "not_required",
-                  });
                   await notificationService.notifyTraveler(leadData.email, "Booking Confirmed",
                     "Your deposit payment has been received! Your booking is being processed.", "Booking Confirmed", task.source_id, "High");
                   if (leadData.assigned_to) {
@@ -487,7 +479,9 @@ export const taskService = {
                       `Payment received for "${leadData.name}". Proceed to document collection.`, "Booking Confirmed", task.source_id, "High");
                   }
                 }
-              } catch (err) { console.error("Failed to create booking on payment:", err); }
+              } catch (err) {
+                console.error("Failed to run booking confirmation notification:", err);
+              }
             } else if (paymentStatus === "declined") {
               await supabase.from("lead_notes").insert({
                 lead_id: task.source_id, content: `Payment Follow-up: Payment declined by traveler.`, created_by: task.assigned_to
@@ -496,21 +490,8 @@ export const taskService = {
             }
           }
 
-          // ── Step 6: Collect Documents ──
+          // ── Step 6: Confirm Booking ──
           else if (task.step === 6) {
-            if (options?.idDocRef) {
-              await supabase.from("lead_notes").insert({
-                lead_id: task.source_id, content: `Documents Collected:\n- ID Document: ${options.idDocRef}`, created_by: task.assigned_to
-              });
-              try {
-                const { data: booking } = await supabase.from("bookings").select("id").eq("lead_id", task.source_id).maybeSingle();
-                if (booking?.id) await supabase.from("travelers").update({ passport_number: options.idDocRef }).eq("booking_id", booking.id);
-              } catch (err) { console.error("Failed to update traveler document:", err); }
-            }
-          }
-
-          // ── Step 7: Confirm Booking ──
-          else if (task.step === 7) {
             await supabase.from("leads").update({ status: "confirmed" }).eq("id", task.source_id);
             await supabase.from("lead_notes").insert({
               lead_id: task.source_id, content: `Booking Confirmed: All tasks completed. Booking officially confirmed.`, created_by: task.assigned_to

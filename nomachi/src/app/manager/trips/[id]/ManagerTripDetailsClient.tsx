@@ -104,7 +104,7 @@ const splitValues = (value?: string | null) =>
     .filter(Boolean);
 
 export function ManagerTripDetailsClient({ user, trip, creator, departures, stats }: ManagerTripDetailsClientProps) {
-  const [activeTab, setActiveTab] = useState<"overview" | "departures" | "itinerary" | "inclusions" | "exclusions" | "documents" | "notes" | "activity">("overview");
+  const [activeTab, setActiveTab] = useState<"overview" | "departures" | "itinerary" | "inclusions" | "exclusions" | "notes" | "activity">("overview");
 
   const firstName = user.full_name.split(" ")[0] || "Manager";
   const tripStyles = splitValues(trip.trip_style);
@@ -130,7 +130,6 @@ export function ManagerTripDetailsClient({ user, trip, creator, departures, stat
     ["itinerary", "Itinerary"],
     ["inclusions", "Inclusions"],
     ["exclusions", "Exclusions"],
-    ["documents", "Documents"],
     ["notes", "Notes"],
     ["activity", "Activity"],
   ] as const;
@@ -463,36 +462,6 @@ export function ManagerTripDetailsClient({ user, trip, creator, departures, stat
                       ) : (
                         <div className="text-slate-500 font-semibold py-8 text-center bg-slate-50/50 rounded-2xl border border-dashed border-slate-200">
                           No exclusions specified for this trip.
-                        </div>
-                      )
-                    )}
-                    {activeTab === "documents" && (
-                      trip.brochure_url ? (
-                        <div className="rounded-2xl border border-slate-200 p-5 bg-[#FAF8F5]/30 flex flex-col md:flex-row md:items-center justify-between gap-4">
-                          <div className="flex items-center gap-3">
-                            <div className="w-10 h-10 rounded-xl bg-red-50 text-red-500 flex items-center justify-center shrink-0">
-                              <FileText className="w-5 h-5" />
-                            </div>
-                            <div>
-                              <h4 className="font-extrabold text-slate-800 text-sm">Trip Itinerary & Brochure</h4>
-                              <p className="text-xs text-slate-500 font-semibold mt-0.5">Attached PDF brochure is ready to download or view.</p>
-                            </div>
-                          </div>
-                          <div className="flex gap-2.5">
-                            <a
-                              href={trip.brochure_url.startsWith("data:") ? `/api/trips/${trip.id}/brochure` : trip.brochure_url}
-                              target="_blank"
-                              rel="noopener noreferrer"
-                              className="px-4 py-2 bg-[#FF5B26] hover:bg-[#e04b1c] text-white text-xs font-bold rounded-xl transition-all shadow-xs inline-flex items-center gap-1.5 no-underline cursor-pointer border-0"
-                            >
-                              <Download className="w-3.5 h-3.5" />
-                              Download PDF
-                            </a>
-                          </div>
-                        </div>
-                      ) : (
-                        <div className="text-slate-500 font-semibold py-8 text-center bg-slate-50/50 rounded-2xl border border-dashed border-slate-200">
-                          No documents or brochure PDFs have been attached to this trip yet.
                         </div>
                       )
                     )}

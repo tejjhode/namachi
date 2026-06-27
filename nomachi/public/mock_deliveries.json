@@ -1,5 +1,370 @@
 [
   {
+    "id": "wa_nn3etij8y",
+    "timestamp": "2026-06-27T07:51:02.167Z",
+    "recipient": "+917719915707",
+    "channel": "WhatsApp",
+    "type": "Booking Confirmed",
+    "title": "WhatsApp Message",
+    "body": "Booking Confirmed: Congratulations, Io221072 Jhode Tejaswa Ghanshyam! Your booking for \"KANHA TIGER SAFARI & WILDERNESS\" is officially confirmed. Get ready for an incredible adventure! 🎉",
+    "priority": "High",
+    "status": "Failed",
+    "details": {
+      "phone_id": "123456789012345",
+      "error": {
+        "message": "Invalid JSON for postcard",
+        "type": "OAuthException",
+        "code": 190,
+        "fbtrace_id": "A8yLUuljPdamnwfLc3fjkmd"
+      },
+      "live": true
+    }
+  },
+  {
+    "id": "email_fn2jut20p",
+    "timestamp": "2026-06-27T07:51:01.895Z",
+    "recipient": "22et10jh371@mitsgwl.ac.in",
+    "channel": "Email",
+    "type": "Booking Confirmed",
+    "title": "Booking Confirmed",
+    "body": "Congratulations, Io221072 Jhode Tejaswa Ghanshyam! Your booking for \"KANHA TIGER SAFARI & WILDERNESS\" is officially confirmed. Get ready for an incredible adventure! 🎉",
+    "priority": "High",
+    "status": "Success",
+    "details": {
+      "smtp_server": "smtp.resend.com",
+      "port": 587,
+      "messageId": "<c86297b3-92b5-e69e-83ae-4440a6eac1ac@edinsured.in>",
+      "live": true
+    }
+  },
+  {
+    "id": "email_43go9foat",
+    "timestamp": "2026-06-27T07:41:55.124Z",
+    "recipient": "tejaswajhode@gmail.com",
+    "channel": "Email",
+    "type": "Payment Received - Manager",
+    "title": "🎯 Client Payment Received — 0901IO221072 JHODE TEJASWA GHANSHYAM",
+    "body": "0901IO221072 JHODE TEJASWA GHANSHYAM has completed payment of ₹10,000 for KANHA TIGER SAFARI & WILDERNESS. Booking D06C31EF is now fully paid.",
+    "priority": "High",
+    "status": "Success",
+    "details": {
+      "smtp_server": "smtp.resend.com",
+      "port": 587,
+      "messageId": "<4856f2b0-9d9d-d357-de1f-f5ebae48c020@edinsured.in>",
+      "live": true
+    }
+  },
+  {
+    "id": "email_v4737ri66",
+    "timestamp": "2026-06-27T07:41:45.147Z",
+    "recipient": "noreply@edinsured.in",
+    "channel": "Email",
+    "type": "Payment Received - Admin",
+    "title": "💳 Payment Received — 0901IO221072 JHODE TEJASWA GHANSHYAM | KANHA TIGER SAFARI & WILDERNESS",
+    "body": "Payment of ₹10,000 received from 0901IO221072 JHODE TEJASWA GHANSHYAM for booking D06C31EF.",
+    "priority": "High",
+    "status": "Success",
+    "details": {
+      "smtp_server": "smtp.resend.com",
+      "port": 587,
+      "messageId": "<1a13b481-2464-0211-413a-303bd5f6e00e@edinsured.in>",
+      "live": true
+    }
+  },
+  {
+    "id": "email_c4hgrl0d6",
+    "timestamp": "2026-06-27T07:41:40.293Z",
+    "recipient": "22et10jh371@mitsgwl.ac.in",
+    "channel": "Email",
+    "type": "Payment Received - Traveler",
+    "title": "✅ Payment Confirmed — KANHA TIGER SAFARI & WILDERNESS",
+    "body": "Your payment of ₹10,000 for KANHA TIGER SAFARI & WILDERNESS has been confirmed. Transaction ID: TXN2546093238NMC",
+    "priority": "High",
+    "status": "Success",
+    "details": {
+      "smtp_server": "smtp.resend.com",
+      "port": 587,
+      "messageId": "<c806a229-1a26-1016-27da-fab3d4a6d819@edinsured.in>",
+      "live": true
+    }
+  },
+  {
+    "id": "email_lvqq8tv36",
+    "timestamp": "2026-06-27T07:28:56.023Z",
+    "recipient": "tejhode@gmail.com",
+    "channel": "Email",
+    "type": "Payment Received - Manager",
+    "title": "🎯 Client Payment Received — 0901IO221072 JHODE TEJASWA GHANSHYAM",
+    "body": "0901IO221072 JHODE TEJASWA GHANSHYAM has completed payment of ₹10,000 for KANHA TIGER SAFARI & WILDERNESS. Booking A2AA3F7C is now fully paid.",
+    "priority": "High",
+    "status": "Success",
+    "details": {
+      "smtp_server": "smtp.resend.com",
+      "port": 587,
+      "messageId": "<e14b3d7c-45ef-9f85-4470-5517f601f6bf@edinsured.in>",
+      "live": true
+    }
+  },
+  {
+    "id": "email_2xjvntkyz",
+    "timestamp": "2026-06-27T07:28:45.574Z",
+    "recipient": "noreply@edinsured.in",
+    "channel": "Email",
+    "type": "Payment Received - Admin",
+    "title": "💳 Payment Received — 0901IO221072 JHODE TEJASWA GHANSHYAM | KANHA TIGER SAFARI & WILDERNESS",
+    "body": "Payment of ₹10,000 received from 0901IO221072 JHODE TEJASWA GHANSHYAM for booking A2AA3F7C.",
+    "priority": "High",
+    "status": "Success",
+    "details": {
+      "smtp_server": "smtp.resend.com",
+      "port": 587,
+      "messageId": "<255ee131-00bc-8277-d1dd-8a49437c8052@edinsured.in>",
+      "live": true
+    }
+  },
+  {
+    "id": "email_xbwn7xyhf",
+    "timestamp": "2026-06-27T07:28:40.491Z",
+    "recipient": "22et10jh371@mitsgwl.ac.in",
+    "channel": "Email",
+    "type": "Payment Received - Traveler",
+    "title": "✅ Payment Confirmed — KANHA TIGER SAFARI & WILDERNESS",
+    "body": "Your payment of ₹10,000 for KANHA TIGER SAFARI & WILDERNESS has been confirmed. Transaction ID: TXN2545314579NMC",
+    "priority": "High",
+    "status": "Success",
+    "details": {
+      "smtp_server": "smtp.resend.com",
+      "port": 587,
+      "messageId": "<31db5157-1e40-0275-a165-1a99ababaa04@edinsured.in>",
+      "live": true
+    }
+  },
+  {
+    "id": "email_81q4yhzku",
+    "timestamp": "2026-06-27T07:21:47.275Z",
+    "recipient": "22et10jh371@mitsgwl.ac.in",
+    "channel": "Email",
+    "type": "Payment Received - Traveler",
+    "title": "✅ Payment Confirmed — KANHA TIGER SAFARI & WILDERNESS",
+    "body": "Your payment of ₹10,000 for KANHA TIGER SAFARI & WILDERNESS has been confirmed. Transaction ID: TXN2544901143NMC",
+    "priority": "High",
+    "status": "Failed",
+    "details": {
+      "smtp_server": "smtp.resend.com",
+      "port": 587,
+      "error": "Message failed: 550 Too many requests. You can only make 2 requests per second. See rate limit response headers for more information. Or contact support to increase rate limit.",
+      "live": true
+    }
+  },
+  {
+    "id": "email_94p36vk33",
+    "timestamp": "2026-06-27T07:21:46.987Z",
+    "recipient": "noreply@edinsured.in",
+    "channel": "Email",
+    "type": "Payment Received - Admin",
+    "title": "💳 Payment Received — 0901IO221072 JHODE TEJASWA GHANSHYAM | KANHA TIGER SAFARI & WILDERNESS",
+    "body": "Payment of ₹10,000 received from 0901IO221072 JHODE TEJASWA GHANSHYAM for booking A2AA3F7C.",
+    "priority": "High",
+    "status": "Success",
+    "details": {
+      "smtp_server": "smtp.resend.com",
+      "port": 587,
+      "messageId": "<e05128f0-ff33-c158-b3ee-3737dccc2690@edinsured.in>",
+      "live": true
+    }
+  },
+  {
+    "id": "email_6t9vyspsa",
+    "timestamp": "2026-06-27T07:21:46.927Z",
+    "recipient": "tejhode@gmail.com",
+    "channel": "Email",
+    "type": "Payment Received - Manager",
+    "title": "🎯 Client Payment Received — 0901IO221072 JHODE TEJASWA GHANSHYAM",
+    "body": "0901IO221072 JHODE TEJASWA GHANSHYAM has completed payment of ₹10,000 for KANHA TIGER SAFARI & WILDERNESS. Booking A2AA3F7C is now fully paid.",
+    "priority": "High",
+    "status": "Success",
+    "details": {
+      "smtp_server": "smtp.resend.com",
+      "port": 587,
+      "messageId": "<124f1292-4f86-e3aa-0d49-60ae3dc2c526@edinsured.in>",
+      "live": true
+    }
+  },
+  {
+    "id": "email_ur87tycvn",
+    "timestamp": "2026-06-27T07:20:20.448Z",
+    "recipient": "22et10jh371@mitsgwl.ac.in",
+    "channel": "Email",
+    "type": "Payment Reminder",
+    "title": "⚠️ Payment Due Reminder — KANHA TIGER SAFARI & WILDERNESS",
+    "body": "This is a formal reminder that the payment balance for your upcoming journey to KANHA TIGER SAFARI & WILDERNESS is currently due. Please complete it to secure your slots.",
+    "priority": "High",
+    "status": "Success",
+    "details": {
+      "smtp_server": "smtp.resend.com",
+      "port": 587,
+      "messageId": "<5e031ae5-fdd2-b8e5-4284-6378151ba489@edinsured.in>",
+      "live": true
+    }
+  },
+  {
+    "id": "wa_k5zb86c16",
+    "timestamp": "2026-06-27T06:55:55.951Z",
+    "recipient": "+917719915707",
+    "channel": "WhatsApp",
+    "type": "Brochure Shared",
+    "title": "WhatsApp Message",
+    "body": "Your Personalised Itinerary Brochure: I'm excited to share the curated brochure for your upcoming adventure. It contains the detailed day-by-day itinerary, stay details, package inclusions, and cost breakdown.\n\nPlease take your time reviewing it before our upcoming call. Looking forward to an amazing conversation!",
+    "priority": "High",
+    "status": "Failed",
+    "details": {
+      "phone_id": "123456789012345",
+      "error": {
+        "message": "Invalid JSON for postcard",
+        "type": "OAuthException",
+        "code": 190,
+        "fbtrace_id": "AwWUYvCm7tsuHDEmWnbHtuR"
+      },
+      "live": true
+    }
+  },
+  {
+    "id": "email_2ebkipy6o",
+    "timestamp": "2026-06-27T06:55:55.701Z",
+    "recipient": "22et10jh371@mitsgwl.ac.in",
+    "channel": "Email",
+    "type": "Brochure Shared",
+    "title": "Your Personalised Itinerary Brochure",
+    "body": "I'm excited to share the curated brochure for your upcoming adventure. It contains the detailed day-by-day itinerary, stay details, package inclusions, and cost breakdown.\n\nPlease take your time reviewing it before our upcoming call. Looking forward to an amazing conversation!",
+    "priority": "High",
+    "status": "Success",
+    "details": {
+      "smtp_server": "smtp.resend.com",
+      "port": 587,
+      "messageId": "<9197fd9b-b120-7f43-0358-0d5fa8a2b0a2@edinsured.in>",
+      "live": true
+    }
+  },
+  {
+    "id": "email_ox14zl7i4",
+    "timestamp": "2026-06-27T06:51:15.381Z",
+    "recipient": "22et10jh371@mitsgwl.ac.in",
+    "channel": "Email",
+    "type": "Vibe Check Completed",
+    "title": "Great News!",
+    "body": "Hi Io221072 Jhode Tejaswa Ghanshyam,\n\nThank you for the wonderful conversation! Based on our Vibe Check, we believe you are a fantastic fit for \"KANHA TIGER SAFARI & WILDERNESS\".\n\nWe will share your personalised itinerary and brochure shortly. Stay excited! 🎒",
+    "priority": "High",
+    "status": "Success",
+    "details": {
+      "smtp_server": "smtp.resend.com",
+      "port": 587,
+      "messageId": "<729a316a-6bfc-60d9-8c81-b3f7cd1ccd9a@edinsured.in>",
+      "live": true
+    }
+  },
+  {
+    "id": "email_yzvp0eps5",
+    "timestamp": "2026-06-27T06:50:02.449Z",
+    "recipient": "22et10jh371@mitsgwl.ac.in",
+    "channel": "Email",
+    "type": "Scheduled Call",
+    "title": "Vibe Check Scheduled",
+    "body": "Hi Io221072 Jhode Tejaswa Ghanshyam,\n\nYour Vibe Check call for \"KANHA TIGER SAFARI & WILDERNESS\" has been scheduled!\n\nDate & Time: 28 Jun 2026 at 12:30 PM\nMeeting Type: Video Call\nMeeting Link: https://meet.google.com/landing\n\nWe will share your personalised trip brochure and itinerary shortly before our call. Looking forward to speaking with you!",
+    "priority": "High",
+    "status": "Success",
+    "details": {
+      "smtp_server": "smtp.resend.com",
+      "port": 587,
+      "messageId": "<f3c768de-c149-de2b-5367-e8b3101004c3@edinsured.in>",
+      "live": true
+    }
+  },
+  {
+    "id": "email_79ejthb8y",
+    "timestamp": "2026-06-27T06:41:51.079Z",
+    "recipient": "22et10jh371@mitsgwl.ac.in",
+    "channel": "Email",
+    "type": "Enquiry Submitted",
+    "title": "We've received your enquiry 🌍",
+    "body": "Your enquiry has been received.",
+    "priority": "Medium",
+    "status": "Success",
+    "details": {
+      "smtp_server": "smtp.resend.com",
+      "port": 587,
+      "messageId": "<ae54105b-bd6b-a5f7-3a06-87c81128991a@edinsured.in>",
+      "live": true
+    }
+  },
+  {
+    "id": "email_csrd3nyp1",
+    "timestamp": "2026-06-27T06:41:43.442Z",
+    "recipient": "tejaswajhode@gmail.com",
+    "channel": "Email",
+    "type": "Lead Assigned",
+    "title": "Lead Assigned",
+    "body": "New lead \"Io221072 Jhode Tejaswa Ghanshyam\" has been assigned to you.",
+    "priority": "High",
+    "status": "Success",
+    "details": {
+      "smtp_server": "smtp.resend.com",
+      "port": 587,
+      "messageId": "<9587145a-2ddd-81d1-dac5-92f061ced1cd@edinsured.in>",
+      "live": true
+    }
+  },
+  {
+    "id": "email_zmrwnyww4",
+    "timestamp": "2026-06-27T06:41:38.677Z",
+    "recipient": "22et10jh371@mitsgwl.ac.in",
+    "channel": "Email",
+    "type": "Manager Assigned",
+    "title": "Manager Assigned",
+    "body": "Tejaswa Jhode has been assigned to assist you.",
+    "priority": "High",
+    "status": "Success",
+    "details": {
+      "smtp_server": "smtp.resend.com",
+      "port": 587,
+      "messageId": "<8ed898a2-df77-164a-6021-c70aad6bf43b@edinsured.in>",
+      "live": true
+    }
+  },
+  {
+    "id": "email_auuk5l6l5",
+    "timestamp": "2026-06-27T06:41:17.783Z",
+    "recipient": "tech@thenomichi.com",
+    "channel": "Email",
+    "type": "New Enquiry",
+    "title": "🚨 New Enquiry Received – KANHA TIGER SAFARI & WILDERNESS",
+    "body": "Io221072 Jhode Tejaswa Ghanshyam submitted an enquiry for \"KANHA TIGER SAFARI & WILDERNESS\".",
+    "priority": "Medium",
+    "status": "Success",
+    "details": {
+      "smtp_server": "smtp.resend.com",
+      "port": 587,
+      "messageId": "<9b14a978-c97c-4578-e0df-4876e7c4aec0@edinsured.in>",
+      "live": true
+    }
+  },
+  {
+    "id": "email_1yo25rekd",
+    "timestamp": "2026-06-27T06:41:17.664Z",
+    "recipient": "jhodetejswa2004@gmail.com",
+    "channel": "Email",
+    "type": "New Enquiry",
+    "title": "🚨 New Enquiry Received – KANHA TIGER SAFARI & WILDERNESS",
+    "body": "Io221072 Jhode Tejaswa Ghanshyam submitted an enquiry for \"KANHA TIGER SAFARI & WILDERNESS\".",
+    "priority": "Medium",
+    "status": "Success",
+    "details": {
+      "smtp_server": "smtp.resend.com",
+      "port": 587,
+      "messageId": "<ad341de8-2280-429b-ba0f-e60c8e8f4d80@edinsured.in>",
+      "live": true
+    }
+  },
+  {
     "id": "wa_tsfnh4pap",
     "timestamp": "2026-06-24T15:53:09.538Z",
     "recipient": "+916262307665",
