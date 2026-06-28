@@ -109,6 +109,38 @@ export function TripEnquiryView({ user, leads = [], trip }: TripEnquiryViewProps
   const [numberOfPeople, setNumberOfPeople] = useState("");
   const [hopeFeelsLike, setHopeFeelsLike] = useState("");
   const [anythingElse, setAnythingElse] = useState("");
+  const [specialMessage, setSpecialMessage] = useState("");
+  const [referralSource, setReferralSource] = useState("");
+  const [referralSourceCustom, setReferralSourceCustom] = useState("");
+  const [prefMinDays, _setPrefMinDays] = useState("");
+  const [prefMaxDays, _setPrefMaxDays] = useState("");
+  const [prefMinBudget, _setPrefMinBudget] = useState("");
+  const [prefMaxBudget, _setPrefMaxBudget] = useState("");
+
+  const setPrefMinDays = (val: string) => {
+    _setPrefMinDays(val);
+    if (val && prefMaxDays && parseInt(prefMaxDays) < parseInt(val)) {
+      _setPrefMaxDays("");
+    }
+  };
+  const setPrefMaxDays = (val: string) => {
+    _setPrefMaxDays(val);
+    if (val && prefMinDays && parseInt(val) < parseInt(prefMinDays)) {
+      _setPrefMinDays("");
+    }
+  };
+  const setPrefMinBudget = (val: string) => {
+    _setPrefMinBudget(val);
+    if (val && prefMaxBudget && parseInt(prefMaxBudget) < parseInt(val)) {
+      _setPrefMaxBudget("");
+    }
+  };
+  const setPrefMaxBudget = (val: string) => {
+    _setPrefMaxBudget(val);
+    if (val && prefMinBudget && parseInt(val) < parseInt(prefMinBudget)) {
+      _setPrefMinBudget("");
+    }
+  };
   const [agreeTerms, setAgreeTerms] = useState(false);
   const [withdrawn, setWithdrawn] = useState(false);
 
@@ -148,7 +180,22 @@ export function TripEnquiryView({ user, leads = [], trip }: TripEnquiryViewProps
     if (!groupType) newErrors.groupType = "Please select a group type";
     if (!preferredMonth) newErrors.preferredMonth = "Please select a preferred month";
     if (!numberOfPeople) newErrors.numberOfPeople = "Please select number of people";
+    if (!prefMinDays || !prefMaxDays) {
+      newErrors.preferredDuration = "Please select preferred duration range";
+    } else if (parseInt(prefMaxDays) < parseInt(prefMinDays)) {
+      newErrors.preferredDuration = "Max days cannot be less than Min days";
+    }
+    if (!prefMinBudget || !prefMaxBudget) {
+      newErrors.budgetPreference = "Please select budget range per person";
+    } else if (parseInt(prefMaxBudget) < parseInt(prefMinBudget)) {
+      newErrors.budgetPreference = "Max budget cannot be less than Min budget";
+    }
     if (!hopeFeelsLike.trim()) newErrors.hopeFeelsLike = "Please tell us what you're hoping for";
+    if (!referralSource) {
+      newErrors.referralSource = "Please select how you heard about us";
+    } else if (referralSource === "other" && !referralSourceCustom.trim()) {
+      newErrors.referralSource = "Please specify how you heard about us";
+    }
     if (!agreeTerms) newErrors.agreeTerms = "You must agree to the Terms & Conditions";
     
     setErrors(newErrors);
@@ -207,8 +254,12 @@ export function TripEnquiryView({ user, leads = [], trip }: TripEnquiryViewProps
           group_type: groupType,
           preferred_month: preferredMonth,
           group_size: parseInt(numberOfPeople),
+          preferred_duration: `${prefMinDays}-${prefMaxDays} Days`,
+          budget_preference: `₹${(parseInt(prefMinBudget) || 0).toLocaleString("en-IN")} - ₹${(parseInt(prefMaxBudget) || 0).toLocaleString("en-IN")} per person`,
           hope_trip_feels_like: hopeFeelsLike.trim(),
           dietary_and_accessibility: anythingElse.trim(),
+          message: specialMessage.trim() || null,
+          source: referralSource === "other" ? referralSourceCustom.trim() : referralSource,
           trip_id: trip.id,
           status: "new",
           assigned_to: assignedToId,
@@ -232,7 +283,7 @@ export function TripEnquiryView({ user, leads = [], trip }: TripEnquiryViewProps
       try {
         await notificationService.notifyTraveler(
           user.email,
-          "We've received your enquiry 🌍",
+          "We've received your enquiry",
           "Your enquiry has been received.",
           "Enquiry Submitted",
           data?.id || null,
@@ -240,7 +291,7 @@ export function TripEnquiryView({ user, leads = [], trip }: TripEnquiryViewProps
         );
 
         await notificationService.notifyAdmins(
-          `🚨 New Enquiry Received – ${trip.title}`,
+          `New Enquiry Received – ${trip.title}`,
           `${fullName} submitted an enquiry for "${trip.title}".`,
           "New Enquiry",
           data?.id || null,
@@ -665,11 +716,11 @@ export function TripEnquiryView({ user, leads = [], trip }: TripEnquiryViewProps
                         onChange={(e) => setPhoneCode(e.target.value)}
                         className="bg-[#FAF8F4] border border-[#e7e1d5]/80 rounded-xl px-2 py-3 text-xs font-semibold text-nomichi-ink focus:outline-none focus:border-[#FF5B26] shrink-0"
                       >
-                        <option value="+91">🇮🇳 +91</option>
-                        <option value="+1">🇺🇸 +1</option>
-                        <option value="+44">🇬🇧 +44</option>
-                        <option value="+61">🇦🇺 +61</option>
-                        <option value="+81">🇯🇵 +81</option>
+                        <option value="+91">IN +91</option>
+                        <option value="+1">US +1</option>
+                        <option value="+44">UK +44</option>
+                        <option value="+61">AU +61</option>
+                        <option value="+81">JP +81</option>
                       </select>
                       <input 
                         type="tel" 
@@ -789,6 +840,75 @@ export function TripEnquiryView({ user, leads = [], trip }: TripEnquiryViewProps
                     {errors.numberOfPeople && <p className="text-[10px] font-bold text-red-500">{errors.numberOfPeople}</p>}
                   </div>
 
+                  {/* Preferred Duration */}
+                  <div className="space-y-2">
+                    <label className="block text-[10px] font-bold text-nomichi-ink/50 uppercase tracking-wider">Preferred Duration <span className="text-[#FF5B26]">*</span></label>
+                    <div className="grid grid-cols-2 gap-2">
+                      <select 
+                        value={prefMinDays}
+                        onChange={(e) => setPrefMinDays(e.target.value)}
+                        className={`w-full bg-[#FAF8F4] border ${errors.preferredDuration ? "border-red-500" : "border-[#e7e1d5]/80"} rounded-xl px-2.5 py-3 text-xs font-semibold text-nomichi-ink focus:outline-none focus:border-[#FF5B26]`}
+                      >
+                        <option value="">Min Days</option>
+                        <option value="3">3 Days</option>
+                        <option value="5">5 Days</option>
+                        <option value="7">7 Days</option>
+                        <option value="10">10 Days</option>
+                        <option value="14">14 Days</option>
+                        <option value="21">21 Days</option>
+                      </select>
+                      <select 
+                        value={prefMaxDays}
+                        onChange={(e) => setPrefMaxDays(e.target.value)}
+                        className={`w-full bg-[#FAF8F4] border ${errors.preferredDuration ? "border-red-500" : "border-[#e7e1d5]/80"} rounded-xl px-2.5 py-3 text-xs font-semibold text-nomichi-ink focus:outline-none focus:border-[#FF5B26]`}
+                      >
+                        <option value="">Max Days</option>
+                        <option value="5">5 Days</option>
+                        <option value="7">7 Days</option>
+                        <option value="10">10 Days</option>
+                        <option value="14">14 Days</option>
+                        <option value="21">21 Days</option>
+                        <option value="30">30 Days</option>
+                      </select>
+                    </div>
+                    {errors.preferredDuration && <p className="text-[10px] font-bold text-red-500">{errors.preferredDuration}</p>}
+                  </div>
+
+                  {/* Budget Preference (Approx.) */}
+                  <div className="space-y-2">
+                    <label className="block text-[10px] font-bold text-nomichi-ink/50 uppercase tracking-wider">Budget Preference (Approx.) <span className="text-[#FF5B26]">*</span></label>
+                    <div className="grid grid-cols-2 gap-2">
+                      <select 
+                        value={prefMinBudget}
+                        onChange={(e) => setPrefMinBudget(e.target.value)}
+                        className={`w-full bg-[#FAF8F4] border ${errors.budgetPreference ? "border-red-500" : "border-[#e7e1d5]/80"} rounded-xl px-2.5 py-3 text-xs font-semibold text-nomichi-ink focus:outline-none focus:border-[#FF5B26]`}
+                      >
+                        <option value="">Min (per person)</option>
+                        <option value="10000">₹10K</option>
+                        <option value="20000">₹20K</option>
+                        <option value="50000">₹50K</option>
+                        <option value="100000">₹1L</option>
+                        <option value="150000">₹1.5L</option>
+                        <option value="200000">₹2L</option>
+                      </select>
+                      <select 
+                        value={prefMaxBudget}
+                        onChange={(e) => setPrefMaxBudget(e.target.value)}
+                        className={`w-full bg-[#FAF8F4] border ${errors.budgetPreference ? "border-red-500" : "border-[#e7e1d5]/80"} rounded-xl px-2.5 py-3 text-xs font-semibold text-nomichi-ink focus:outline-none focus:border-[#FF5B26]`}
+                      >
+                        <option value="">Max (per person)</option>
+                        <option value="20000">₹20K</option>
+                        <option value="50000">₹50K</option>
+                        <option value="100000">₹1L</option>
+                        <option value="150000">₹1.5L</option>
+                        <option value="200000">₹2L</option>
+                        <option value="300000">₹3L</option>
+                        <option value="500000">₹5L+</option>
+                      </select>
+                    </div>
+                    {errors.budgetPreference && <p className="text-[10px] font-bold text-red-500">{errors.budgetPreference}</p>}
+                  </div>
+
                 </div>
 
                 {/* Textarea 1: What hoping feels like */}
@@ -817,9 +937,58 @@ export function TripEnquiryView({ user, leads = [], trip }: TripEnquiryViewProps
                     value={anythingElse}
                     onChange={(e) => setAnythingElse(e.target.value.slice(0, 300))}
                     placeholder="Dietary preferences, accessibility needs, special occasions, etc. (Optional)"
+                    rows={2}
+                    className="w-full bg-[#FAF8F4] border border-[#e7e1d5]/80 rounded-xl p-4 text-xs font-semibold text-nomichi-ink focus:outline-none focus:border-[#FF5B26] resize-none"
+                  />
+                </div>
+
+                {/* Textarea 3: Special Message */}
+                <div className="space-y-2">
+                  <div className="flex justify-between items-center">
+                    <label className="block text-[10px] font-bold text-nomichi-ink/50 uppercase tracking-wider">Special Message</label>
+                    <span className="text-[9px] font-bold text-nomichi-ink/35">{specialMessage.length}/500</span>
+                  </div>
+                  <textarea 
+                    value={specialMessage}
+                    onChange={(e) => setSpecialMessage(e.target.value.slice(0, 500))}
+                    placeholder="Write any additional requests, special requirements, or questions for our team here... (Optional)"
                     rows={3}
                     className="w-full bg-[#FAF8F4] border border-[#e7e1d5]/80 rounded-xl p-4 text-xs font-semibold text-nomichi-ink focus:outline-none focus:border-[#FF5B26] resize-none"
                   />
+                </div>
+
+                {/* Source/Referral Selector */}
+                <div className="space-y-2 text-left">
+                  <label className="block text-[10px] font-bold text-nomichi-ink/50 uppercase tracking-wider">How did you hear about us? <span className="text-[#FF5B26]">*</span></label>
+                  <select
+                    value={referralSource}
+                    onChange={(e) => {
+                      setReferralSource(e.target.value);
+                      if (e.target.value !== "other") {
+                        setReferralSourceCustom("");
+                      }
+                    }}
+                    className={`w-full bg-[#FAF8F4] border ${errors.referralSource ? "border-red-500" : "border-[#e7e1d5]/80"} rounded-xl px-3 py-3 text-xs font-semibold text-nomichi-ink focus:outline-none focus:border-[#FF5B26] appearance-none bg-[url('data:image/svg+xml;charset=utf-8,%3Csvg%20xmlns%3D%22http%3A%2F%2Fwww.w3.org%2F2000%2Fsvg%22%20fill%3D%22none%22%20viewBox%3D%220%200%2024%2024%22%20stroke%3D%22%2523A1A1AA%22%20stroke-width%3D%222%22%3E%3Cpath%20stroke-linecap%3D%22round%22%20stroke-linejoin%3D%22round%22%20d%3D%22M19%209l-7%207-7-7%22%20%2F%3E%3C%2Fsvg%3E')] bg-[length:16px] bg-[right_12px_center] bg-no-repeat pr-10 transition-all`}
+                  >
+                    <option value="">Select source</option>
+                    <option value="instagram">Instagram</option>
+                    <option value="facebook">Facebook</option>
+                    <option value="whatsapp">WhatsApp</option>
+                    <option value="website">Website Search</option>
+                    <option value="recommendation">Friend / Recommendation</option>
+                    <option value="other">Other (Specify...)</option>
+                  </select>
+                  {errors.referralSource && <p className="text-[10px] font-bold text-red-500">{errors.referralSource}</p>}
+                  
+                  {referralSource === "other" && (
+                    <input 
+                      type="text" 
+                      placeholder="Please specify how you heard about us..." 
+                      value={referralSourceCustom} 
+                      onChange={(e) => setReferralSourceCustom(e.target.value)}
+                      className="w-full bg-[#FAF8F4] border border-[#e7e1d5]/80 rounded-xl px-3.5 py-3 text-xs font-semibold text-nomichi-ink focus:outline-none focus:border-[#FF5B26] mt-2"
+                    />
+                  )}
                 </div>
               </div>
 

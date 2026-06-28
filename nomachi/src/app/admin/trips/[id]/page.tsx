@@ -78,6 +78,8 @@ export default function EditTripPage({ params }: EditTripPageProps) {
   const [editingFAQIdx, setEditingFAQIdx] = useState<number | null>(null);
 
   const [galleryImages, setGalleryImages] = useState<string[]>([]);
+  const [availableStyles, setAvailableStyles] = useState<string[]>(AVAILABLE_STYLES);
+  const [availableBestFor, setAvailableBestFor] = useState<string[]>(AVAILABLE_BEST_FOR);
   const [selectedStyles, setSelectedStyles] = useState<string[]>([]);
   const [selectedBestFor, setSelectedBestFor] = useState<string[]>([]);
 
@@ -115,8 +117,12 @@ export default function EditTripPage({ params }: EditTripPageProps) {
       setItinerary(trip.itinerary || []);
       setFaqs(trip.faqs || []);
       setGalleryImages(trip.images || []);
-      setSelectedStyles(trip.trip_style ? trip.trip_style.split(",").map((s) => s.trim()) : []);
-      setSelectedBestFor(trip.best_for ? trip.best_for.split(",").map((s) => s.trim()) : []);
+      const loadedStyles = trip.trip_style ? trip.trip_style.split(",").map((s: string) => s.trim()) : [];
+      const loadedBestFor = trip.best_for ? trip.best_for.split(",").map((s: string) => s.trim()) : [];
+      setSelectedStyles(loadedStyles);
+      setSelectedBestFor(loadedBestFor);
+      setAvailableStyles(Array.from(new Set([...AVAILABLE_STYLES, ...loadedStyles])));
+      setAvailableBestFor(Array.from(new Set([...AVAILABLE_BEST_FOR, ...loadedBestFor])));
       setBrochureFileName(trip.brochure_url ? "uploaded_brochure.pdf" : "");
     }
   }, [trip]);
@@ -442,7 +448,7 @@ export default function EditTripPage({ params }: EditTripPageProps) {
                 <select
                   value={getNormalizedStatus(form.status)}
                   onChange={(e) => setForm({ ...form, status: e.target.value })}
-                  className="w-full px-3.5 py-2.5 border border-[#e7e1d5] rounded-xl focus:outline-none focus:border-[#FF5B26] bg-[#FAF8F4]/30 text-xs font-semibold"
+                  className="w-full px-3.5 py-2.5 border border-[#e7e1d5] rounded-xl focus:outline-none focus:border-[#FF5B26] bg-[#FAF8F4]/30 text-xs font-semibold appearance-none bg-[url('data:image/svg+xml;charset=utf-8,%3Csvg%20xmlns%3D%22http%3A%2F%2Fwww.w3.org%2F2000%2Fsvg%22%20fill%3D%22none%22%20viewBox%3D%220%200%2024%2024%22%20stroke%3D%22%2523A1A1AA%22%20stroke-width%3D%222%22%3E%3Cpath%20stroke-linecap%3D%22round%22%20stroke-linejoin%3D%22round%22%20d%3D%22M19%209l-7%207-7-7%22%20%2F%3E%3C%2Fsvg%3E')] bg-[length:16px] bg-[right_12px_center] bg-no-repeat pr-10 min-h-[42px] transition-all"
                 >
                   <option value="Draft">Draft</option>
                   <option value="Open for Enquiries">Open for Enquiries</option>
@@ -680,8 +686,8 @@ export default function EditTripPage({ params }: EditTripPageProps) {
                   {styleDropdownOpen && (
                     <>
                       <div className="fixed inset-0 z-10" onClick={() => setStyleDropdownOpen(false)} />
-                      <div className="absolute z-20 w-full mt-1 bg-white border border-[#e7e1d5] rounded-xl shadow-lg p-2 max-h-48 overflow-y-auto space-y-0.5">
-                        {AVAILABLE_STYLES.map((option) => {
+                      <div className="absolute z-20 w-full mt-1 bg-white border border-[#e7e1d5] rounded-xl shadow-lg p-2 max-h-48 overflow-y-auto overflow-x-hidden space-y-0.5">
+                        {availableStyles.map((option) => {
                           const isChecked = selectedStyles.includes(option);
                           return (
                             <button
@@ -703,6 +709,47 @@ export default function EditTripPage({ params }: EditTripPageProps) {
                             </button>
                           );
                         })}
+                        <div className="p-1.5 border-t border-[#e7e1d5]/50 mt-1 flex items-center gap-1.5">
+                          <input
+                            type="text"
+                            placeholder="Add custom..."
+                            className="flex-grow min-w-0 px-2 py-1 text-xs font-semibold border border-[#e7e1d5] rounded-lg focus:outline-none focus:border-[#FF5B26] bg-[#FAF8F4]/30"
+                            onKeyDown={(e) => {
+                              if (e.key === "Enter") {
+                                e.preventDefault();
+                                const val = e.currentTarget.value.trim();
+                                if (val) {
+                                  if (!availableStyles.includes(val)) {
+                                    setAvailableStyles([...availableStyles, val]);
+                                  }
+                                  if (!selectedStyles.includes(val)) {
+                                    setSelectedStyles([...selectedStyles, val]);
+                                  }
+                                  e.currentTarget.value = "";
+                                }
+                              }
+                            }}
+                          />
+                          <button
+                            type="button"
+                            onClick={(e) => {
+                              const input = e.currentTarget.previousElementSibling as HTMLInputElement;
+                              const val = input.value.trim();
+                              if (val) {
+                                if (!availableStyles.includes(val)) {
+                                  setAvailableStyles([...availableStyles, val]);
+                                }
+                                if (!selectedStyles.includes(val)) {
+                                  setSelectedStyles([...selectedStyles, val]);
+                                }
+                                input.value = "";
+                              }
+                            }}
+                            className="bg-[#FF5B26] text-white px-2 py-1 text-[10px] font-bold rounded-lg cursor-pointer hover:bg-[#e04b1c]"
+                          >
+                            Add
+                          </button>
+                        </div>
                       </div>
                     </>
                   )}
@@ -714,7 +761,7 @@ export default function EditTripPage({ params }: EditTripPageProps) {
                   <select
                     value={form.difficulty}
                     onChange={(e) => setForm({ ...form, difficulty: e.target.value })}
-                    className="w-full px-3 py-2 border border-[#e7e1d5] rounded-xl focus:outline-none focus:border-[#FF5B26] bg-[#FAF8F4]/30 text-xs font-semibold min-h-[42px]"
+                    className="w-full px-3 py-2 border border-[#e7e1d5] rounded-xl focus:outline-none focus:border-[#FF5B26] bg-[#FAF8F4]/30 text-xs font-semibold appearance-none bg-[url('data:image/svg+xml;charset=utf-8,%3Csvg%20xmlns%3D%22http%3A%2F%2Fwww.w3.org%2F2000%2Fsvg%22%20fill%3D%22none%22%20viewBox%3D%220%200%2024%2024%22%20stroke%3D%22%2523A1A1AA%22%20stroke-width%3D%222%22%3E%3Cpath%20stroke-linecap%3D%22round%22%20stroke-linejoin%3D%22round%22%20d%3D%22M19%209l-7%207-7-7%22%20%2F%3E%3C%2Fsvg%3E')] bg-[length:16px] bg-[right_12px_center] bg-no-repeat pr-10 min-h-[42px] transition-all"
                   >
                     <option value="Easy">Easy</option>
                     <option value="Moderate">Moderate</option>
@@ -753,8 +800,8 @@ export default function EditTripPage({ params }: EditTripPageProps) {
                   {bestForDropdownOpen && (
                     <>
                       <div className="fixed inset-0 z-10" onClick={() => setBestForDropdownOpen(false)} />
-                      <div className="absolute z-20 w-full mt-1 bg-white border border-[#e7e1d5] rounded-xl shadow-lg p-2 max-h-48 overflow-y-auto space-y-0.5">
-                        {AVAILABLE_BEST_FOR.map((option) => {
+                      <div className="absolute z-20 w-full mt-1 bg-white border border-[#e7e1d5] rounded-xl shadow-lg p-2 max-h-48 overflow-y-auto overflow-x-hidden space-y-0.5">
+                        {availableBestFor.map((option) => {
                           const isChecked = selectedBestFor.includes(option);
                           return (
                             <button
@@ -776,25 +823,82 @@ export default function EditTripPage({ params }: EditTripPageProps) {
                             </button>
                           );
                         })}
+                        <div className="p-1.5 border-t border-[#e7e1d5]/50 mt-1 flex items-center gap-1.5">
+                          <input
+                            type="text"
+                            placeholder="Add custom..."
+                            className="flex-grow min-w-0 px-2 py-1 text-xs font-semibold border border-[#e7e1d5] rounded-lg focus:outline-none focus:border-[#FF5B26] bg-[#FAF8F4]/30"
+                            onKeyDown={(e) => {
+                              if (e.key === "Enter") {
+                                e.preventDefault();
+                                const val = e.currentTarget.value.trim();
+                                if (val) {
+                                  if (!availableBestFor.includes(val)) {
+                                    setAvailableBestFor([...availableBestFor, val]);
+                                  }
+                                  if (!selectedBestFor.includes(val)) {
+                                    setSelectedBestFor([...selectedBestFor, val]);
+                                  }
+                                  e.currentTarget.value = "";
+                                }
+                              }
+                            }}
+                          />
+                          <button
+                            type="button"
+                            onClick={(e) => {
+                              const input = e.currentTarget.previousElementSibling as HTMLInputElement;
+                              const val = input.value.trim();
+                              if (val) {
+                                if (!availableBestFor.includes(val)) {
+                                  setAvailableBestFor([...availableBestFor, val]);
+                                }
+                                if (!selectedBestFor.includes(val)) {
+                                  setSelectedBestFor([...selectedBestFor, val]);
+                                }
+                                input.value = "";
+                              }
+                            }}
+                            className="bg-[#FF5B26] text-white px-2 py-1 text-[10px] font-bold rounded-lg cursor-pointer hover:bg-[#e04b1c]"
+                          >
+                            Add
+                          </button>
+                        </div>
                       </div>
                     </>
                   )}
                 </div>
 
                 {/* Age Group */}
-                <div>
-                  <label className="block text-[10px] font-bold text-nomichi-ink/50 uppercase tracking-wider mb-1.5">Age Group</label>
+                <div className="space-y-1.5">
+                  <label className="block text-[10px] font-bold text-nomichi-ink/50 uppercase tracking-wider">Age Group</label>
                   <select
-                    value={form.ageGroup}
-                    onChange={(e) => setForm({ ...form, ageGroup: e.target.value })}
-                    className="w-full px-3 py-2 border border-[#e7e1d5] rounded-xl focus:outline-none focus:border-[#FF5B26] bg-[#FAF8F4]/30 text-xs font-semibold min-h-[42px]"
+                    value={["18+", "18–35", "25–45", "40+", "All Ages"].includes(form.ageGroup) ? form.ageGroup : "custom"}
+                    onChange={(e) => {
+                      if (e.target.value === "custom") {
+                        setForm({ ...form, ageGroup: "" });
+                      } else {
+                        setForm({ ...form, ageGroup: e.target.value });
+                      }
+                    }}
+                    className="w-full px-3 py-2 border border-[#e7e1d5] rounded-xl focus:outline-none focus:border-[#FF5B26] bg-[#FAF8F4]/30 text-xs font-semibold appearance-none bg-[url('data:image/svg+xml;charset=utf-8,%3Csvg%20xmlns%3D%22http%3A%2F%2Fwww.w3.org%2F2000%2Fsvg%22%20fill%3D%22none%22%20viewBox%3D%220%200%2024%2024%22%20stroke%3D%22%2523A1A1AA%22%20stroke-width%3D%222%22%3E%3Cpath%20stroke-linecap%3D%22round%22%20stroke-linejoin%3D%22round%22%20d%3D%22M19%209l-7%207-7-7%22%20%2F%3E%3C%2Fsvg%3E')] bg-[length:16px] bg-[right_12px_center] bg-no-repeat pr-10 min-h-[42px] transition-all"
                   >
                     <option value="18+">18+</option>
                     <option value="18–35">18–35</option>
                     <option value="25–45">25–45</option>
                     <option value="40+">40+</option>
                     <option value="All Ages">All Ages</option>
+                    <option value="custom">+ Add Custom...</option>
                   </select>
+                  {!["18+", "18–35", "25–45", "40+", "All Ages"].includes(form.ageGroup) && (
+                    <input
+                      type="text"
+                      value={form.ageGroup}
+                      onChange={(e) => setForm({ ...form, ageGroup: e.target.value })}
+                      placeholder="Enter custom age group (e.g. 21–40)"
+                      className="w-full px-3 py-2 border border-[#e7e1d5] rounded-xl focus:outline-none focus:border-[#FF5B26] bg-[#FAF8F4]/30 text-xs font-semibold mt-1"
+                    />
+                  )}
                 </div>
               </div>
 
@@ -805,7 +909,7 @@ export default function EditTripPage({ params }: EditTripPageProps) {
                   <select
                     value={form.meals}
                     onChange={(e) => setForm({ ...form, meals: e.target.value })}
-                    className="w-full px-3 py-2 border border-[#e7e1d5] rounded-xl focus:outline-none focus:border-[#FF5B26] bg-[#FAF8F4]/30 text-xs font-semibold min-h-[42px]"
+                    className="w-full px-3 py-2 border border-[#e7e1d5] rounded-xl focus:outline-none focus:border-[#FF5B26] bg-[#FAF8F4]/30 text-xs font-semibold appearance-none bg-[url('data:image/svg+xml;charset=utf-8,%3Csvg%20xmlns%3D%22http%3A%2F%2Fwww.w3.org%2F2000%2Fsvg%22%20fill%3D%22none%22%20viewBox%3D%220%200%2024%2024%22%20stroke%3D%22%2523A1A1AA%22%20stroke-width%3D%222%22%3E%3Cpath%20stroke-linecap%3D%22round%22%20stroke-linejoin%3D%22round%22%20d%3D%22M19%209l-7%207-7-7%22%20%2F%3E%3C%2Fsvg%3E')] bg-[length:16px] bg-[right_12px_center] bg-no-repeat pr-10 min-h-[42px] transition-all"
                   >
                     <option value="Breakfast Only">Breakfast Only</option>
                     <option value="Breakfast + Dinner">Breakfast + Dinner</option>
@@ -814,18 +918,35 @@ export default function EditTripPage({ params }: EditTripPageProps) {
                   </select>
                 </div>
 
-                <div>
-                  <label className="block text-[10px] font-bold text-nomichi-ink/50 uppercase tracking-wider mb-1.5">Group Size</label>
+                {/* Group Size */}
+                <div className="space-y-1.5">
+                  <label className="block text-[10px] font-bold text-nomichi-ink/50 uppercase tracking-wider">Group Size</label>
                   <select
-                    value={form.groupSize}
-                    onChange={(e) => setForm({ ...form, groupSize: e.target.value })}
-                    className="w-full px-3 py-2 border border-[#e7e1d5] rounded-xl focus:outline-none focus:border-[#FF5B26] bg-[#FAF8F4]/30 text-xs font-semibold min-h-[42px]"
+                    value={["6–8", "8–12", "12–16", "16+"].includes(form.groupSize) ? form.groupSize : "custom"}
+                    onChange={(e) => {
+                      if (e.target.value === "custom") {
+                        setForm({ ...form, groupSize: "" });
+                      } else {
+                        setForm({ ...form, groupSize: e.target.value });
+                      }
+                    }}
+                    className="w-full px-3 py-2 border border-[#e7e1d5] rounded-xl focus:outline-none focus:border-[#FF5B26] bg-[#FAF8F4]/30 text-xs font-semibold appearance-none bg-[url('data:image/svg+xml;charset=utf-8,%3Csvg%20xmlns%3D%22http%3A%2F%2Fwww.w3.org%2F2000%2Fsvg%22%20fill%3D%22none%22%20viewBox%3D%220%200%2024%2024%22%20stroke%3D%22%2523A1A1AA%22%20stroke-width%3D%222%22%3E%3Cpath%20stroke-linecap%3D%22round%22%20stroke-linejoin%3D%22round%22%20d%3D%22M19%209l-7%207-7-7%22%20%2F%3E%3C%2Fsvg%3E')] bg-[length:16px] bg-[right_12px_center] bg-no-repeat pr-10 min-h-[42px] transition-all"
                   >
                     <option value="6–8">6–8</option>
                     <option value="8–12">8–12</option>
                     <option value="12–16">12–16</option>
                     <option value="16+">16+</option>
+                    <option value="custom">+ Add Custom...</option>
                   </select>
+                  {!["6–8", "8–12", "12–16", "16+"].includes(form.groupSize) && (
+                    <input
+                      type="text"
+                      value={form.groupSize}
+                      onChange={(e) => setForm({ ...form, groupSize: e.target.value })}
+                      placeholder="Enter custom group size (e.g. 10–14)"
+                      className="w-full px-3 py-2 border border-[#e7e1d5] rounded-xl focus:outline-none focus:border-[#FF5B26] bg-[#FAF8F4]/30 text-xs font-semibold mt-1"
+                    />
+                  )}
                 </div>
 
                 <div>

@@ -31,6 +31,7 @@ import {
   BellOff,
   Lock,
   ArrowLeft,
+  Heart,
 } from "lucide-react";
 import { createClient } from "@/lib/supabase/client";
 
@@ -675,7 +676,7 @@ export default function SettingsView({ user, onBack }: SettingsViewProps) {
               {/* Credits */}
               <div className="bg-gradient-to-br from-[#FFECE5] to-[#FFF6F4] rounded-3xl border border-[#FF5B26]/10 p-6 text-center">
                 <p className="text-xs font-bold text-[#FF5B26]/80 leading-relaxed">
-                  Made with ❤️ by the Nomachi Team
+                  Made with <Heart className="w-3.5 h-3.5 text-[#FF5B26] fill-[#FF5B26] inline-block align-middle mx-0.5" /> by the Nomachi Team
                 </p>
                 <p className="text-[10px] text-nomichi-ink/40 font-semibold mt-1.5">
                   © {new Date().getFullYear()} Nomachi Travel Pvt. Ltd. All rights reserved.

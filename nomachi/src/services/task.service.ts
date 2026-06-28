@@ -66,18 +66,19 @@ export function getLeadAssignmentTasks(
 
 export const taskService = {
   /**
-   * Sequential 7-step workflow engine.
+   * Sequential 8-step workflow engine.
    *
    * Step 1: Contact Traveller          → auto-created on assignment
    * Step 2: Schedule Vibe Check        → after Step 1
    * Step 3: Conduct Vibe Check         → after Step 2 (replaces brochure — meeting happens first)
    * Step 4: Share Brochure             → after Step 3 (qualified) — curated itinerary post-discussion
-   * Step 5: Payment Follow-up          → after Step 4
-   * Step 6: Collect Documents          → after Step 5 (paid)
-   * Step 7: Confirm Booking            → after Step 6
+   * Step 5: Request Documents          → after Step 4
+   * Step 6: Verify Submitted Documents → after Step 5 + traveler upload
+   * Step 7: Payment Follow-up          → after Step 6
+   * Step 8: Confirm Booking            → after Step 7
    *
    * Internal status flow:
-   *   new → contacted → negotiating (vibe done) → qualified (itinerary shared) → converted → confirmed
+   *   new → contacted → negotiating (vibe done) → qualified (itinerary shared) → documents_submitted → converted → confirmed
    *
    * User-visible stages:
    *   Enquiry Submitted → Trip Expert Assigned → Vibe Check Completed → Itinerary Shared → Booking Confirmed
@@ -97,7 +98,14 @@ export const taskService = {
       .eq("source_kind", "lead")
       .eq("source_id", leadId);
 
+    const { data: travelerDocuments } = await supabase
+      .from("traveler_documents")
+      .select("id")
+      .eq("lead_id", leadId)
+      .limit(1);
+
     const existingTasks: DBTask[] = tasks || [];
+    const hasTravelerDocuments = (travelerDocuments || []).length > 0;
     const getTaskByStep = (step: number) => existingTasks.find((t) => t.step === step);
     const isStepComplete = (step: number) => {
       const t = getTaskByStep(step);
@@ -114,8 +122,8 @@ export const taskService = {
       dueDaysFromNow: number,
       subtasks: string[],
       customDueDate?: string
-    ) => {
-      if (doesStepExist(step)) return;
+    ): Promise<boolean> => {
+      if (doesStepExist(step)) return false;
       let dueDateStr = customDueDate;
       if (!dueDateStr) {
         const dueDate = new Date();
@@ -135,6 +143,8 @@ export const taskService = {
         subtasks: subtasks.map((st) => ({ title: st, completed: false })),
         step,
       }]);
+
+      return true;
     };
 
     const leadStatus = (lead.status || "new").toLowerCase();
@@ -186,9 +196,40 @@ export const taskService = {
       );
     }
 
-    // ── Step 5: Payment Follow-up — after Step 4 ──
+    // ── Step 5: Request Documents — after Step 4 ──
     if (isStepComplete(4) && ["negotiating", "qualified", "converted", "confirmed"].includes(leadStatus)) {
-      await createWorkflowTask(5,
+      const createdDocumentRequestTask = await createWorkflowTask(5,
+        "Request Documents",
+        `Request identity documents (ID, passport, visa requirements, etc.) from ${lead.name} so the traveler can submit them for verification.`,
+        "document", "Medium", 0,
+        ["Send document request to traveler", "Ask traveler to upload ID / passport copy", "Review the submitted documents", "Log verification details in system"]
+      );
+
+      if (createdDocumentRequestTask && lead.email) {
+        await notificationService.notifyTraveler(
+          lead.email,
+          "Document Required",
+          `Please upload your ID and travel documents for "${lead.trips?.title || "your trip"}" so we can verify your booking.`,
+          "Document Required",
+          lead.id,
+          "High"
+        );
+      }
+    }
+
+    // ── Step 6: Verify Submitted Documents — after Step 5 ──
+    if (isStepComplete(5) && ["documents_submitted", "negotiating", "qualified", "converted", "confirmed"].includes(leadStatus)) {
+      await createWorkflowTask(6,
+        "Verify Submitted Documents",
+        `Review the documents submitted by ${lead.name} and verify the traveler details before payment.`,
+        "document", "High", 0,
+        ["Open submitted documents", "Verify identity details", "Check file clarity and validity", "Record verification outcome"]
+      );
+    }
+
+    // ── Step 7: Payment Follow-up — after Step 6 ──
+    if (isStepComplete(6) && ["documents_submitted", "negotiating", "qualified", "converted", "confirmed"].includes(leadStatus)) {
+      await createWorkflowTask(7,
         "Payment Follow-up",
         `Follow up with ${lead.name} on payment. Share payment link and confirm deposit received.`,
         "payment", "High", 1,
@@ -196,9 +237,9 @@ export const taskService = {
       );
     }
 
-    // ── Step 6: Confirm Booking — after Step 5 (paid) ──
-    if (isStepComplete(5) && ["converted", "confirmed"].includes(leadStatus)) {
-      await createWorkflowTask(6,
+    // ── Step 8: Confirm Booking — after Step 7 (paid) ──
+    if (isStepComplete(7) && ["converted", "confirmed"].includes(leadStatus)) {
+      await createWorkflowTask(8,
         "Confirm Booking",
         `All tasks complete. Confirm the booking for ${lead.name} to finalize their trip registration.`,
         "booking", "High", 0,
@@ -247,6 +288,7 @@ export const taskService = {
       paymentStatus?: string; refId?: string; receiptAmt?: string;
       idDocRef?: string; departureId?: string;
       brochureMsg?: string;
+      docNotes?: string;
     }
   ): Promise<DBTask> {
     const { data, error } = await supabase
@@ -389,12 +431,13 @@ export const taskService = {
             // Create booking and traveler records immediately so traveler can view/pay balance
             try {
               const { data: leadData } = await supabase.from("leads")
-                .select("name, email, assigned_to, user_id, trip_id, phone")
+                .select("name, email, assigned_to, user_id, trip_id, phone, group_size")
                 .eq("id", task.source_id).single();
 
               if (leadData) {
                 let price = 0;
                 let departureId: string | null = null;
+                const groupSize = Number(leadData.group_size) || 1;
                 if (leadData.trip_id) {
                   const { data: trip } = await supabase.from("trips").select("price").eq("id", leadData.trip_id).single();
                   if (trip?.price) price = Number(trip.price);
@@ -415,11 +458,11 @@ export const taskService = {
                 // Decrement seats
                 if (departureId) {
                   const { data: depData } = await supabase.from("trip_departures").select("seats_left").eq("id", departureId).maybeSingle();
-                  if (depData?.seats_left != null) await supabase.from("trip_departures").update({ seats_left: Math.max(0, depData.seats_left - 1) }).eq("id", departureId);
+                  if (depData?.seats_left != null) await supabase.from("trip_departures").update({ seats_left: Math.max(0, depData.seats_left - groupSize) }).eq("id", departureId);
                 }
                 if (leadData.trip_id) {
                   const { data: tripData } = await supabase.from("trips").select("seats_left").eq("id", leadData.trip_id).maybeSingle();
-                  if (tripData?.seats_left != null) await supabase.from("trips").update({ seats_left: Math.max(0, tripData.seats_left - 1) }).eq("id", leadData.trip_id);
+                  if (tripData?.seats_left != null) await supabase.from("trips").update({ seats_left: Math.max(0, tripData.seats_left - groupSize) }).eq("id", leadData.trip_id);
                 }
                 await travelerService.createTraveler({
                   booking_id: booking.id, user_id: leadData.user_id,
@@ -454,8 +497,27 @@ export const taskService = {
             }
           }
 
-          // ── Step 5: Payment Follow-up ──
+          // ── Step 5: Request Documents ──
           else if (task.step === 5) {
+            await supabase.from("leads").update({ status: "documents_submitted" }).eq("id", task.source_id);
+            await supabase.from("lead_notes").insert({
+              lead_id: task.source_id,
+              content: `Document Request Sent:\n- Notes: ${options?.docNotes || "Please upload the required identity documents."}`,
+              created_by: task.assigned_to
+            });
+          }
+
+          // ── Step 6: Verify Submitted Documents ──
+          else if (task.step === 6) {
+            await supabase.from("lead_notes").insert({
+              lead_id: task.source_id,
+              content: `Submitted Documents Verified:\n- Verification Notes: ${options?.docNotes || "All submitted documents are verified."}`,
+              created_by: task.assigned_to
+            });
+          }
+
+          // ── Step 7: Payment Follow-up ──
+          else if (task.step === 7) {
             const paymentStatus = options?.paymentStatus || "paid";
             if (paymentStatus === "paid") {
               await supabase.from("leads").update({ status: "converted" }).eq("id", task.source_id);
@@ -476,7 +538,7 @@ export const taskService = {
                     "Your deposit payment has been received! Your booking is being processed.", "Booking Confirmed", task.source_id, "High");
                   if (leadData.assigned_to) {
                     await notificationService.notifyManager(leadData.assigned_to, "Booking Confirmed",
-                      `Payment received for "${leadData.name}". Proceed to document collection.`, "Booking Confirmed", task.source_id, "High");
+                      `Payment received for "${leadData.name}". Proceed to final confirmation.`, "Booking Confirmed", task.source_id, "High");
                   }
                 }
               } catch (err) {
@@ -490,8 +552,8 @@ export const taskService = {
             }
           }
 
-          // ── Step 6: Confirm Booking ──
-          else if (task.step === 6) {
+          // ── Step 8: Confirm Booking ──
+          else if (task.step === 8) {
             await supabase.from("leads").update({ status: "confirmed" }).eq("id", task.source_id);
             await supabase.from("lead_notes").insert({
               lead_id: task.source_id, content: `Booking Confirmed: All tasks completed. Booking officially confirmed.`, created_by: task.assigned_to

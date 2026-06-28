@@ -1,5 +1,6 @@
 import { useEffect, useState, useCallback } from "react";
 import { leadService } from "@/services/lead.service";
+import { createClient } from "@/lib/supabase/client";
 import { Lead, LeadNote } from "@/types/admin.types";
 
 export function useLead(id: string | null) {
@@ -23,7 +24,29 @@ export function useLead(id: string | null) {
 
   useEffect(() => {
     fetchLead();
-  }, [fetchLead]);
+
+    if (!id) return;
+    const supabase = createClient();
+    const channel = supabase
+      .channel(`realtime-lead-${id}`)
+      .on(
+        "postgres_changes",
+        {
+          event: "*",
+          schema: "public",
+          table: "leads",
+          filter: `id=eq.${id}`,
+        },
+        () => {
+          fetchLead();
+        }
+      )
+      .subscribe();
+
+    return () => {
+      supabase.removeChannel(channel);
+    };
+  }, [id, fetchLead]);
 
   const changeStatus = async (status: string) => {
     if (!id) return;

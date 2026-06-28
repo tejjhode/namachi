@@ -29,6 +29,8 @@ export interface Lead {
   group_type?: string;
   hope_trip_feels_like?: string;
   dietary_and_accessibility?: string;
+  budget_preference?: string;
+  preferred_duration?: string;
   trips?: {
     title: string;
   };
@@ -76,6 +78,28 @@ export function AdminDataProvider({ children }: { children: React.ReactNode }) {
 
   useEffect(() => {
     fetchData();
+
+    const channel = supabase
+      .channel("admin-context-sync")
+      .on(
+        "postgres_changes",
+        { event: "*", schema: "public", table: "leads" },
+        () => {
+          fetchData();
+        }
+      )
+      .on(
+        "postgres_changes",
+        { event: "*", schema: "public", table: "trips" },
+        () => {
+          fetchData();
+        }
+      )
+      .subscribe();
+
+    return () => {
+      supabase.removeChannel(channel);
+    };
   }, []);
 
   return (

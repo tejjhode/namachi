@@ -61,6 +61,8 @@ export interface Lead {
   group_type?: string;
   hope_trip_feels_like?: string;
   dietary_and_accessibility?: string;
+  budget_preference?: string;
+  preferred_duration?: string;
   profiles?: {
     id: string;
     full_name: string;

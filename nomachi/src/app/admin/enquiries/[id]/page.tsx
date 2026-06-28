@@ -59,6 +59,12 @@ export default function EnquiryDetailPage({ params }: EnquiryDetailPageProps) {
   const [selectedManagerId, setSelectedManagerId] = useState("");
   const [isSubmittingPromotion, setIsSubmittingPromotion] = useState(false);
   const [isSubmittingClose, setIsSubmittingClose] = useState(false);
+  const [isFollowUpModalOpen, setIsFollowUpModalOpen] = useState(false);
+  const [followUpDate, setFollowUpDate] = useState("");
+  const [followUpTime, setFollowUpTime] = useState("");
+  const [followUpNotes, setFollowUpNotes] = useState("");
+  const [followUpPriority, setFollowUpPriority] = useState("Medium");
+  const [schedulingFollowUp, setSchedulingFollowUp] = useState(false);
 
   useEffect(() => {
     const supabase = createClient();
@@ -74,8 +80,57 @@ export default function EnquiryDetailPage({ params }: EnquiryDetailPageProps) {
 
   const usersById = useMemo(() => new Map(users.map((user) => [user.id, user])), [users]);
   const activityNotes = lead?.lead_notes || [];
-  const isTripActive = (lead?.trips?.status || "").toLowerCase() === "active";
+  const isTripActive = (lead?.trips?.status || "").toLowerCase() === "active" || (lead?.trips?.status || "").toLowerCase() === "open for enquiries" || (lead?.trips?.status || "").toLowerCase() === "published";
   const tripStatusLabel = lead?.trips?.status || "Draft";
+
+  const handleScheduleFollowUp = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!lead || !followUpDate || !followUpTime) return;
+
+    try {
+      setSchedulingFollowUp(true);
+      const combinedDateTime = `${followUpDate}T${followUpTime}:00`;
+      
+      await taskService.createTask({
+        title: `Follow-up with ${lead.name}`,
+        description: followUpNotes || `Call traveler to discuss enquiry for ${lead.trips?.title || lead.trip_interest || "trip"}.`,
+        source_kind: "lead",
+        source_id: lead.id,
+        type: "communication",
+        priority: followUpPriority,
+        due_date: new Date(combinedDateTime).toISOString(),
+        status: "pending",
+        assigned_to: lead.assigned_to || currentUser?.id || null,
+        subtasks: [
+          { title: `Call ${lead.name} at ${new Date(combinedDateTime).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}`, completed: false },
+          { title: `Discuss ${lead.trips?.title || "selected trip"}`, completed: false },
+          { title: `Log requirements in lead detail`, completed: false }
+        ]
+      });
+
+      const dateFormatted = new Date(combinedDateTime).toLocaleString("en-GB", {
+        day: "numeric",
+        month: "short",
+        year: "numeric",
+        hour: "2-digit",
+        minute: "2-digit"
+      });
+      await addNote(`Follow-up scheduled for: ${dateFormatted}. Note: ${followUpNotes || "No notes"}`, currentUser?.id);
+      
+      setIsFollowUpModalOpen(false);
+      setFollowUpDate("");
+      setFollowUpTime("");
+      setFollowUpNotes("");
+      await refresh();
+      alert("Follow-up task successfully scheduled!");
+    } catch (err: any) {
+      console.error("Failed to schedule follow-up:", err.message);
+      alert("Error scheduling follow-up: " + err.message);
+    } finally {
+      setSchedulingFollowUp(false);
+    }
+  };
+
 
   const handleStatusChange = async (e: React.ChangeEvent<HTMLSelectElement>) => {
     try {
@@ -331,44 +386,38 @@ export default function EnquiryDetailPage({ params }: EnquiryDetailPageProps) {
                   <Calendar className="w-5 h-5" />
                 </div>
                 <div className="space-y-1">
-                  <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wide block">Preferred Travel Dates</span>
-                  <span className="font-bold text-slate-800">
-                    {lead.trips?.start_date
-                      ? `${new Date(lead.trips.start_date).toLocaleDateString("en-IN", { day: "numeric", month: "short", year: "numeric" })} - ${lead.trips?.end_date ? new Date(lead.trips.end_date).toLocaleDateString("en-IN", { day: "numeric", month: "short", year: "numeric" }) : ""}`
-                      : "24 Jun 2026 - 26 Jun 2026"}
-                  </span>
-                </div>
-              </div>
-
-              <div className="flex gap-3.5 items-start text-left">
-                <div className="w-9 h-9 rounded-xl bg-[#FFEFEA] flex items-center justify-center shrink-0 text-[#FF5B26]">
-                  <Calendar className="w-5 h-5" />
-                </div>
-                <div className="space-y-1">
                   <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wide block">Preferred Month</span>
-                  <span className="font-bold text-slate-800">{lead.preferred_month || "July 2026"}</span>
+                  <span className="font-bold text-slate-800">{lead.preferred_month || "Not specified"}</span>
                 </div>
               </div>
 
               <div className="flex gap-3.5 items-start text-left">
                 <div className="w-9 h-9 rounded-xl bg-[#FFEFEA] flex items-center justify-center shrink-0 text-[#FF5B26]">
-                  <Heart className="w-5 h-5" />
+                  <Clock3 className="w-5 h-5" />
                 </div>
                 <div className="space-y-1">
-                  <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wide block">Hope this trip feels like</span>
-                  <p className="font-semibold text-slate-700 leading-relaxed max-w-sm">
-                    {lead.hope_trip_feels_like || "A peaceful escape into nature with close wildlife sightings and memorable experiences."}
-                  </p>
+                  <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wide block">Preferred Duration</span>
+                  <span className="font-bold text-slate-800">{lead.preferred_duration || "Not specified"}</span>
                 </div>
               </div>
 
               <div className="flex gap-3.5 items-start text-left">
                 <div className="w-9 h-9 rounded-xl bg-[#FFEFEA] flex items-center justify-center shrink-0 text-[#FF5B26]">
-                  <Star className="w-5 h-5" />
+                  <Wallet className="w-5 h-5" />
                 </div>
                 <div className="space-y-1">
-                  <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wide block">How should this trip feel like?</span>
-                  <span className="font-bold text-slate-800">Relaxing, Nature-filled, Adventurous</span>
+                  <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wide block">Budget Preference</span>
+                  <span className="font-bold text-slate-800">{lead.budget_preference || "Not specified"}</span>
+                </div>
+              </div>
+
+              <div className="flex gap-3.5 items-start text-left">
+                <div className="w-9 h-9 rounded-xl bg-[#FFEFEA] flex items-center justify-center shrink-0 text-[#FF5B26]">
+                  <Users className="w-5 h-5" />
+                </div>
+                <div className="space-y-1">
+                  <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wide block">Travel Style (Group Type)</span>
+                  <span className="font-bold text-slate-800 capitalize">{lead.group_type || "Not specified"}</span>
                 </div>
               </div>
 
@@ -378,91 +427,46 @@ export default function EnquiryDetailPage({ params }: EnquiryDetailPageProps) {
                 </div>
                 <div className="space-y-1">
                   <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wide block">Dietary & Accessibility</span>
-                  <span className="font-bold text-slate-800">{lead.dietary_and_accessibility || "Vegetarian, No accessibility requirements"}</span>
-                </div>
-              </div>
-
-              <div className="flex gap-3.5 items-start text-left">
-                <div className="w-9 h-9 rounded-xl bg-[#FFEFEA] flex items-center justify-center shrink-0 text-[#FF5B26]">
-                  <Wallet className="w-5 h-5" />
-                </div>
-                <div className="space-y-1">
-                  <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wide block">Budget (Approx.)</span>
-                  <span className="font-bold text-slate-800">
-                    {lead.trips?.price 
-                      ? `₹${Number(lead.trips.price).toLocaleString("en-IN")} - ₹${Math.round(Number(lead.trips.price) * 1.3).toLocaleString("en-IN")}`
-                      : "₹30,000 - ₹40,000"}
-                  </span>
-                </div>
-              </div>
-
-              <div className="flex gap-3.5 items-start text-left">
-                <div className="w-9 h-9 rounded-xl bg-[#FFEFEA] flex items-center justify-center shrink-0 text-[#FF5B26]">
-                  <Bed className="w-5 h-5" />
-                </div>
-                <div className="space-y-1">
-                  <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wide block">Accommodation Preference</span>
-                  <span className="font-bold text-slate-800">Mid-range, Comfortable</span>
-                </div>
-              </div>
-
-              <div className="flex gap-3.5 items-start text-left">
-                <div className="w-9 h-9 rounded-xl bg-[#FFEFEA] flex items-center justify-center shrink-0 text-[#FF5B26]">
-                  <Users className="w-5 h-5" />
-                </div>
-                <div className="space-y-1">
-                  <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wide block">Travel Style</span>
-                  <span className="font-bold text-slate-800 capitalize">{lead.group_type || "Family Trip"}</span>
-                </div>
-              </div>
-
-              <div className="flex gap-3.5 items-start text-left">
-                <div className="w-9 h-9 rounded-xl bg-[#FFEFEA] flex items-center justify-center shrink-0 text-[#FF5B26]">
-                  <Camera className="w-5 h-5" />
-                </div>
-                <div className="space-y-1">
-                  <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wide block">Activities Interest</span>
-                  <span className="font-bold text-slate-800">Wildlife Safari, Nature Walk, Photography</span>
+                  <span className="font-bold text-slate-800">{lead.dietary_and_accessibility || "None specified"}</span>
                 </div>
               </div>
 
               <div className="flex gap-3.5 items-start col-span-2 border-t border-slate-100 pt-4 text-left">
                 <div className="w-9 h-9 rounded-xl bg-[#FFEFEA] flex items-center justify-center shrink-0 text-[#FF5B26]">
-                  <MessageSquare className="w-5 h-5" />
+                  <Heart className="w-5 h-5" />
                 </div>
                 <div className="space-y-1">
-                  <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wide block">Special Requests</span>
-                  <span className="font-semibold text-slate-700">{lead.notes || "Need a good naturalist guide"}</span>
+                  <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wide block">Hope this trip feels like</span>
+                  <p className="font-semibold text-slate-700 leading-relaxed max-w-sm">
+                    {lead.hope_trip_feels_like || "Not specified"}
+                  </p>
                 </div>
               </div>
 
-            </div>
-          </div>
+              <div className="flex gap-3.5 items-start col-span-2 border-t border-slate-100 pt-4 text-left">
+                <div className="w-9 h-9 rounded-xl bg-[#FFEFEA] flex items-center justify-center shrink-0 text-[#FF5B26]">
+                  <Tag className="w-5 h-5" />
+                </div>
+                <div className="space-y-1">
+                  <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wide block">Referral Source (How they heard about us)</span>
+                  <span className="font-bold text-slate-855 capitalize">{lead.source || "Website Search"}</span>
+                </div>
+              </div>
 
-          {/* Additional Information Card */}
-          <div className="bg-white border border-[#e7e1d5]/40 rounded-[24px] p-6 shadow-sm space-y-4">
-            <h3 className="text-xs font-black text-nomichi-ink/45 uppercase tracking-widest border-b border-[#e7e1d5]/20 pb-2">Additional Information</h3>
-            <div className="grid grid-cols-2 md:grid-cols-5 gap-6 text-xs text-nomichi-ink text-left">
-              <div className="space-y-1">
-                <span className="text-[10px] font-bold text-[#FF5B26]/60 uppercase tracking-wide block">Destination Preference</span>
-                <span className="font-bold text-slate-800">{lead.trips?.destination || "Jungle, Wildlife, Nature"}</span>
-              </div>
-              <div className="space-y-1 border-l border-slate-100 pl-4">
-                <span className="text-[10px] font-bold text-[#FF5B26]/60 uppercase tracking-wide block">Time Flexibility</span>
-                <span className="font-bold text-slate-800">Flexible</span>
-              </div>
-              <div className="space-y-1 border-l border-slate-100 pl-4">
-                <span className="text-[10px] font-bold text-[#FF5B26]/60 uppercase tracking-wide block">Previous Travel Experience</span>
-                <span className="font-bold text-slate-800">Beginner</span>
-              </div>
-              <div className="space-y-1 border-l border-slate-100 pl-4">
-                <span className="text-[10px] font-bold text-[#FF5B26]/60 uppercase tracking-wide block">Any Health Conditions</span>
-                <span className="font-bold text-slate-800">None</span>
-              </div>
-              <div className="space-y-1 border-l border-slate-100 pl-4">
-                <span className="text-[10px] font-bold text-[#FF5B26]/60 uppercase tracking-wide block">Other Notes</span>
-                <span className="font-semibold text-slate-600">-</span>
-              </div>
+              {lead.message && (
+                <div className="flex gap-3.5 items-start col-span-2 border-t border-slate-100 pt-4 text-left">
+                  <div className="w-9 h-9 rounded-xl bg-[#FFEFEA] flex items-center justify-center shrink-0 text-[#FF5B26]">
+                    <MessageSquare className="w-5 h-5" />
+                  </div>
+                  <div className="space-y-1">
+                    <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wide block">Special Message</span>
+                    <p className="font-semibold text-slate-700 leading-relaxed max-w-lg">
+                      {lead.message}
+                    </p>
+                  </div>
+                </div>
+              )}
+
             </div>
           </div>
 
@@ -527,7 +531,7 @@ export default function EnquiryDetailPage({ params }: EnquiryDetailPageProps) {
                   <select
                     value={selectedManagerId}
                     onChange={(e) => setSelectedManagerId(e.target.value)}
-                    className="w-full appearance-none rounded-xl border border-slate-200 bg-[#FAF8F4]/30 px-3 py-2 text-xs font-bold text-slate-700 focus:border-[#FF5B26] focus:outline-none cursor-pointer"
+                    className="w-full appearance-none rounded-xl border border-slate-200 bg-[#FAF8F4]/30 px-3 py-2.5 text-xs font-bold text-slate-700 focus:border-[#FF5B26] focus:outline-none cursor-pointer bg-[url('data:image/svg+xml;charset=utf-8,%3Csvg%20xmlns%3D%22http%3A%2F%2Fwww.w3.org%2F2000%2Fsvg%22%20fill%3D%22none%22%20viewBox%3D%220%200%2024%2024%22%20stroke%3D%22%2523A1A1AA%22%20stroke-width%3D%222%22%3E%3Cpath%20stroke-linecap%3D%22round%22%20stroke-linejoin%3D%22round%22%20d%3D%22M19%209l-7%207-7-7%22%20%2F%3E%3C%2Fsvg%3E')] bg-[length:14px] bg-[right_12px_center] bg-no-repeat pr-10"
                   >
                     <option value="">Choose a manager</option>
                     {managers.map((mgr) => (
@@ -536,7 +540,6 @@ export default function EnquiryDetailPage({ params }: EnquiryDetailPageProps) {
                       </option>
                     ))}
                   </select>
-                  <ChevronDown className="pointer-events-none absolute right-3 top-1/2 w-3.5 h-3.5 -translate-y-1/2 text-slate-400" />
                 </div>
               </div>
               
@@ -560,20 +563,53 @@ export default function EnquiryDetailPage({ params }: EnquiryDetailPageProps) {
           <div className="bg-white border border-[#e7e1d5]/40 rounded-[24px] p-6 shadow-sm space-y-4">
             <h3 className="text-xs font-black text-nomichi-ink/45 uppercase tracking-widest border-b border-[#e7e1d5]/20 pb-2 text-left">Quick Actions</h3>
             <div className="grid grid-cols-2 gap-2.5 text-xs">
-              <button onClick={() => window.open(`tel:${lead.phone || ""}`)} className="h-10 bg-white hover:bg-slate-50 border border-slate-200 text-slate-700 font-bold rounded-xl flex items-center justify-center gap-1.5 cursor-pointer transition-all shadow-2xs border-0">
+              <button
+                onClick={() => {
+                  if (lead.phone) {
+                    window.open(`tel:${lead.phone}`);
+                  } else {
+                    alert("Traveller phone number not available.");
+                  }
+                }}
+                className="h-10 bg-white hover:bg-slate-50 border border-slate-200 text-slate-700 font-bold rounded-xl flex items-center justify-center gap-1.5 cursor-pointer transition-all shadow-2xs"
+              >
                 <Phone className="w-4 h-4 text-slate-400" /> Call Traveller
               </button>
-              <button onClick={() => window.open(`mailto:${lead.email}`)} className="h-10 bg-white hover:bg-slate-50 border border-slate-200 text-slate-700 font-bold rounded-xl flex items-center justify-center gap-1.5 cursor-pointer transition-all shadow-2xs border-0">
+              <button
+                onClick={() => {
+                  if (lead.email) {
+                    window.open(`mailto:${lead.email}`);
+                  } else {
+                    alert("Traveller email not available.");
+                  }
+                }}
+                className="h-10 bg-white hover:bg-slate-50 border border-slate-200 text-slate-700 font-bold rounded-xl flex items-center justify-center gap-1.5 cursor-pointer transition-all shadow-2xs"
+              >
                 <Mail className="w-4 h-4 text-slate-400" /> Send Email
               </button>
-              <button onClick={() => window.open(`https://wa.me/${(lead.phone || "").replace(/[^0-9]/g, '')}`)} className="h-10 bg-white hover:bg-slate-50 border border-slate-200 text-slate-700 font-bold rounded-xl flex items-center justify-center gap-1.5 cursor-pointer transition-all shadow-2xs border-0">
+              <button
+                onClick={() => {
+                  if (lead.phone) {
+                    window.open(`https://wa.me/${(lead.phone || "").replace(/[^0-9]/g, "")}`);
+                  } else {
+                    alert("Traveller phone number not available.");
+                  }
+                }}
+                className="h-10 bg-white hover:bg-slate-50 border border-slate-200 text-slate-700 font-bold rounded-xl flex items-center justify-center gap-1.5 cursor-pointer transition-all shadow-2xs"
+              >
                 <MessageSquare className="w-4 h-4 text-[#25D366] fill-current" /> Send WhatsApp
               </button>
-              <button onClick={() => document.getElementById("internal-notes-textarea")?.focus()} className="h-10 bg-white hover:bg-slate-50 border border-slate-200 text-slate-700 font-bold rounded-xl flex items-center justify-center gap-1.5 cursor-pointer transition-all shadow-2xs border-0">
+              <button
+                onClick={() => document.getElementById("internal-notes-textarea")?.focus()}
+                className="h-10 bg-white hover:bg-slate-50 border border-slate-200 text-slate-700 font-bold rounded-xl flex items-center justify-center gap-1.5 cursor-pointer transition-all shadow-2xs"
+              >
                 <FileText className="w-4 h-4 text-slate-400" /> Add Note
               </button>
-              <button onClick={() => alert("Schedule Follow-up calendar...")} className="h-10 bg-white hover:bg-slate-50 border border-slate-200 text-slate-700 font-bold rounded-xl flex items-center justify-center gap-1.5 cursor-pointer transition-all shadow-2xs col-span-2 border-0">
-                <Calendar className="w-4 h-4 text-slate-400" /> Schedule Follow-up
+              <button
+                onClick={() => setIsFollowUpModalOpen(true)}
+                className="h-10 bg-white hover:bg-slate-50 border border-slate-200 text-[#FF5B26] font-bold rounded-xl flex items-center justify-center gap-1.5 cursor-pointer transition-all shadow-2xs col-span-2"
+              >
+                <Calendar className="w-4 h-4 text-[#FF5B26]" /> Schedule Follow-up
               </button>
             </div>
           </div>
@@ -605,6 +641,91 @@ export default function EnquiryDetailPage({ params }: EnquiryDetailPageProps) {
 
         </div>
       </div>
+
+      {/* Schedule Follow-up Modal */}
+      {isFollowUpModalOpen && (
+        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
+          <div className="bg-white rounded-3xl border border-[#e7e1d5]/40 shadow-xl max-w-md w-full p-6 space-y-4 animate-in fade-in zoom-in-95 duration-200">
+            <div className="flex justify-between items-center border-b border-slate-100 pb-3">
+              <h3 className="text-sm font-black text-nomichi-ink uppercase tracking-wider">Schedule Follow-up</h3>
+              <button 
+                type="button" 
+                onClick={() => setIsFollowUpModalOpen(false)} 
+                className="text-slate-400 hover:text-slate-700 bg-transparent border-0 font-bold text-base cursor-pointer"
+              >
+                ✕
+              </button>
+            </div>
+            <form onSubmit={handleScheduleFollowUp} className="space-y-4 text-xs font-semibold text-slate-700">
+              <div className="grid grid-cols-2 gap-3">
+                <div className="space-y-1">
+                  <label className="text-[10px] font-bold text-slate-400 uppercase tracking-wide">Date *</label>
+                  <input
+                    type="date"
+                    required
+                    value={followUpDate}
+                    onChange={(e) => setFollowUpDate(e.target.value)}
+                    className="w-full px-3 py-2.5 border border-slate-200 rounded-xl focus:outline-none focus:border-[#FF5B26] bg-[#FAF8F4]/30"
+                  />
+                </div>
+                <div className="space-y-1">
+                  <label className="text-[10px] font-bold text-slate-400 uppercase tracking-wide">Time *</label>
+                  <input
+                    type="time"
+                    required
+                    value={followUpTime}
+                    onChange={(e) => setFollowUpTime(e.target.value)}
+                    className="w-full px-3 py-2.5 border border-slate-200 rounded-xl focus:outline-none focus:border-[#FF5B26] bg-[#FAF8F4]/30"
+                  />
+                </div>
+              </div>
+
+              <div className="space-y-1">
+                <label className="text-[10px] font-bold text-slate-400 uppercase tracking-wide">Priority</label>
+                <div className="relative">
+                  <select
+                    value={followUpPriority}
+                    onChange={(e) => setFollowUpPriority(e.target.value)}
+                    className="w-full appearance-none rounded-xl border border-slate-200 bg-[#FAF8F4]/30 px-3 py-2.5 text-xs font-bold text-slate-700 focus:border-[#FF5B26] focus:outline-none cursor-pointer bg-[url('data:image/svg+xml;charset=utf-8,%3Csvg%20xmlns%3D%22http%3A%2F%2Fwww.w3.org%2F2000%2Fsvg%22%20fill%3D%22none%22%20viewBox%3D%220%200%2024%2024%22%20stroke%3D%22%2523A1A1AA%22%20stroke-width%3D%222%22%3E%3Cpath%20stroke-linecap%3D%22round%22%20stroke-linejoin%3D%22round%22%20d%3D%22M19%209l-7%207-7-7%22%20%2F%3E%3C%2Fsvg%3E')] bg-[length:14px] bg-[right_12px_center] bg-no-repeat pr-10"
+                  >
+                    <option value="Low">Low</option>
+                    <option value="Medium">Medium</option>
+                    <option value="High">High</option>
+                  </select>
+                </div>
+              </div>
+
+              <div className="space-y-1">
+                <label className="text-[10px] font-bold text-slate-400 uppercase tracking-wide">Follow-up Notes / Description</label>
+                <textarea
+                  rows={3}
+                  value={followUpNotes}
+                  onChange={(e) => setFollowUpNotes(e.target.value)}
+                  placeholder="e.g., Discuss itinerary options, answer questions about hotels..."
+                  className="w-full px-3 py-2 border border-slate-200 rounded-xl focus:outline-none focus:border-[#FF5B26] bg-[#FAF8F4]/30 resize-none font-semibold"
+                />
+              </div>
+
+              <div className="flex gap-3 justify-end pt-2">
+                <button
+                  type="button"
+                  onClick={() => setIsFollowUpModalOpen(false)}
+                  className="px-4 py-2 border border-slate-200 text-slate-700 hover:bg-slate-50 font-bold rounded-xl cursor-pointer bg-white"
+                >
+                  Cancel
+                </button>
+                <button
+                  type="submit"
+                  disabled={schedulingFollowUp}
+                  className="px-5 py-2 bg-[#FF5B26] hover:bg-[#b04b1e] text-white font-bold rounded-xl cursor-pointer disabled:opacity-50 border-0"
+                >
+                  {schedulingFollowUp ? "Scheduling..." : "Schedule"}
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

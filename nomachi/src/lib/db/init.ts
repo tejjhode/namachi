@@ -81,7 +81,61 @@ const migrations = [
   CREATE INDEX IF NOT EXISTS idx_lead_notes_created_by ON public.lead_notes(created_by);
   CREATE INDEX IF NOT EXISTS idx_lead_notes_created_at ON public.lead_notes(created_at);`,
 
-  // 5. Create activities table
+  // 5. Create traveler documents table
+  `CREATE TABLE IF NOT EXISTS public.traveler_documents (
+    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    lead_id UUID NOT NULL REFERENCES public.leads(id) ON DELETE CASCADE,
+    user_id UUID NOT NULL REFERENCES public.profiles(id) ON DELETE CASCADE,
+    trip_id UUID REFERENCES public.trips(id) ON DELETE SET NULL,
+    traveler_index INTEGER NOT NULL DEFAULT 1,
+    full_name TEXT NOT NULL,
+    date_of_birth TEXT,
+    gender TEXT,
+    document_type TEXT,
+    document_number TEXT,
+    mobile_number TEXT,
+    email TEXT,
+    address TEXT,
+    emergency_contact_name TEXT,
+    emergency_contact_number TEXT,
+    file_name TEXT,
+    file_type TEXT,
+    file_data_url TEXT,
+    status TEXT DEFAULT 'submitted' CHECK (status IN ('submitted', 'reviewed', 'approved', 'rejected')),
+    created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
+    updated_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
+  );
+  CREATE INDEX IF NOT EXISTS idx_traveler_documents_lead_id ON public.traveler_documents(lead_id);
+  CREATE INDEX IF NOT EXISTS idx_traveler_documents_user_id ON public.traveler_documents(user_id);
+  CREATE INDEX IF NOT EXISTS idx_traveler_documents_trip_id ON public.traveler_documents(trip_id);
+  CREATE INDEX IF NOT EXISTS idx_traveler_documents_created_at ON public.traveler_documents(created_at);
+  ALTER TABLE public.traveler_documents ENABLE ROW LEVEL SECURITY;
+  DROP POLICY IF EXISTS "traveler_documents_select_owner_or_manager" ON public.traveler_documents;
+  CREATE POLICY "traveler_documents_select_owner_or_manager" ON public.traveler_documents
+    FOR SELECT USING (
+      auth.uid() = user_id OR EXISTS (
+        SELECT 1 FROM public.profiles p
+        WHERE p.id = auth.uid() AND LOWER(p.role) IN ('manager', 'admin')
+      )
+    );
+  DROP POLICY IF EXISTS "traveler_documents_insert_owner" ON public.traveler_documents;
+  CREATE POLICY "traveler_documents_insert_owner" ON public.traveler_documents
+    FOR INSERT WITH CHECK (auth.uid() = user_id);
+  DROP POLICY IF EXISTS "traveler_documents_update_owner_or_manager" ON public.traveler_documents;
+  CREATE POLICY "traveler_documents_update_owner_or_manager" ON public.traveler_documents
+    FOR UPDATE USING (
+      auth.uid() = user_id OR EXISTS (
+        SELECT 1 FROM public.profiles p
+        WHERE p.id = auth.uid() AND LOWER(p.role) IN ('manager', 'admin')
+      )
+    ) WITH CHECK (
+      auth.uid() = user_id OR EXISTS (
+        SELECT 1 FROM public.profiles p
+        WHERE p.id = auth.uid() AND LOWER(p.role) IN ('manager', 'admin')
+      )
+    );`,
+
+  // 6. Create activities table
   `CREATE TABLE IF NOT EXISTS public.activities (
     id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
     entity_type TEXT NOT NULL CHECK (entity_type IN ('lead', 'trip', 'profile')),
@@ -97,17 +151,18 @@ const migrations = [
   CREATE INDEX IF NOT EXISTS idx_activities_action ON public.activities(action);
   CREATE INDEX IF NOT EXISTS idx_activities_created_at ON public.activities(created_at);`,
 
-  // 6. Enable RLS and create policies
+  // 7. Enable RLS and create policies
   `ALTER TABLE IF EXISTS public.profiles ENABLE ROW LEVEL SECURITY;
   ALTER TABLE IF EXISTS public.trips ENABLE ROW LEVEL SECURITY;
   ALTER TABLE IF EXISTS public.leads ENABLE ROW LEVEL SECURITY;
   ALTER TABLE IF EXISTS public.lead_notes ENABLE ROW LEVEL SECURITY;
+  ALTER TABLE IF EXISTS public.traveler_documents ENABLE ROW LEVEL SECURITY;
   ALTER TABLE IF EXISTS public.activities ENABLE ROW LEVEL SECURITY;
   
   DROP POLICY IF EXISTS "Allow all profiles read" ON public.profiles;
   CREATE POLICY "Allow all profiles read" ON public.profiles FOR SELECT USING (true);`,
 
-  // 7. Create trigger for new user signup
+  // 8. Create trigger for new user signup
   `CREATE OR REPLACE FUNCTION public.handle_new_user()
   RETURNS TRIGGER AS $$
   BEGIN
@@ -129,7 +184,7 @@ const migrations = [
     AFTER INSERT ON auth.users
     FOR EACH ROW EXECUTE FUNCTION public.handle_new_user();`,
 
-  // 8. Sync existing auth users to profiles
+  // 9. Sync existing auth users to profiles
   `INSERT INTO public.profiles (id, email, full_name, avatar_url, phone, role, is_active)
   SELECT 
     id,
@@ -146,7 +201,7 @@ const migrations = [
     avatar_url = EXCLUDED.avatar_url,
     phone = EXCLUDED.phone;`,
 
-  // 9. Create chat_messages table (encrypted real-time chat)
+  // 10. Create chat_messages table (encrypted real-time chat)
   `CREATE TABLE IF NOT EXISTS public.chat_messages (
     id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
     lead_id UUID REFERENCES public.leads(id) ON DELETE CASCADE,
@@ -179,17 +234,6 @@ export async function initializeDatabase() {
   try {
     console.log("🗄️  Initializing database schema...");
 
-    // Quick check: if profiles table exists, we don't need to re-run DDL migrations
-    const { error: checkError } = await supabase
-      .from("profiles")
-      .select("id")
-      .limit(1);
-
-    if (!checkError) {
-      console.log("✅ Database schema already initialized (profiles table exists).");
-      return true;
-    }
-
     for (let i = 0; i < migrations.length; i++) {
       try {
         await supabase.rpc("exec_sql", { query_text: migrations[i] });
@@ -202,6 +246,14 @@ export async function initializeDatabase() {
           console.warn(`⚠ Migration ${i + 1}/${migrations.length} warning:`, error.message);
         }
       }
+    }
+
+    // Reload schema cache so PostgREST immediately notices new tables/changes
+    try {
+      await supabase.rpc("exec_sql", { query_text: "NOTIFY pgrst, 'reload schema';" });
+      console.log("✓ Reloaded PostgREST schema cache");
+    } catch (reloadErr: any) {
+      console.warn("⚠ PostgREST schema cache reload warning:", reloadErr.message);
     }
 
     console.log("✅ Database initialization complete!");

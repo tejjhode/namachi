@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect, useRef } from "react";
+import { useState, useEffect, useRef, useCallback } from "react";
 import { useRouter } from "next/navigation";
 import { 
   Home, 
@@ -64,7 +64,10 @@ import {
   Smile,
   FileText,
   Check,
-  Loader2
+  Loader2,
+  AlertTriangle,
+  Trash2,
+  Upload
 } from "lucide-react";
 import { createClient } from "@/lib/supabase/client";
 import { notificationService, Notification } from "@/services/notification.service";
@@ -182,6 +185,24 @@ const parseDepartureStatus = (value?: string | null) => {
     // fall through
   }
   return { status: value, code: "—", leader: "Unassigned", meeting: "—", notes: "" };
+};
+
+const getVibeCheckMeetingDetails = (notes?: any[]) => {
+  if (!notes || !Array.isArray(notes)) return null;
+  const vibeNote = notes.find(n => n.content && n.content.includes("Schedule Vibe Check:"));
+  if (!vibeNote) return null;
+  
+  const content = vibeNote.content;
+  let timeStr = "";
+  let linkStr = "";
+  
+  const timeMatch = content.match(/Scheduled on ([^—]+)/i);
+  if (timeMatch) timeStr = timeMatch[1].trim();
+  
+  const linkMatch = content.match(/Link:\s*(https?:\/\/[^\s]+)/i);
+  if (linkMatch) linkStr = linkMatch[1].trim();
+  
+  return { timeStr, linkStr };
 };
 
 const formatDate = (value?: string | null) => {
@@ -342,6 +363,255 @@ export function DashboardView({ user, leads = [], trips = [], initialChatMessage
   // Invoice Modal State
   const [invoiceModalBooking, setInvoiceModalBooking] = useState<any | null>(null);
 
+  // Traveler documents state hooks
+  const [submittedDocuments, setSubmittedDocuments] = useState<any[]>([]);
+  const [documentsLoading, setDocumentsLoading] = useState(false);
+  const [documentsSaving, setDocumentsSaving] = useState(false);
+  const [documentsMessage, setDocumentsMessage] = useState("");
+  const [documentRows, setDocumentRows] = useState<any[]>([
+    {
+      local_id: "row-0",
+      full_name: "",
+      date_of_birth: "",
+      gender: "",
+      email: "",
+      mobile_number: "",
+      document_type: "",
+      document_number: "",
+      address: "",
+      emergency_contact_name: "",
+      emergency_contact_number: "",
+      file_name: "",
+      file_type: "",
+      file_data_url: ""
+    }
+  ]);
+
+  const addDocumentRow = () => {
+    setDocumentRows(prev => [
+      ...prev,
+      {
+        local_id: `row-${Date.now()}-${Math.random()}`,
+        full_name: "",
+        date_of_birth: "",
+        gender: "",
+        email: "",
+        mobile_number: "",
+        document_type: "",
+        document_number: "",
+        address: "",
+        emergency_contact_name: "",
+        emergency_contact_number: "",
+        file_name: "",
+        file_type: "",
+        file_data_url: ""
+      }
+    ]);
+  };
+
+  const removeDocumentRow = (localId: string) => {
+    setDocumentRows(prev => prev.filter(r => r.local_id !== localId));
+  };
+
+  const updateDocumentRow = (localId: string, field: string, value: any) => {
+    setDocumentRows(prev => prev.map(r => r.local_id === localId ? { ...r, [field]: value } : r));
+  };
+
+  const handleDocumentFileChange = async (localId: string, event: React.ChangeEvent<HTMLInputElement>) => {
+    const file = event.target.files?.[0];
+    if (!file) return;
+
+    if (file.size > 5 * 1024 * 1024) {
+      alert("File size exceeds the 5MB limit.");
+      return;
+    }
+
+    const reader = new FileReader();
+    reader.onload = () => {
+      updateDocumentRow(localId, "file_name", file.name);
+      updateDocumentRow(localId, "file_type", file.type);
+      updateDocumentRow(localId, "file_data_url", reader.result as string);
+    };
+    reader.readAsDataURL(file);
+  };
+
+  const fetchSubmittedDocuments = useCallback(async (leadId: string) => {
+    try {
+      setDocumentsLoading(true);
+      const supabaseClient = createClient();
+      const { data, error } = await supabaseClient
+        .from("traveler_documents")
+        .select("*")
+        .eq("lead_id", leadId)
+        .order("traveler_index", { ascending: true });
+      if (error) throw error;
+      setSubmittedDocuments(data || []);
+      
+      if (data && data.length > 0) {
+        setDocumentRows(data.map((d: any, idx: number) => ({
+          local_id: `row-${idx}`,
+          full_name: d.full_name || "",
+          date_of_birth: d.date_of_birth || "",
+          gender: d.gender || "",
+          email: d.email || "",
+          mobile_number: d.mobile_number || "",
+          document_type: d.document_type || "",
+          document_number: d.document_number || "",
+          address: d.address || "",
+          emergency_contact_name: d.emergency_contact_name || "",
+          emergency_contact_number: d.emergency_contact_number || "",
+          file_name: d.file_name || "",
+          file_type: d.file_type || "",
+          file_data_url: d.file_data_url || ""
+        })));
+      }
+    } catch (err: any) {
+      console.error("Failed to load traveler documents:", err.message);
+    } finally {
+      setDocumentsLoading(false);
+    }
+  }, []);
+
+  const handleSaveDocuments = async () => {
+    if (!selectedLead) return;
+    
+    // Check validation of required fields
+    for (let i = 0; i < documentRows.length; i++) {
+      const row = documentRows[i];
+      if (!row.full_name.trim()) {
+        alert(`Please enter traveler ${i + 1}'s full name.`);
+        return;
+      }
+      if (!row.gender) {
+        alert(`Please select traveler ${i + 1}'s gender.`);
+        return;
+      }
+      if (i === 0 && !row.email.trim()) {
+        alert("Please enter the primary traveler's email.");
+        return;
+      }
+      if (i === 0 && !row.mobile_number.trim()) {
+        alert("Please enter the primary traveler's mobile number.");
+        return;
+      }
+      if (!row.document_type) {
+        alert(`Please select traveler ${i + 1}'s ID Proof Type.`);
+        return;
+      }
+      if (!row.document_number.trim()) {
+        alert(`Please enter traveler ${i + 1}'s ID Number.`);
+        return;
+      }
+    }
+
+    try {
+      setDocumentsSaving(true);
+      setDocumentsMessage("");
+      const supabaseClient = createClient();
+      const authUserRes = await supabaseClient.auth.getUser();
+      const currentUserId = authUserRes.data.user?.id;
+      if (!currentUserId) throw new Error("No authenticated user session.");
+
+      // First delete existing records for this lead
+      const { error: deleteError } = await supabaseClient
+        .from("traveler_documents")
+        .delete()
+        .eq("lead_id", selectedLead.id)
+        .eq("user_id", currentUserId);
+
+      if (deleteError) throw deleteError;
+
+      // Insert new rows
+      const payload = documentRows.map((row, idx) => ({
+        lead_id: selectedLead.id,
+        user_id: currentUserId,
+        trip_id: selectedLead.trip_id || null,
+        traveler_index: idx + 1,
+        full_name: row.full_name,
+        date_of_birth: row.date_of_birth || null,
+        gender: row.gender || null,
+        document_type: row.document_type || null,
+        document_number: row.document_number || null,
+        mobile_number: row.mobile_number || null,
+        email: row.email || null,
+        address: row.address || null,
+        emergency_contact_name: row.emergency_contact_name || null,
+        emergency_contact_number: row.emergency_contact_number || null,
+        file_name: row.file_name || null,
+        file_type: row.file_type || null,
+        file_data_url: row.file_data_url || null,
+        status: "submitted"
+      }));
+
+      const { data, error: insertError } = await supabaseClient
+        .from("traveler_documents")
+        .insert(payload)
+        .select("*");
+
+      if (insertError) throw insertError;
+
+      setSubmittedDocuments(data || []);
+      setDocumentsMessage("Traveler details and documents successfully submitted!");
+
+      // Update lead status to 'documents_submitted'
+      const { error: statusError } = await supabaseClient
+        .from("leads")
+        .update({ status: "documents_submitted" })
+        .eq("id", selectedLead.id);
+
+      if (statusError) throw statusError;
+
+      // Create activity log
+      await supabaseClient.from("activities").insert({
+        entity_type: "lead",
+        entity_id: selectedLead.id,
+        action: "document_submission",
+        description: `Traveler documents submitted for ${documentRows.length} travelers.`,
+        created_by: currentUserId
+      });
+
+      // Update workflow tasks
+      try {
+        const { data: leadTasks } = await supabaseClient
+          .from("tasks")
+          .select("id, step, status")
+          .eq("source_id", selectedLead.id)
+          .eq("step", 5)
+          .eq("status", "pending");
+
+        if (leadTasks && leadTasks.length > 0) {
+          // complete step 5 task
+          const { error: taskCompleteErr } = await supabaseClient
+            .from("tasks")
+            .update({ status: "completed" })
+            .eq("id", leadTasks[0].id);
+            
+          if (!taskCompleteErr) {
+            // Evaluates lead workflow next steps
+            const workflowRes = await fetch("/api/notifications/deliver", {
+              method: "POST",
+              headers: { "Content-Type": "application/json" },
+              body: JSON.stringify({
+                action: "evaluate_workflow",
+                leadId: selectedLead.id
+              })
+            });
+            if (!workflowRes.ok) console.error("Evaluate workflow API returned error status:", workflowRes.status);
+          }
+        }
+      } catch (taskErr) {
+        console.error("Failed to advance manager workflow steps:", taskErr);
+      }
+
+      alert("Documents submitted successfully!");
+    } catch (err: any) {
+      console.error("Failed to submit documents:", err);
+      alert("Failed to submit documents: " + err.message);
+    } finally {
+      setDocumentsSaving(false);
+    }
+  };
+
   const openPaymentModal = (booking: any) => {
     setPaymentModalBooking(booking);
     setPaymentStep("method");
@@ -369,7 +639,12 @@ export function DashboardView({ user, leads = [], trips = [], initialChatMessage
       const completedPayments = (paymentModalBooking.payments || [])
         .filter((p: any) => p.status === "completed")
         .reduce((sum: number, p: any) => sum + Number(p.amount), 0);
-      const pendingAmount = Math.max(0, Number(paymentModalBooking.price || 0) - completedPayments);
+      const travelerCount = paymentModalBooking.leads?.traveler_documents?.length 
+        || Number(paymentModalBooking.leads?.group_size) 
+        || paymentModalBooking.travelers?.length 
+        || 1;
+      const totalBookingPrice = Number(paymentModalBooking.price || 0) * travelerCount;
+      const pendingAmount = Math.max(0, totalBookingPrice - completedPayments);
 
       const response = await fetch("/api/payments/complete", {
         method: "POST",
@@ -400,7 +675,7 @@ export function DashboardView({ user, leads = [], trips = [], initialChatMessage
       const supabase = createClient();
       const { data, error } = await supabase
         .from("bookings")
-        .select("*, trips(*), profiles(*), travelers(*), payments(*), trip_departures(*)")
+        .select("*, trips(*), profiles(*), travelers(*), payments(*), trip_departures(*), leads(*, traveler_documents(*))")
         .eq("user_id", user.id)
         .order("created_at", { ascending: false });
 
@@ -1274,6 +1549,15 @@ export function DashboardView({ user, leads = [], trips = [], initialChatMessage
     }
   }, [activeEnquiryId, selectedLead]);
 
+  // Fetch traveler documents when active lead changes
+  useEffect(() => {
+    if (selectedLead) {
+      fetchSubmittedDocuments(selectedLead.id);
+    } else {
+      setSubmittedDocuments([]);
+    }
+  }, [selectedLead, fetchSubmittedDocuments]);
+
   // Fetch assigned Trip Expert profile
   useEffect(() => {
     async function fetchAssignedExpert() {
@@ -1472,9 +1756,19 @@ export function DashboardView({ user, leads = [], trips = [], initialChatMessage
     }
   };
 
+  const normalizeLeadStatus = (status: string) => (status || "").toLowerCase().trim().replace(/\s+/g, "_");
+
+  const formatFallbackStatusLabel = (status: string) => {
+    const cleaned = normalizeLeadStatus(status).replace(/_/g, " ").trim();
+    if (!cleaned) return "Pending";
+    return cleaned.replace(/\b\w/g, (char) => char.toUpperCase());
+  };
+
   // Helper: map DB status to Badge info
   const getStatusDetails = (status: string) => {
-    switch (status) {
+    const normalizedStatus = normalizeLeadStatus(status);
+
+    switch (normalizedStatus) {
       case "new":
         return {
           label: "New",
@@ -1482,6 +1776,7 @@ export function DashboardView({ user, leads = [], trips = [], initialChatMessage
           dotColor: "bg-blue-500"
         };
       case "contacted":
+      case "reviewed":
         return {
           label: "Contacted",
           bgColor: "bg-[#FFEFEA] text-[#FF5B26] border border-[#FF5B26]/10",
@@ -1500,7 +1795,24 @@ export function DashboardView({ user, leads = [], trips = [], initialChatMessage
           bgColor: "bg-amber-50 text-amber-700 border border-amber-200/50",
           dotColor: "bg-amber-500"
         };
+      case "documents_submitted":
+        return {
+          label: "Documents Submitted",
+          bgColor: "bg-cyan-50 text-cyan-700 border border-cyan-200/50",
+          dotColor: "bg-cyan-500"
+        };
       case "converted":
+        return {
+          label: "Payment Received",
+          bgColor: "bg-emerald-50 text-emerald-700 border border-emerald-200/50",
+          dotColor: "bg-emerald-500"
+        };
+      case "payment_received":
+        return {
+          label: "Payment Received",
+          bgColor: "bg-emerald-50 text-emerald-700 border border-emerald-200/50",
+          dotColor: "bg-emerald-500"
+        };
       case "confirmed":
         return {
           label: "Confirmed",
@@ -1509,11 +1821,17 @@ export function DashboardView({ user, leads = [], trips = [], initialChatMessage
         };
       case "lost":
       case "not_a_fit":
-      default:
+      case "closed":
         return {
           label: "Not a Fit",
           bgColor: "bg-zinc-100 text-zinc-700 border border-zinc-200/50",
           dotColor: "bg-zinc-500"
+        };
+      default:
+        return {
+          label: formatFallbackStatusLabel(status),
+          bgColor: "bg-slate-100 text-slate-700 border border-slate-200/50",
+          dotColor: "bg-slate-500"
         };
     }
   };
@@ -1736,30 +2054,29 @@ export function DashboardView({ user, leads = [], trips = [], initialChatMessage
   // Journeys list directly mapped from database (no dummy fallbacks)
   const displayAdventures = upcomingAdventures;
 
-  // 2. My Enquiries (leads where status is 'new', 'contacted', or 'qualified')
+  // 2. My Enquiries (directly mapped from database rows with trip details)
   const myEnquiries = leads
-    .filter(lead => (lead.status === 'new' || lead.status === 'contacted' || lead.status === 'qualified') && lead.trips)
+    .filter(lead => !!lead.trips)
     .map(lead => {
       const trip = lead.trips;
+      const statusObj = getStatusDetails(lead.status);
       
-      let statusLabel = "New";
-      let statusColor = "bg-blue-500";
-      
-      if (lead.status === "contacted") {
-        statusLabel = "Contacted";
-        statusColor = "bg-orange-500";
-      } else if (lead.status === "qualified") {
-        statusLabel = "Qualified";
-        statusColor = "bg-purple-500";
-      }
-
       return {
         id: lead.id,
+        trip,
         title: trip.title,
+        destination: trip.destination,
         dates: trip.start_date ? new Date(trip.start_date).toLocaleDateString("en-US", { day: 'numeric', month: 'short', year: 'numeric' }) : "Flexible Dates",
-        status: statusLabel,
-        statusColor: statusColor,
-        image: trip.image_url || "https://images.unsplash.com/photo-1469854523086-cc02fe5d8800?auto=format&fit=crop&w=150&q=80"
+        status: statusObj.label,
+        statusColor: statusObj.dotColor,
+        statusBgColor: statusObj.bgColor,
+        image: trip.image_url,
+        created_at: lead.created_at,
+        enquiry_id: lead.enquiry_id,
+        group_size: lead.group_size,
+        group_type: lead.group_type,
+        expertName: getExpertForLead(lead),
+        leadStatus: normalizeLeadStatus(lead.status),
       };
     });
 
@@ -2823,6 +3140,9 @@ export function DashboardView({ user, leads = [], trips = [], initialChatMessage
                         <option value="Contacted">Contacted</option>
                         <option value="Qualified">Qualified</option>
                         <option value="Vibe Check Sent">Vibe Check Sent</option>
+                        <option value="Documents Submitted">Documents Submitted</option>
+                        <option value="Payment Received">Payment Received</option>
+                        <option value="Confirmed">Confirmed</option>
                         <option value="Not a Fit">Not a Fit</option>
                       </select>
                       <ChevronDown className="w-4 h-4 text-nomichi-ink/40 absolute right-3 top-1/2 -translate-y-1/2 pointer-events-none" />
@@ -2910,8 +3230,8 @@ export function DashboardView({ user, leads = [], trips = [], initialChatMessage
               {/* Table / List Container */}
               {(() => {
                 // Filters calculations
-                const filtered = leads.filter((lead) => {
-                  const trip = lead.trips;
+                const filtered = displayEnquiries.filter((enquiry) => {
+                  const trip = enquiry.trip;
                   if (!trip) return false;
 
                   if (enquirySearch) {
@@ -2922,8 +3242,7 @@ export function DashboardView({ user, leads = [], trips = [], initialChatMessage
                   }
 
                   if (enquiryStatus !== "All Status") {
-                    const badgeDetails = getStatusDetails(lead.status);
-                    if (badgeDetails.label.toLowerCase() !== enquiryStatus.toLowerCase()) {
+                    if (enquiry.status.toLowerCase() !== enquiryStatus.toLowerCase()) {
                       return false;
                     }
                   }
@@ -2934,7 +3253,7 @@ export function DashboardView({ user, leads = [], trips = [], initialChatMessage
 
                   if (enquiryFromDate) {
                     const fromDate = new Date(enquiryFromDate);
-                    const leadDate = new Date(lead.created_at);
+                    const leadDate = new Date(enquiry.created_at);
                     fromDate.setHours(0, 0, 0, 0);
                     leadDate.setHours(0, 0, 0, 0);
                     if (leadDate < fromDate) return false;
@@ -2942,7 +3261,7 @@ export function DashboardView({ user, leads = [], trips = [], initialChatMessage
 
                   if (enquiryToDate) {
                     const toDate = new Date(enquiryToDate);
-                    const leadDate = new Date(lead.created_at);
+                    const leadDate = new Date(enquiry.created_at);
                     toDate.setHours(23, 59, 59, 999);
                     leadDate.setHours(0, 0, 0, 0);
                     if (leadDate > toDate) return false;
@@ -2978,25 +3297,30 @@ export function DashboardView({ user, leads = [], trips = [], initialChatMessage
 
                         {/* Table Body */}
                         <div className="divide-y divide-[#e7e1d5]/30">
-                          {paginated.map((lead) => {
-                            const trip = lead.trips;
+                          {paginated.map((enquiry) => {
+                            const trip = enquiry.trip;
                             if (!trip) return null;
-                            const statusObj = getStatusDetails(lead.status);
-                            const expertName = getExpertForLead(lead);
+                            const expertName = enquiry.expertName;
 
-                            const adultsStr = lead.group_size ? `${lead.group_size} ${lead.group_size === 1 ? 'Adult' : 'Adults'}` : '2 Adults';
-                            const typeStr = lead.group_type ? (lead.group_type.charAt(0).toUpperCase() + lead.group_type.slice(1)) : 'Couple';
+                            const adultsStr = enquiry.group_size ? `${enquiry.group_size} ${enquiry.group_size === 1 ? 'Adult' : 'Adults'}` : '2 Adults';
+                            const typeStr = enquiry.group_type ? (enquiry.group_type.charAt(0).toUpperCase() + enquiry.group_type.slice(1)) : 'Couple';
                             const groupDetails = `${adultsStr} • ${typeStr}`;
-                            const displayEnqId = lead.enquiry_id || `ENQ${lead.id ? String(lead.id).replace(/[^0-9]/g, '').slice(0, 5) || String(lead.id).slice(0, 5).toUpperCase() : '12345'}`;
+                            const displayEnqId = enquiry.enquiry_id || `ENQ${enquiry.id ? String(enquiry.id).replace(/[^0-9]/g, '').slice(0, 5) || String(enquiry.id).slice(0, 5).toUpperCase() : '12345'}`;
 
                             return (
-                              <div key={lead.id} className="grid grid-cols-12 gap-4 px-6 py-5 items-center hover:bg-[#FAF8F4]/30 transition-colors">
+                              <div key={enquiry.id} className="grid grid-cols-12 gap-4 px-6 py-5 items-center hover:bg-[#FAF8F4]/30 transition-colors">
                                 <div className="col-span-4 flex items-center gap-4">
-                                  <img 
-                                    src={trip.image_url || "https://images.unsplash.com/photo-1469854523086-cc02fe5d8800?auto=format&fit=crop&w=150&q=80"} 
-                                    alt={trip.title} 
-                                    className="w-16 h-16 rounded-xl object-cover shrink-0 border border-[#e7e1d5]/30"
-                                  />
+                                  {trip.image_url ? (
+                                    <img 
+                                      src={trip.image_url} 
+                                      alt={trip.title} 
+                                      className="w-16 h-16 rounded-xl object-cover shrink-0 border border-[#e7e1d5]/30"
+                                    />
+                                  ) : (
+                                    <div className="w-16 h-16 rounded-xl shrink-0 border border-dashed border-[#e7e1d5]/70 bg-gradient-to-br from-[#FFF6F0] to-[#F9F4EC] flex items-center justify-center text-[#FF5B26] font-black text-[11px]">
+                                      {trip.title?.split(" ").slice(0, 2).map((word: string) => word[0]).join("").toUpperCase() || "TR"}
+                                    </div>
+                                  )}
                                   <div className="space-y-1 min-w-0">
                                     <h4 className="font-display font-bold text-sm text-nomichi-ink truncate leading-tight">{trip.title}</h4>
                                     <div className="flex items-center gap-1 text-[11px] text-nomichi-ink/50 font-medium">
@@ -3017,21 +3341,21 @@ export function DashboardView({ user, leads = [], trips = [], initialChatMessage
                                 </div>
 
                                 <div className="col-span-2 space-y-2">
-                                  <div className={`inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-bold border ${statusObj.bgColor}`}>
-                                    <span className={`w-1.5 h-1.5 rounded-full ${statusObj.dotColor}`} />
-                                    {statusObj.label}
+                                  <div className={`inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-bold border ${enquiry.statusBgColor}`}>
+                                    <span className={`w-1.5 h-1.5 rounded-full ${enquiry.statusColor}`} />
+                                    {enquiry.status}
                                   </div>
                                   <span className="text-[11px] text-nomichi-ink/50 font-bold block pl-1">{expertName}</span>
                                 </div>
 
                                 <div className="col-span-2 space-y-1 min-w-0">
-                                  <span className="text-xs font-bold text-nomichi-ink block">{getRelativeTime(lead.created_at)}</span>
-                                  <span className="text-[11px] text-nomichi-ink/40 font-semibold block">{getAbsoluteDate(lead.created_at)}</span>
+                                  <span className="text-xs font-bold text-nomichi-ink block">{getRelativeTime(enquiry.created_at)}</span>
+                                  <span className="text-[11px] text-nomichi-ink/40 font-semibold block">{getAbsoluteDate(enquiry.created_at)}</span>
                                 </div>
 
                                 <div className="col-span-2 text-right">
                                   <button 
-                                    onClick={() => navigateToView("enquiry_detail", lead.id)}
+                                    onClick={() => navigateToView("enquiry_detail", enquiry.id)}
                                     className="inline-flex items-center justify-center border border-[#FF5B26]/30 hover:bg-[#FF5B26]/5 text-[#FF5B26] font-bold text-xs px-4 py-2.5 rounded-xl transition-all shadow-sm shrink-0 whitespace-nowrap active:scale-[0.97]"
                                   >
                                     View Details →
@@ -3046,26 +3370,31 @@ export function DashboardView({ user, leads = [], trips = [], initialChatMessage
 
                     {/* Mobile View Grid Cards */}
                     <div className="block md:hidden divide-y divide-[#e7e1d5]/30">
-                      {paginated.map((lead) => {
-                        const trip = lead.trips;
+                      {paginated.map((enquiry) => {
+                        const trip = enquiry.trip;
                         if (!trip) return null;
-                        const statusObj = getStatusDetails(lead.status);
-                        const expertName = getExpertForLead(lead);
+                        const expertName = enquiry.expertName;
 
-                        const adultsStr = lead.group_size ? `${lead.group_size} ${lead.group_size === 1 ? 'Adult' : 'Adults'}` : '2 Adults';
-                        const typeStr = lead.group_type ? (lead.group_type.charAt(0).toUpperCase() + lead.group_type.slice(1)) : 'Couple';
+                        const adultsStr = enquiry.group_size ? `${enquiry.group_size} ${enquiry.group_size === 1 ? 'Adult' : 'Adults'}` : '2 Adults';
+                        const typeStr = enquiry.group_type ? (enquiry.group_type.charAt(0).toUpperCase() + enquiry.group_type.slice(1)) : 'Couple';
                         const groupDetails = `${adultsStr} • ${typeStr}`;
-                        const displayEnqId = lead.enquiry_id || `ENQ${lead.id ? String(lead.id).replace(/[^0-9]/g, '').slice(0, 5) || String(lead.id).slice(0, 5).toUpperCase() : '12345'}`;
+                        const displayEnqId = enquiry.enquiry_id || `ENQ${enquiry.id ? String(enquiry.id).replace(/[^0-9]/g, '').slice(0, 5) || String(enquiry.id).slice(0, 5).toUpperCase() : '12345'}`;
 
                         return (
-                          <div key={lead.id} className="p-5 space-y-4 bg-white hover:bg-[#FAF8F4]/20 transition-colors text-left">
+                          <div key={enquiry.id} className="p-5 space-y-4 bg-white hover:bg-[#FAF8F4]/20 transition-colors text-left">
                             {/* Trip Info Header */}
                             <div className="flex items-center gap-3">
-                              <img 
-                                src={trip.image_url || "https://images.unsplash.com/photo-1469854523086-cc02fe5d8800?auto=format&fit=crop&w=150&q=80"} 
-                                alt={trip.title} 
-                                className="w-14 h-14 rounded-xl object-cover shrink-0 border border-[#e7e1d5]/35"
-                              />
+                              {trip.image_url ? (
+                                <img 
+                                  src={trip.image_url} 
+                                  alt={trip.title} 
+                                  className="w-14 h-14 rounded-xl object-cover shrink-0 border border-[#e7e1d5]/35"
+                                />
+                              ) : (
+                                <div className="w-14 h-14 rounded-xl shrink-0 border border-dashed border-[#e7e1d5]/70 bg-gradient-to-br from-[#FFF6F0] to-[#F9F4EC] flex items-center justify-center text-[#FF5B26] font-black text-[10px]">
+                                  {trip.title?.split(" ").slice(0, 2).map((word: string) => word[0]).join("").toUpperCase() || "TR"}
+                                </div>
+                              )}
                               <div className="space-y-0.5 min-w-0">
                                 <h4 className="font-display font-extrabold text-sm text-nomichi-ink leading-tight truncate">{trip.title}</h4>
                                 <div className="flex items-center gap-1 text-[10px] text-nomichi-ink/50 font-bold">
@@ -3088,9 +3417,9 @@ export function DashboardView({ user, leads = [], trips = [], initialChatMessage
                               <div>
                                 <span className="text-[9px] text-nomichi-ink/40 uppercase tracking-wide block">Status</span>
                                 <div className="flex flex-col items-start mt-0.5 gap-0.5">
-                                  <div className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[9px] font-extrabold border ${statusObj.bgColor}`}>
-                                    <span className={`w-1 h-1 rounded-full ${statusObj.dotColor}`} />
-                                    {statusObj.label}
+                                  <div className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[9px] font-extrabold border ${enquiry.statusBgColor}`}>
+                                    <span className={`w-1 h-1 rounded-full ${enquiry.statusColor}`} />
+                                    {enquiry.status}
                                   </div>
                                   <span className="text-[9px] text-nomichi-ink/40 font-bold pl-0.5">{expertName}</span>
                                 </div>
@@ -3101,13 +3430,13 @@ export function DashboardView({ user, leads = [], trips = [], initialChatMessage
                               </div>
                               <div>
                                 <span className="text-[9px] text-nomichi-ink/40 uppercase tracking-wide block">Last Updated</span>
-                                <span className="text-nomichi-ink font-extrabold block mt-0.5">{getRelativeTime(lead.created_at)}</span>
+                                <span className="text-nomichi-ink font-extrabold block mt-0.5">{getRelativeTime(enquiry.created_at)}</span>
                               </div>
                             </div>
 
                             {/* CTA Action button */}
                             <button 
-                              onClick={() => navigateToView("enquiry_detail", lead.id)}
+                              onClick={() => navigateToView("enquiry_detail", enquiry.id)}
                               className="w-full inline-flex items-center justify-center border border-[#FF5B26]/30 hover:bg-[#FF5B26]/5 text-[#FF5B26] font-bold text-xs py-3 rounded-xl transition-all shadow-xs active:scale-[0.98] cursor-pointer"
                             >
                               View Details →
@@ -3201,6 +3530,7 @@ export function DashboardView({ user, leads = [], trips = [], initialChatMessage
                 if (!trip) return null;
 
                 const statusObj = getStatusDetails(lead.status);
+                const vibeCheckDetails = getVibeCheckMeetingDetails(lead.lead_notes);
                 const expertName = getExpertForLead(lead);
 
                 // Enquiry ID representation
@@ -3217,12 +3547,13 @@ export function DashboardView({ user, leads = [], trips = [], initialChatMessage
                   ? `₹${(rawPrice * (lead.group_size || 2)).toLocaleString("en-IN")}` 
                   : "₹1,24,500";
 
-                // Timeline step configuration — 6 user-facing stages
+                // Timeline step configuration — 7 user-facing stages
                 const steps = [
                   { label: "Enquiry Submitted", statusKey: "new", icon: Check },
                   { label: "Trip Expert Assigned", statusKey: "contacted", icon: UserIcon },
                   { label: "Vibe Check Completed", statusKey: "negotiating", icon: Heart },
                   { label: "Itinerary Shared", statusKey: "qualified", icon: FileText },
+                  { label: "Documents Submission", statusKey: "documents_submitted", icon: FileText },
                   { label: "Payment Received", statusKey: "converted", icon: CreditCard },
                   { label: "Booking Confirmed", statusKey: "confirmed", icon: Calendar }
                 ];
@@ -3238,12 +3569,14 @@ export function DashboardView({ user, leads = [], trips = [], initialChatMessage
                   if (s === "negotiating" || s === "vibe_check_sent" || s === "vibe check sent") return 2;
                   // Stage 3: Itinerary Shared
                   if (s === "qualified") return 3;
-                  // Stage 4: Payment Received
-                  if (s === "converted") return 4;
-                  // Stage 5: Booking Confirmed
-                  if (s === "confirmed") return 5;
+                  // Stage 4: Documents Submission
+                  if (s === "documents_submitted" || s === "documents submitted") return 4;
+                  // Stage 5: Payment Received
+                  if (s === "converted") return 5;
+                  // Stage 6: Booking Confirmed
+                  if (s === "confirmed") return 6;
                   // Lost leads — show at last reached stage
-                  if (s === "lost" || s === "not_a_fit" || s === "closed") return 5;
+                  if (s === "lost" || s === "not_a_fit" || s === "closed") return 6;
                   return 0;
                 };
 
@@ -3375,7 +3708,7 @@ const firstName = lead.name ? lead.name.split(" ")[0] : "Traveler";
                         {/* Horizontal Line Completed Progress */}
                         <div 
                           className="absolute left-[10%] top-6 h-0.5 bg-emerald-500 transition-all duration-500 -z-0"
-                          style={{ width: `${(Math.min(currentStatusIdx, 5) / 5) * 80}%` }}
+                          style={{ width: `${(Math.min(currentStatusIdx, 6) / 6) * 80}%` }}
                         />
 
                         {/* Steps list */}
@@ -3399,6 +3732,7 @@ const firstName = lead.name ? lead.name.split(" ")[0] : "Traveler";
                             else if (idx === 3) dateLabel = new Date(d.getTime() + 48 * 60 * 60 * 1000).toLocaleDateString("en-IN", { day: 'numeric', month: 'short' });
                             else if (idx === 4) dateLabel = new Date(d.getTime() + 72 * 60 * 60 * 1000).toLocaleDateString("en-IN", { day: 'numeric', month: 'short' });
                             else if (idx === 5) dateLabel = new Date(d.getTime() + 96 * 60 * 60 * 1000).toLocaleDateString("en-IN", { day: 'numeric', month: 'short' });
+                            else if (idx === 6) dateLabel = new Date(d.getTime() + 120 * 60 * 60 * 1000).toLocaleDateString("en-IN", { day: 'numeric', month: 'short' });
                           }
 
                           const StepIcon = st.icon;
@@ -3448,29 +3782,48 @@ const firstName = lead.name ? lead.name.split(" ")[0] : "Traveler";
                             {currentStatusIdx === 1 && "Great news! Your Trip Expert has been assigned."}
                             {currentStatusIdx === 2 && "Vibe Check Completed!"}
                             {currentStatusIdx === 3 && "Your personalised itinerary is ready!"}
-                            {currentStatusIdx === 4 && "Payment Completed Successfully!"}
-                            {currentStatusIdx === 5 && "Congratulations! Your booking is confirmed."}
+                            {currentStatusIdx === 4 && "Traveler Documents Required"}
+                            {currentStatusIdx === 5 && "Payment Received Successfully!"}
+                            {currentStatusIdx === 6 && "Congratulations! Your booking is confirmed."}
                           </h4>
                           <p className="text-xs text-nomichi-ink/50 leading-relaxed font-semibold">
                             {currentStatusIdx === 0 && "We've received your enquiry and are reviewing your travel preferences. Our team will get back to you within 24 hours."}
-                            {currentStatusIdx === 1 && `${assignedExpert?.full_name || 'Your Trip Expert'} will be your dedicated travel expert and will work with you to craft the perfect journey.`}
+                            {currentStatusIdx === 1 && (
+                              vibeCheckDetails 
+                                ? `Your Vibe Check is scheduled for ${vibeCheckDetails.timeStr}. Join using the button on the right or message your expert below.`
+                                : `${assignedExpert?.full_name || 'Your Trip Expert'} will be your dedicated travel expert and will work with you to craft the perfect journey.`
+                            )}
                             {currentStatusIdx === 2 && "Thanks for the great conversation! We've aligned on your preferences and finalized the perfect experience for you."}
                             {currentStatusIdx === 3 && "We've crafted a memorable experience just for you. Please review the itinerary and let us know your thoughts."}
-                            {currentStatusIdx === 4 && "Thank you! Your payment has been received and your booking is confirmed."}
-                            {currentStatusIdx === 5 && "Your adventure is all set! We can't wait to host you on an unforgettable journey."}
+                            {currentStatusIdx === 4 && "Please upload and verify traveler details and government ID proofs to proceed."}
+                            {currentStatusIdx === 5 && "Thank you! Your deposit has been received and your slots are secured."}
+                            {currentStatusIdx === 6 && "Your adventure is all set! We can't wait to host you on an unforgettable journey."}
                           </p>
                         </div>
                       </div>
 
                       {/* Banner Action Right Side */}
                       {currentStatusIdx === 1 && (
-                        <button 
-                          onClick={() => navigateToView("messages")} 
-                          className="bg-transparent hover:bg-[#FF5B26]/5 border border-[#FF5B26]/30 text-[#FF5B26] font-bold text-xs px-4 py-2.5 rounded-xl transition-all shadow-sm shrink-0 whitespace-nowrap active:scale-[0.97] flex items-center gap-1.5 bg-white cursor-pointer"
-                        >
-                          <MessageSquare className="w-4 h-4" />
-                          Message Expert
-                        </button>
+                        <div className="flex gap-2 shrink-0 flex-wrap">
+                          {vibeCheckDetails?.linkStr && (
+                            <a 
+                              href={vibeCheckDetails.linkStr}
+                              target="_blank"
+                              rel="noreferrer"
+                              className="bg-[#16A34A] hover:bg-[#16A34A]/90 text-white font-extrabold text-xs px-4 py-2.5 rounded-xl transition-all shadow-sm flex items-center gap-1.5 cursor-pointer text-decoration-none"
+                            >
+                              <Video className="w-4 h-4" />
+                              Join Call
+                            </a>
+                          )}
+                          <button 
+                            onClick={() => navigateToView("messages")} 
+                            className="bg-transparent hover:bg-[#FF5B26]/5 border border-[#FF5B26]/30 text-[#FF5B26] font-bold text-xs px-4 py-2.5 rounded-xl transition-all shadow-sm shrink-0 whitespace-nowrap active:scale-[0.97] flex items-center gap-1.5 bg-white cursor-pointer"
+                          >
+                            <MessageSquare className="w-4 h-4" />
+                            Message Expert
+                          </button>
+                        </div>
                       )}
                       {currentStatusIdx === 2 && (
                         <button 
@@ -3718,8 +4071,451 @@ const firstName = lead.name ? lead.name.split(" ")[0] : "Traveler";
                           </div>
                         )}
 
-                        {/* Stage 4: Payment Received Card */}
+                        {/* Stage 4: Document Submission Card */}
                         {currentStatusIdx === 4 && (
+                          submittedDocuments.length > 0 ? (
+                            <div className="space-y-6 animate-in fade-in duration-200 text-left">
+                              {/* Documents Submitted Successfully Card */}
+                              <div className="bg-white border border-[#e7e1d5]/55 rounded-[24px] p-6 shadow-sm flex flex-col md:flex-row md:items-center justify-between gap-4 text-left">
+                                <div className="flex items-start gap-4">
+                                  <div className="w-12 h-12 rounded-full bg-emerald-50 text-emerald-600 flex items-center justify-center shrink-0 border border-emerald-100/40">
+                                    <Check className="w-6 h-6 stroke-[3px]" />
+                                  </div>
+                                  <div className="space-y-1">
+                                    <h3 className="text-base font-black text-nomichi-ink">Documents Submitted Successfully!</h3>
+                                    <p className="text-xs text-nomichi-ink/50 font-semibold leading-relaxed max-w-xl">
+                                      Thank you! We have received your documents. Our team will review them and notify you if anything else is required.
+                                    </p>
+                                    <div className="flex flex-wrap items-center gap-x-6 gap-y-1.5 pt-2 text-[10px] text-nomichi-ink/40 font-bold uppercase tracking-wider">
+                                      <div>Submitted on: <span className="text-nomichi-ink font-extrabold">{new Date(submittedDocuments[0]?.created_at || Date.now()).toLocaleDateString("en-GB", { day: "numeric", month: "short", year: "numeric" })}, {new Date(submittedDocuments[0]?.created_at || Date.now()).toLocaleTimeString("en-US", { hour: "2-digit", minute: "2-digit" })}</span></div>
+                                      <div>Enquiry ID: <span className="text-nomichi-ink font-extrabold">ENQ-{displayEnqId}</span></div>
+                                    </div>
+                                  </div>
+                                </div>
+                                <button
+                                  type="button"
+                                  onClick={() => alert("Summary download started.")}
+                                  className="inline-flex items-center justify-center gap-1.5 rounded-xl border border-[#e7e1d5] bg-white px-4 py-2.5 text-xs font-extrabold text-nomichi-ink hover:bg-[#FAF8F4] transition-all cursor-pointer shrink-0 shadow-xs"
+                                >
+                                  <Download className="w-4 h-4" />
+                                  Download Summary
+                                </button>
+                              </div>
+
+                              {/* Submitted Travelers Header & List */}
+                              <div className="space-y-4">
+                                <div className="flex items-center justify-between gap-3">
+                                  <h4 className="text-sm font-black text-nomichi-ink">Submitted Travelers ({submittedDocuments.length})</h4>
+                                  <button
+                                    type="button"
+                                    onClick={() => {
+                                      if (confirm("Are you sure you want to add or edit travelers? This will open the submission form.")) {
+                                        setSubmittedDocuments([]);
+                                      }
+                                    }}
+                                    className="inline-flex items-center gap-1.5 rounded-xl border border-[#FF5B26]/30 bg-white px-3.5 py-2 text-xs font-extrabold text-[#FF5B26] hover:bg-[#FFF7F3] cursor-pointer"
+                                  >
+                                    <Plus className="w-4 h-4" />
+                                    Add Another Person
+                                  </button>
+                                </div>
+
+                                <div className="space-y-4">
+                                  {submittedDocuments.map((doc) => (
+                                    <div key={doc.id} className="bg-white border border-[#e7e1d5]/55 rounded-2xl p-5 flex items-center justify-between gap-4 text-left shadow-xs transition-all hover:shadow-2xs">
+                                      <div className="flex items-center gap-4 flex-1 min-w-0">
+                                        <div className="w-12 h-12 rounded-full bg-slate-50 text-slate-500 border border-slate-100 flex items-center justify-center shrink-0">
+                                          <UserIcon className="w-5 h-5" />
+                                        </div>
+                                        <div className="grid grid-cols-1 md:grid-cols-4 gap-4 flex-1 min-w-0 font-semibold text-xs text-nomichi-ink">
+                                          <div className="min-w-0">
+                                            <div className="flex items-center gap-1.5 flex-wrap">
+                                              <span className="text-sm font-extrabold text-nomichi-ink truncate">{doc.full_name}</span>
+                                              {doc.traveler_index === 1 && (
+                                                <span className="px-2 py-0.5 rounded-full bg-emerald-50 text-emerald-700 text-[8px] font-black uppercase tracking-wider">Primary Traveler</span>
+                                              )}
+                                            </div>
+                                            <p className="text-[10px] text-nomichi-ink/55 mt-1 font-semibold">
+                                              {doc.date_of_birth ? `${Math.max(0, Math.floor((Date.now() - new Date(doc.date_of_birth).getTime()) / (365.25 * 24 * 60 * 60 * 1000)))} Years` : "—"} | <span className="capitalize">{doc.gender || "—"}</span>
+                                            </p>
+                                            <p className="text-[9px] text-nomichi-ink/40 font-bold uppercase mt-0.5">DOB: {doc.date_of_birth ? new Date(doc.date_of_birth).toLocaleDateString("en-GB", { day: "numeric", month: "short", year: "numeric" }) : "—"}</p>
+                                          </div>
+
+                                          <div className="min-w-0">
+                                            <span className="text-[9px] font-bold text-nomichi-ink/45 uppercase block tracking-wider">ID Proof</span>
+                                            <span className="text-xs font-bold text-nomichi-ink mt-1 block capitalize truncate">{doc.document_type || "—"}</span>
+                                          </div>
+
+                                          <div className="min-w-0">
+                                            <span className="text-[9px] font-bold text-nomichi-ink/45 uppercase block tracking-wider">ID Number</span>
+                                            <span className="text-xs font-bold text-nomichi-ink mt-1 block truncate">{doc.document_number || "—"}</span>
+                                          </div>
+
+                                          <div className="min-w-0 flex items-center gap-1.5">
+                                            <div className="w-5 h-5 rounded-full bg-emerald-50 text-emerald-600 flex items-center justify-center shrink-0 border border-emerald-100/35">
+                                              <Check className="w-3.5 h-3.5 stroke-[2.5px]" />
+                                            </div>
+                                            <div>
+                                              <span className="text-[9px] font-bold text-nomichi-ink/45 uppercase block tracking-wider">Documents</span>
+                                              <span className="text-xs font-extrabold text-emerald-700 block mt-0.5">
+                                                {doc.file_data_url ? "1 Uploaded" : "Verified"}
+                                              </span>
+                                            </div>
+                                          </div>
+                                        </div>
+                                      </div>
+                                      
+                                      <div className="flex items-center gap-3">
+                                        <button
+                                          type="button"
+                                          onClick={() => {
+                                            if (confirm("Would you like to edit this traveler's details?")) {
+                                              setSubmittedDocuments([]);
+                                            }
+                                          }}
+                                          className="inline-flex items-center justify-center gap-1.5 rounded-lg border border-slate-200 bg-white px-2.5 py-1.5 text-[10px] font-bold text-slate-600 hover:bg-slate-50 cursor-pointer shadow-xs active:scale-[0.98] transition-all"
+                                        >
+                                          <Edit className="w-3.5 h-3.5" />
+                                          Edit
+                                        </button>
+                                        <ChevronDown className="w-4 h-4 text-slate-300 shrink-0" />
+                                      </div>
+                                    </div>
+                                  ))}
+                                </div>
+                              </div>
+
+                              {/* Uploaded Documents Summary Stats Grid */}
+                              <div className="space-y-4 pt-2">
+                                <div className="flex items-center justify-between gap-3">
+                                  <h4 className="text-sm font-black text-nomichi-ink">Uploaded Documents Summary</h4>
+                                  <button
+                                    type="button"
+                                    onClick={() => alert("Summary view expanded")}
+                                    className="text-xs font-bold text-[#FF5B26] hover:underline bg-transparent border-0 cursor-pointer p-0"
+                                  >
+                                    View All
+                                  </button>
+                                </div>
+                                <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+                                  {/* Stat 1 */}
+                                  <div className="bg-white border border-[#e7e1d5]/55 rounded-2xl p-4 flex items-center gap-3 shadow-xs">
+                                    <div className="w-10 h-10 rounded-xl bg-emerald-50 text-emerald-600 flex items-center justify-center shrink-0 border border-emerald-100/20">
+                                      <FileText className="w-5 h-5" />
+                                    </div>
+                                    <div className="text-left">
+                                      <span className="text-lg font-black text-nomichi-ink block leading-none">{submittedDocuments.filter(d => d.file_data_url).length}</span>
+                                      <span className="text-[9px] text-nomichi-ink/50 font-bold uppercase tracking-wider block mt-1">Documents Uploaded</span>
+                                    </div>
+                                  </div>
+                                  {/* Stat 2 */}
+                                  <div className="bg-white border border-[#e7e1d5]/55 rounded-2xl p-4 flex items-center gap-3 shadow-xs">
+                                    <div className="w-10 h-10 rounded-xl bg-blue-50 text-blue-600 flex items-center justify-center shrink-0 border border-blue-100/20">
+                                      <Users className="w-5 h-5" />
+                                    </div>
+                                    <div className="text-left">
+                                      <span className="text-lg font-black text-nomichi-ink block leading-none">{submittedDocuments.length}</span>
+                                      <span className="text-[9px] text-nomichi-ink/50 font-bold uppercase tracking-wider block mt-1">Travelers</span>
+                                    </div>
+                                  </div>
+                                  {/* Stat 3 */}
+                                  <div className="bg-white border border-[#e7e1d5]/55 rounded-2xl p-4 flex items-center gap-3 shadow-xs">
+                                    <div className="w-10 h-10 rounded-xl bg-purple-50 text-purple-600 flex items-center justify-center shrink-0 border border-purple-100/20">
+                                      <Clock className="w-5 h-5" />
+                                    </div>
+                                    <div className="text-left">
+                                      <span className="text-lg font-black text-nomichi-ink block leading-none">
+                                        {submittedDocuments.filter(d => d.status === "submitted").length}
+                                      </span>
+                                      <span className="text-[9px] text-nomichi-ink/50 font-bold uppercase tracking-wider block mt-1">Pending Review</span>
+                                    </div>
+                                  </div>
+                                  {/* Stat 4 */}
+                                  <div className="bg-white border border-[#e7e1d5]/55 rounded-2xl p-4 flex items-center gap-3 shadow-xs">
+                                    <div className="w-10 h-10 rounded-xl bg-amber-50 text-amber-600 flex items-center justify-center shrink-0 border border-amber-100/20">
+                                      <AlertTriangle className="w-5 h-5" />
+                                    </div>
+                                    <div className="text-left">
+                                      <span className="text-lg font-black text-nomichi-ink block leading-none">
+                                        {submittedDocuments.filter(d => d.status === "rejected").length}
+                                      </span>
+                                      <span className="text-[9px] text-nomichi-ink/50 font-bold uppercase tracking-wider block mt-1">Action Required</span>
+                                    </div>
+                                  </div>
+                                </div>
+                                
+                                {/* Info banner */}
+                                <div className="bg-blue-50/20 border border-blue-100/60 rounded-2xl p-4 flex items-center gap-3 text-left">
+                                  <Shield className="w-5 h-5 text-blue-600 shrink-0" />
+                                  <p className="text-xs text-nomichi-ink/65 font-semibold leading-relaxed">
+                                    Our team typically reviews documents within 24-48 hours.
+                                  </p>
+                                </div>
+                              </div>
+                            </div>
+                          ) : (
+                            <div id="traveler-document-form" className="bg-white border border-[#e7e1d5]/50 rounded-[24px] p-6 shadow-sm space-y-6 text-left animate-in slide-in-from-bottom duration-250">
+                              <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-3 border-b border-[#e7e1d5]/30 pb-4">
+                                <div className="space-y-1">
+                                  <h3 className="text-sm font-bold text-nomichi-ink">Documents Submission</h3>
+                                  <p className="text-xs text-nomichi-ink/55 font-semibold leading-relaxed">
+                                    Please submit the required details and documents for every traveler. We’ll store them in a separate documents table for your enquiry.
+                                  </p>
+                                </div>
+                                <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full bg-amber-50 border border-amber-200 text-amber-700 text-[10px] font-black uppercase tracking-wider">
+                                  <FileText className="w-3.5 h-3.5" />
+                                  Documents Required
+                                </span>
+                              </div>
+
+                              <div className="grid grid-cols-1 lg:grid-cols-12 gap-6">
+                                <div className="lg:col-span-12 space-y-6">
+                                  <div className="bg-[#FAF8F4]/50 border border-[#e7e1d5]/40 rounded-3xl p-5 space-y-4">
+                                    <div className="flex flex-col sm:flex-row sm:items-start sm:justify-between gap-3">
+                                      <div>
+                                        <h4 className="text-sm font-bold text-nomichi-ink">Traveler Details</h4>
+                                        <p className="text-xs text-nomichi-ink/50 font-semibold">Add details for all travelers going on this trip.</p>
+                                      </div>
+                                      <button
+                                        type="button"
+                                        onClick={addDocumentRow}
+                                        className="inline-flex items-center gap-1.5 rounded-xl border border-[#FF5B26]/30 bg-white px-3.5 py-2 text-xs font-extrabold text-[#FF5B26] hover:bg-[#FFF7F3] transition-all cursor-pointer"
+                                      >
+                                        <Plus className="w-4 h-4" />
+                                        Add Person
+                                      </button>
+                                    </div>
+
+                                    {documentsLoading ? (
+                                      <div className="py-12 flex items-center justify-center text-sm font-semibold text-nomichi-ink/45">
+                                        <Loader2 className="w-4 h-4 animate-spin mr-2 text-[#FF5B26]" />
+                                        Loading submitted documents...
+                                      </div>
+                                    ) : null}
+
+                                    <div className="space-y-4">
+                                      {documentRows.map((row, index) => {
+                                        const rowAge = row.date_of_birth
+                                          ? Math.max(0, Math.floor((Date.now() - new Date(row.date_of_birth).getTime()) / (365.25 * 24 * 60 * 60 * 1000)))
+                                          : null;
+
+                                        return (
+                                          <div key={row.local_id} className="rounded-2xl border border-[#e7e1d5]/55 bg-white p-4 shadow-xs space-y-4">
+                                            <div className="flex flex-wrap items-center justify-between gap-3">
+                                              <div className="flex items-center gap-2">
+                                                <div className="w-8 h-8 rounded-full bg-emerald-50 text-emerald-600 flex items-center justify-center">
+                                                  <Users className="w-4 h-4" />
+                                                </div>
+                                                <div className="flex items-center gap-2">
+                                                  <span className="text-sm font-extrabold text-nomichi-ink">Person {index + 1}</span>
+                                                  {index === 0 ? (
+                                                    <span className="px-2 py-0.5 rounded-full bg-emerald-50 text-emerald-700 text-[10px] font-black uppercase">Primary Traveler</span>
+                                                  ) : null}
+                                                </div>
+                                              </div>
+                                              <button
+                                                type="button"
+                                                onClick={() => removeDocumentRow(row.local_id)}
+                                                disabled={documentRows.length === 1}
+                                                className="inline-flex items-center gap-1.5 rounded-xl border border-red-200 bg-white px-3 py-2 text-xs font-extrabold text-red-500 hover:bg-red-50 disabled:opacity-40 disabled:cursor-not-allowed cursor-pointer"
+                                              >
+                                                <Trash2 className="w-3.5 h-3.5" />
+                                                Remove
+                                              </button>
+                                            </div>
+
+                                            <div className="grid grid-cols-1 md:grid-cols-4 gap-4 text-xs font-semibold text-nomichi-ink">
+                                              <div className="md:col-span-2 space-y-1.5">
+                                                <label className="text-[10px] font-bold text-nomichi-ink/40 uppercase tracking-wider">Full Name</label>
+                                                <input
+                                                  type="text"
+                                                  required
+                                                  placeholder="Full name as on ID document"
+                                                  value={row.full_name}
+                                                  onChange={(e) => updateDocumentRow(row.local_id, "full_name", e.target.value)}
+                                                  className="w-full h-11 px-3.5 border border-[#e7e1d5]/60 rounded-xl focus:outline-none focus:border-[#FF5B26] text-xs bg-white font-semibold text-nomichi-ink"
+                                                />
+                                              </div>
+
+                                              <div className="space-y-1.5">
+                                                <label className="text-[10px] font-bold text-nomichi-ink/40 uppercase tracking-wider">Date of Birth</label>
+                                                <input
+                                                  type="date"
+                                                  required
+                                                  value={row.date_of_birth}
+                                                  onChange={(e) => updateDocumentRow(row.local_id, "date_of_birth", e.target.value)}
+                                                  className="w-full h-11 px-3.5 border border-[#e7e1d5]/60 rounded-xl focus:outline-none focus:border-[#FF5B26] text-xs bg-white font-semibold text-nomichi-ink"
+                                                />
+                                              </div>
+
+                                              <div className="space-y-1.5">
+                                                <label className="text-[10px] font-bold text-nomichi-ink/40 uppercase tracking-wider">Gender</label>
+                                                <select
+                                                  required
+                                                  value={row.gender}
+                                                  onChange={(e) => updateDocumentRow(row.local_id, "gender", e.target.value)}
+                                                  className="w-full h-11 px-3 border border-[#e7e1d5]/60 rounded-xl focus:outline-none focus:border-[#FF5B26] text-xs bg-white font-semibold text-nomichi-ink cursor-pointer"
+                                                >
+                                                  <option value="">Select</option>
+                                                  <option value="male">Male</option>
+                                                  <option value="female">Female</option>
+                                                  <option value="other">Other</option>
+                                                </select>
+                                              </div>
+
+                                              <div className="md:col-span-2 space-y-1.5">
+                                                <label className="text-[10px] font-bold text-nomichi-ink/40 uppercase tracking-wider">Email Address</label>
+                                                <input
+                                                  type="email"
+                                                  required={index === 0}
+                                                  placeholder="Email address for notifications"
+                                                  value={row.email}
+                                                  onChange={(e) => updateDocumentRow(row.local_id, "email", e.target.value)}
+                                                  className="w-full h-11 px-3.5 border border-[#e7e1d5]/60 rounded-xl focus:outline-none focus:border-[#FF5B26] text-xs bg-white font-semibold text-nomichi-ink"
+                                                />
+                                              </div>
+
+                                              <div className="space-y-1.5">
+                                                <label className="text-[10px] font-bold text-nomichi-ink/40 uppercase tracking-wider">Mobile Number</label>
+                                                <input
+                                                  type="tel"
+                                                  required={index === 0}
+                                                  placeholder="Include country code"
+                                                  value={row.mobile_number}
+                                                  onChange={(e) => updateDocumentRow(row.local_id, "mobile_number", e.target.value)}
+                                                  className="w-full h-11 px-3.5 border border-[#e7e1d5]/60 rounded-xl focus:outline-none focus:border-[#FF5B26] text-xs bg-white font-semibold text-nomichi-ink"
+                                                />
+                                              </div>
+
+                                              <div className="space-y-1.5 flex flex-col justify-end">
+                                                <label className="text-[10px] font-bold text-nomichi-ink/40 uppercase tracking-wider block mb-1">Age</label>
+                                                <div className="h-11 px-3.5 border border-[#e7e1d5]/30 rounded-xl bg-zinc-50 flex items-center justify-start text-xs font-black text-nomichi-ink/55 select-none">
+                                                  {rowAge !== null ? `${rowAge} Yrs` : "—"}
+                                                </div>
+                                              </div>
+
+                                              <div className="md:col-span-2 space-y-1.5">
+                                                <label className="text-[10px] font-bold text-nomichi-ink/40 uppercase tracking-wider">ID Proof Type</label>
+                                                <select
+                                                  required
+                                                  value={row.document_type}
+                                                  onChange={(e) => updateDocumentRow(row.local_id, "document_type", e.target.value)}
+                                                  className="w-full h-11 px-3 border border-[#e7e1d5]/60 rounded-xl focus:outline-none focus:border-[#FF5B26] text-xs bg-white font-semibold text-nomichi-ink cursor-pointer"
+                                                >
+                                                  <option value="">Select ID Type</option>
+                                                  <option value="aadhaar">Aadhaar Card</option>
+                                                  <option value="pan">PAN Card</option>
+                                                  <option value="passport">Passport</option>
+                                                  <option value="voter_id">Voter ID Card</option>
+                                                  <option value="driving_license">Driving License</option>
+                                                  <option value="other">Other Gov Issued ID</option>
+                                                </select>
+                                              </div>
+
+                                              <div className="md:col-span-2 space-y-1.5">
+                                                <label className="text-[10px] font-bold text-nomichi-ink/40 uppercase tracking-wider">ID Number</label>
+                                                <input
+                                                  type="text"
+                                                  required
+                                                  placeholder="e.g., Aadhaar No, Passport No"
+                                                  value={row.document_number}
+                                                  onChange={(e) => updateDocumentRow(row.local_id, "document_number", e.target.value)}
+                                                  className="w-full h-11 px-3.5 border border-[#e7e1d5]/60 rounded-xl focus:outline-none focus:border-[#FF5B26] text-xs bg-white font-semibold text-nomichi-ink"
+                                                />
+                                              </div>
+
+                                              <div className="md:col-span-4 space-y-1.5">
+                                                <label className="text-[10px] font-bold text-nomichi-ink/40 uppercase tracking-wider">Address</label>
+                                                <input
+                                                  type="text"
+                                                  required
+                                                  placeholder="Full address as per document"
+                                                  value={row.address}
+                                                  onChange={(e) => updateDocumentRow(row.local_id, "address", e.target.value)}
+                                                  className="w-full h-11 px-3.5 border border-[#e7e1d5]/60 rounded-xl focus:outline-none focus:border-[#FF5B26] text-xs bg-white font-semibold text-nomichi-ink"
+                                                />
+                                              </div>
+
+                                              <div className="md:col-span-2 space-y-1.5">
+                                                <label className="text-[10px] font-bold text-nomichi-ink/40 uppercase tracking-wider">Emergency Contact Name</label>
+                                                <input
+                                                  type="text"
+                                                  required
+                                                  placeholder="Guardian / Friend / Spouse Name"
+                                                  value={row.emergency_contact_name}
+                                                  onChange={(e) => updateDocumentRow(row.local_id, "emergency_contact_name", e.target.value)}
+                                                  className="w-full h-11 px-3.5 border border-[#e7e1d5]/60 rounded-xl focus:outline-none focus:border-[#FF5B26] text-xs bg-white font-semibold text-nomichi-ink"
+                                                />
+                                              </div>
+
+                                              <div className="md:col-span-2 space-y-1.5">
+                                                <label className="text-[10px] font-bold text-nomichi-ink/40 uppercase tracking-wider">Emergency Contact Number</label>
+                                                <input
+                                                  type="tel"
+                                                  required
+                                                  placeholder="Emergency contact phone number"
+                                                  value={row.emergency_contact_number}
+                                                  onChange={(e) => updateDocumentRow(row.local_id, "emergency_contact_number", e.target.value)}
+                                                  className="w-full h-11 px-3.5 border border-[#e7e1d5]/60 rounded-xl focus:outline-none focus:border-[#FF5B26] text-xs bg-white font-semibold text-nomichi-ink"
+                                                />
+                                              </div>
+
+                                              <div className="md:col-span-4 space-y-1.5">
+                                                <label className="text-[10px] font-bold text-nomichi-ink/40 uppercase tracking-wider block mb-1">Upload ID Proof (PDF or Image)</label>
+                                                <div className="flex items-center gap-3">
+                                                  <label className="h-11 px-4 border border-[#e7e1d5]/60 rounded-xl bg-white hover:bg-zinc-50 flex items-center justify-center gap-1.5 text-xs font-extrabold text-nomichi-ink cursor-pointer select-none">
+                                                    <Upload className="w-4 h-4 text-[#FF5B26]" />
+                                                    Browse File
+                                                    <input
+                                                      type="file"
+                                                      accept="image/*,application/pdf"
+                                                      onChange={(e) => handleDocumentFileChange(row.local_id, e)}
+                                                      className="hidden"
+                                                    />
+                                                  </label>
+                                                  {row.file_name ? (
+                                                    <span className="text-[10px] font-bold text-emerald-600 truncate max-w-xs sm:max-w-md">
+                                                      ✓ {row.file_name} ({row.file_type})
+                                                    </span>
+                                                  ) : (
+                                                    <span className="text-[10px] text-nomichi-ink/40 font-semibold">
+                                                      No file selected (Optional)
+                                                    </span>
+                                                  )}
+                                                </div>
+                                              </div>
+                                            </div>
+                                          </div>
+                                        );
+                                      })}
+                                    </div>
+
+                                    {documentsMessage && (
+                                      <div className="rounded-xl border border-emerald-100 bg-emerald-50 px-4 py-3 text-xs font-bold text-emerald-700 text-left">
+                                        {documentsMessage}
+                                      </div>
+                                    )}
+
+                                    <div className="flex justify-end gap-2 pt-2 border-t border-[#e7e1d5]/30">
+                                      <button
+                                        type="button"
+                                        disabled={documentsSaving}
+                                        onClick={handleSaveDocuments}
+                                        className="h-10 px-5 bg-[#FF5B26] hover:bg-[#e04b1c] text-white text-xs font-extrabold rounded-xl border-0 cursor-pointer shadow-sm active:scale-[0.98] disabled:opacity-50 transition-all flex items-center gap-1.5"
+                                      >
+                                        {documentsSaving && <Loader2 className="w-3.5 h-3.5 animate-spin" />}
+                                        {documentsSaving ? "Saving..." : "Save & Submit Documents"}
+                                      </button>
+                                    </div>
+                                  </div>
+                                </div>
+                              </div>
+                            </div>
+                          )
+                        )}
+
+                        {/* Stage 5: Payment Received Card */}
+                        {currentStatusIdx === 5 && (
                           <div className="bg-white border border-[#e7e1d5]/50 rounded-[24px] p-6 shadow-sm space-y-5 text-left animate-in slide-in-from-bottom duration-250">
                             <div className="flex justify-between items-center border-b border-[#e7e1d5]/30 pb-3">
                               <h3 className="text-sm font-bold text-nomichi-ink">Payment Details</h3>
@@ -3792,8 +4588,8 @@ const firstName = lead.name ? lead.name.split(" ")[0] : "Traveler";
                           </div>
                         )}
 
-                        {/* Stage 5: Booking Confirmation Card */}
-                        {currentStatusIdx === 5 && (
+                        {/* Stage 6: Booking Confirmation Card */}
+                        {currentStatusIdx === 6 && (
                           <div className="bg-white border border-[#e7e1d5]/50 rounded-[24px] p-6 shadow-sm space-y-5 text-left animate-in slide-in-from-bottom duration-250">
                             <div className="flex justify-between items-center border-b border-[#e7e1d5]/30 pb-3">
                               <h3 className="text-sm font-bold text-nomichi-ink">Booking Confirmation</h3>
@@ -4043,29 +4839,34 @@ const firstName = lead.name ? lead.name.split(" ")[0] : "Traveler";
                         {/* What Happens Next? (Stage dependent descriptions) */}
                         <div className="bg-white border border-[#e7e1d5]/50 rounded-[24px] p-6 shadow-sm space-y-4 text-left">
                           <h3 className="text-sm font-bold text-nomichi-ink border-b border-[#e7e1d5]/30 pb-3">What Happens Next?</h3>
-                          
                           <div className="space-y-4">
                             {currentStatusIdx === 0 && (
                               <>
                                 <div className="flex gap-3 items-start text-xs leading-relaxed font-semibold">
-                                  <div className="w-5 h-5 rounded bg-[#FFF1EA] text-[#FF5B26] font-bold text-[10px] flex items-center justify-center shrink-0">1</div>
+                                  <div className="w-5.5 h-5.5 rounded-full bg-[#FFF1EA] text-[#FF5B26] border border-[#FFD3C4] flex items-center justify-center shrink-0">
+                                    <span className="w-1.5 h-1.5 rounded-full bg-[#FF5B26]" />
+                                  </div>
                                   <div>
-                                    <strong className="block text-nomichi-ink">Our team reviews your enquiry</strong>
-                                    <span className="text-nomichi-ink/50 text-[11px] block mt-0.5">We carefully review your travel preferences.</span>
+                                    <strong className="block text-nomichi-ink">Assigning Trip Expert</strong>
+                                    <span className="text-nomichi-ink/50 text-[11px] block mt-0.5">We are assigning the best trip expert for you.</span>
                                   </div>
                                 </div>
                                 <div className="flex gap-3 items-start text-xs leading-relaxed font-semibold">
-                                  <div className="w-5 h-5 rounded bg-zinc-100 text-zinc-400 font-bold text-[10px] flex items-center justify-center shrink-0">2</div>
+                                  <div className="w-5.5 h-5.5 rounded-full bg-zinc-100 text-zinc-400 flex items-center justify-center shrink-0">
+                                    <span className="w-1.5 h-1.5 rounded-full bg-zinc-400" />
+                                  </div>
                                   <div>
-                                    <strong className="block text-nomichi-ink/45">A travel expert is assigned</strong>
-                                    <span className="text-nomichi-ink/30 text-[11px] block mt-0.5">The right expert for your trip gets in touch.</span>
+                                    <strong className="block text-nomichi-ink/45">Vibe Check Session</strong>
+                                    <span className="text-nomichi-ink/30 text-[11px] block mt-0.5">Connect with your expert to outline the trip plan.</span>
                                   </div>
                                 </div>
                                 <div className="flex gap-3 items-start text-xs leading-relaxed font-semibold">
-                                  <div className="w-5 h-5 rounded bg-zinc-100 text-zinc-400 font-bold text-[10px] flex items-center justify-center shrink-0">3</div>
+                                  <div className="w-5.5 h-5.5 rounded-full bg-zinc-100 text-zinc-400 flex items-center justify-center shrink-0">
+                                    <span className="w-1.5 h-1.5 rounded-full bg-zinc-400" />
+                                  </div>
                                   <div>
-                                    <strong className="block text-nomichi-ink/45">Vibe Check briefing call</strong>
-                                    <span className="text-nomichi-ink/30 text-[11px] block mt-0.5">We'll connect for a quick briefing call.</span>
+                                    <strong className="block text-nomichi-ink/45">Customized Itinerary</strong>
+                                    <span className="text-nomichi-ink/30 text-[11px] block mt-0.5">We will share your detailed itinerary and proposal.</span>
                                   </div>
                                 </div>
                               </>
@@ -4074,12 +4875,36 @@ const firstName = lead.name ? lead.name.split(" ")[0] : "Traveler";
                             {currentStatusIdx === 1 && (
                               <>
                                 <div className="flex gap-3 items-start text-xs leading-relaxed font-semibold">
-                                  <div className="w-5.5 h-5.5 rounded-full bg-[#FFF1EA] text-[#FF5B26] border border-[#FFD3C4] flex items-center justify-center shrink-0">
+                                  <div className="w-5.5 h-5.5 rounded-full bg-emerald-50 text-emerald-600 border border-emerald-100 flex items-center justify-center shrink-0">
+                                    <Check className="w-3.5 h-3.5 stroke-[2.5px]" />
+                                  </div>
+                                  <div>
+                                    <strong className="block text-nomichi-ink">Trip Expert Assigned</strong>
+                                    <span className="text-nomichi-ink/50 text-[11px] block mt-0.5">Your dedicated expert is now ready to assist you.</span>
+                                  </div>
+                                </div>
+                                <div className="flex gap-3 items-start text-xs leading-relaxed font-semibold">
+                                  <div className="w-5.5 h-5.5 rounded-full bg-[#FFF1EA] text-[#FF5B26] border border-[#FFD3C4] flex items-center justify-center shrink-0 ring-4 ring-orange-100 animate-pulse">
                                     <span className="w-1.5 h-1.5 rounded-full bg-[#FF5B26]" />
                                   </div>
                                   <div>
-                                    <strong className="block text-nomichi-ink">Vibe Check briefing call</strong>
-                                    <span className="text-nomichi-ink/50 text-[11px] block mt-0.5">We'll connect for a quick briefing call.</span>
+                                    <strong className="block text-nomichi-ink">Vibe Check Session</strong>
+                                    <span className="text-nomichi-ink/50 text-[11px] block mt-0.5">
+                                      {vibeCheckDetails 
+                                        ? `Scheduled for: ${vibeCheckDetails.timeStr}` 
+                                        : "Connect with your expert to outline the trip plan."}
+                                    </span>
+                                    {vibeCheckDetails?.linkStr && (
+                                      <a 
+                                        href={vibeCheckDetails.linkStr} 
+                                        target="_blank" 
+                                        rel="noreferrer" 
+                                        className="inline-flex items-center gap-1 px-2.5 py-1 bg-[#16A34A] hover:bg-[#16A34A]/90 text-white text-[9px] font-black rounded-lg mt-2 transition-all shadow-xs text-decoration-none uppercase tracking-wide"
+                                      >
+                                        <Video className="w-3.5 h-3.5" />
+                                        Join Video Call
+                                      </a>
+                                    )}
                                   </div>
                                 </div>
                                 <div className="flex gap-3 items-start text-xs leading-relaxed font-semibold">
@@ -4087,17 +4912,8 @@ const firstName = lead.name ? lead.name.split(" ")[0] : "Traveler";
                                     <span className="w-1.5 h-1.5 rounded-full bg-zinc-400" />
                                   </div>
                                   <div>
-                                    <strong className="block text-nomichi-ink/45">Itinerary shared</strong>
-                                    <span className="text-nomichi-ink/30 text-[11px] block mt-0.5">Your personalized itinerary will be ready soon.</span>
-                                  </div>
-                                </div>
-                                <div className="flex gap-3 items-start text-xs leading-relaxed font-semibold">
-                                  <div className="w-5.5 h-5.5 rounded-full bg-zinc-100 text-zinc-400 flex items-center justify-center shrink-0">
-                                    <span className="w-1.5 h-1.5 rounded-full bg-zinc-400" />
-                                  </div>
-                                  <div>
-                                    <strong className="block text-nomichi-ink/45">Booking Confirmation</strong>
-                                    <span className="text-nomichi-ink/30 text-[11px] block mt-0.5">Once finalized, your adventure is confirmed!</span>
+                                    <strong className="block text-nomichi-ink/45">Customized Itinerary</strong>
+                                    <span className="text-nomichi-ink/30 text-[11px] block mt-0.5">We will share your detailed itinerary and proposal.</span>
                                   </div>
                                 </div>
                               </>
@@ -4110,17 +4926,17 @@ const firstName = lead.name ? lead.name.split(" ")[0] : "Traveler";
                                     <Check className="w-3.5 h-3.5 stroke-[2.5px]" />
                                   </div>
                                   <div>
-                                    <strong className="block text-nomichi-ink">Vibe Check completed</strong>
-                                    <span className="text-nomichi-ink/50 text-[11px] block mt-0.5">Informal briefing and fit review completed.</span>
+                                    <strong className="block text-nomichi-ink">Vibe Check Completed</strong>
+                                    <span className="text-nomichi-ink/50 text-[11px] block mt-0.5"> fit check and trip ideas review completed.</span>
                                   </div>
                                 </div>
                                 <div className="flex gap-3 items-start text-xs leading-relaxed font-semibold">
-                                  <div className="w-5.5 h-5.5 rounded-full bg-[#FFF1EA] text-[#FF5B26] border border-[#FFD3C4] flex items-center justify-center shrink-0">
+                                  <div className="w-5.5 h-5.5 rounded-full bg-[#FFF1EA] text-[#FF5B26] border border-[#FFD3C4] flex items-center justify-center shrink-0 ring-4 ring-orange-100 animate-pulse">
                                     <span className="w-1.5 h-1.5 rounded-full bg-[#FF5B26]" />
                                   </div>
                                   <div>
-                                    <strong className="block text-nomichi-ink">Itinerary Shared</strong>
-                                    <span className="text-nomichi-ink/50 text-[11px] block mt-0.5">We'll share the customized proposal & itinerary brochure.</span>
+                                    <strong className="block text-nomichi-ink">Customized Itinerary</strong>
+                                    <span className="text-nomichi-ink/50 text-[11px] block mt-0.5">We are preparing your detailed itinerary proposal.</span>
                                   </div>
                                 </div>
                                 <div className="flex gap-3 items-start text-xs leading-relaxed font-semibold">
@@ -4128,8 +4944,8 @@ const firstName = lead.name ? lead.name.split(" ")[0] : "Traveler";
                                     <span className="w-1.5 h-1.5 rounded-full bg-zinc-400" />
                                   </div>
                                   <div>
-                                    <strong className="block text-nomichi-ink/45">Booking Confirmation</strong>
-                                    <span className="text-nomichi-ink/30 text-[11px] block mt-0.5">Confirm slots and secure with a deposit.</span>
+                                    <strong className="block text-nomichi-ink/45">Documents Submission</strong>
+                                    <span className="text-nomichi-ink/30 text-[11px] block mt-0.5">Provide traveler IDs and details.</span>
                                   </div>
                                 </div>
                               </>
@@ -4147,12 +4963,12 @@ const firstName = lead.name ? lead.name.split(" ")[0] : "Traveler";
                                   </div>
                                 </div>
                                 <div className="flex gap-3 items-start text-xs leading-relaxed font-semibold">
-                                  <div className="w-5.5 h-5.5 rounded-full bg-[#FFF1EA] text-[#FF5B26] border border-[#FFD3C4] flex items-center justify-center shrink-0">
+                                  <div className="w-5.5 h-5.5 rounded-full bg-[#FFF1EA] text-[#FF5B26] border border-[#FFD3C4] flex items-center justify-center shrink-0 ring-4 ring-orange-100 animate-pulse">
                                     <span className="w-1.5 h-1.5 rounded-full bg-[#FF5B26]" />
                                   </div>
                                   <div>
-                                    <strong className="block text-nomichi-ink">Booking Confirmation</strong>
-                                    <span className="text-nomichi-ink/50 text-[11px] block mt-0.5">Confirm slots and secure with a deposit.</span>
+                                    <strong className="block text-nomichi-ink">Documents Submission</strong>
+                                    <span className="text-nomichi-ink/50 text-[11px] block mt-0.5">Provide traveler details and gov ID proofs.</span>
                                   </div>
                                 </div>
                                 <div className="flex gap-3 items-start text-xs leading-relaxed font-semibold">
@@ -4160,8 +4976,8 @@ const firstName = lead.name ? lead.name.split(" ")[0] : "Traveler";
                                     <span className="w-1.5 h-1.5 rounded-full bg-zinc-400" />
                                   </div>
                                   <div>
-                                    <strong className="block text-nomichi-ink/45">Get Ready!</strong>
-                                    <span className="text-nomichi-ink/30 text-[11px] block mt-0.5">We'll share all trip preparation details.</span>
+                                    <strong className="block text-nomichi-ink/45">Payment Receipt</strong>
+                                    <span className="text-nomichi-ink/30 text-[11px] block mt-0.5">Make payment deposit to secure your slots.</span>
                                   </div>
                                 </div>
                               </>
@@ -4174,17 +4990,17 @@ const firstName = lead.name ? lead.name.split(" ")[0] : "Traveler";
                                     <Check className="w-3.5 h-3.5 stroke-[2.5px]" />
                                   </div>
                                   <div>
-                                    <strong className="block text-nomichi-ink">Payment Completed</strong>
-                                    <span className="text-nomichi-ink/50 text-[11px] block mt-0.5">We have received your payment successfully.</span>
+                                    <strong className="block text-nomichi-ink">Documents Submitted</strong>
+                                    <span className="text-nomichi-ink/50 text-[11px] block mt-0.5">Documents successfully uploaded.</span>
                                   </div>
                                 </div>
                                 <div className="flex gap-3 items-start text-xs leading-relaxed font-semibold">
-                                  <div className="w-5.5 h-5.5 rounded-full bg-emerald-50 text-emerald-600 border border-emerald-100 flex items-center justify-center shrink-0 ring-4 ring-emerald-100 animate-pulse">
-                                    <Check className="w-3.5 h-3.5 stroke-[2.5px]" />
+                                  <div className="w-5.5 h-5.5 rounded-full bg-amber-50 text-amber-600 border border-amber-200 flex items-center justify-center shrink-0 ring-4 ring-amber-100 animate-pulse">
+                                    <span className="w-1.5 h-1.5 rounded-full bg-amber-600" />
                                   </div>
                                   <div>
-                                    <strong className="block text-nomichi-ink">Documents & Permits</strong>
-                                    <span className="text-nomichi-ink/50 text-[11px] block mt-0.5">Our team will help you with the required documents.</span>
+                                    <strong className="block text-nomichi-ink">Document Verification</strong>
+                                    <span className="text-nomichi-ink/50 text-[11px] block mt-0.5">Our team is reviewing your uploaded documents.</span>
                                   </div>
                                 </div>
                                 <div className="flex gap-3 items-start text-xs leading-relaxed font-semibold">
@@ -4192,8 +5008,8 @@ const firstName = lead.name ? lead.name.split(" ")[0] : "Traveler";
                                     <span className="w-1.5 h-1.5 rounded-full bg-zinc-400" />
                                   </div>
                                   <div>
-                                    <strong className="block text-nomichi-ink/45">Pre-Departure Briefing</strong>
-                                    <span className="text-nomichi-ink/30 text-[11px] block mt-0.5">You will receive all trip details before departure.</span>
+                                    <strong className="block text-nomichi-ink/45">Payment Receipt</strong>
+                                    <span className="text-nomichi-ink/30 text-[11px] block mt-0.5">Complete booking payment upon approval.</span>
                                   </div>
                                 </div>
                               </>
@@ -4206,8 +5022,8 @@ const firstName = lead.name ? lead.name.split(" ")[0] : "Traveler";
                                     <Check className="w-3.5 h-3.5 stroke-[2.5px]" />
                                   </div>
                                   <div>
-                                    <strong className="block text-nomichi-ink">Payment Completed</strong>
-                                    <span className="text-nomichi-ink/50 text-[11px] block mt-0.5">We have received your payment successfully.</span>
+                                    <strong className="block text-nomichi-ink">Documents Verified</strong>
+                                    <span className="text-nomichi-ink/50 text-[11px] block mt-0.5">All traveler documents verified successfully.</span>
                                   </div>
                                 </div>
                                 <div className="flex gap-3 items-start text-xs leading-relaxed font-semibold">
@@ -4215,8 +5031,8 @@ const firstName = lead.name ? lead.name.split(" ")[0] : "Traveler";
                                     <Check className="w-3.5 h-3.5 stroke-[2.5px]" />
                                   </div>
                                   <div>
-                                    <strong className="block text-nomichi-ink">Documents Verified</strong>
-                                    <span className="text-nomichi-ink/50 text-[11px] block mt-0.5">All required travel documents have been approved.</span>
+                                    <strong className="block text-nomichi-ink">Payment Received</strong>
+                                    <span className="text-nomichi-ink/50 text-[11px] block mt-0.5">We have received your payment deposit.</span>
                                   </div>
                                 </div>
                                 <div className="flex gap-3 items-start text-xs leading-relaxed font-semibold">
@@ -4224,8 +5040,40 @@ const firstName = lead.name ? lead.name.split(" ")[0] : "Traveler";
                                     <span className="w-1.5 h-1.5 rounded-full bg-[#FF5B26]" />
                                   </div>
                                   <div>
-                                    <strong className="block text-nomichi-ink">Pre-Departure Briefing</strong>
-                                    <span className="text-nomichi-ink/50 text-[11px] block mt-0.5">We will share all final trip briefings soon.</span>
+                                    <strong className="block text-nomichi-ink">Booking Confirmation</strong>
+                                    <span className="text-nomichi-ink/50 text-[11px] block mt-0.5">We are confirming your vouchers and stay.</span>
+                                  </div>
+                                </div>
+                              </>
+                            )}
+
+                            {currentStatusIdx === 6 && (
+                              <>
+                                <div className="flex gap-3 items-start text-xs leading-relaxed font-semibold">
+                                  <div className="w-5.5 h-5.5 rounded-full bg-emerald-50 text-emerald-600 border border-emerald-100 flex items-center justify-center shrink-0">
+                                    <Check className="w-3.5 h-3.5 stroke-[2.5px]" />
+                                  </div>
+                                  <div>
+                                    <strong className="block text-nomichi-ink">Documents Verified</strong>
+                                    <span className="text-nomichi-ink/50 text-[11px] block mt-0.5">Traveler documents verified.</span>
+                                  </div>
+                                </div>
+                                <div className="flex gap-3 items-start text-xs leading-relaxed font-semibold">
+                                  <div className="w-5.5 h-5.5 rounded-full bg-emerald-50 text-emerald-600 border border-emerald-100 flex items-center justify-center shrink-0">
+                                    <Check className="w-3.5 h-3.5 stroke-[2.5px]" />
+                                  </div>
+                                  <div>
+                                    <strong className="block text-nomichi-ink">Payment Received</strong>
+                                    <span className="text-nomichi-ink/50 text-[11px] block mt-0.5">Payment received successfully.</span>
+                                  </div>
+                                </div>
+                                <div className="flex gap-3 items-start text-xs leading-relaxed font-semibold">
+                                  <div className="w-5.5 h-5.5 rounded-full bg-emerald-50 text-emerald-600 border border-emerald-100 flex items-center justify-center shrink-0">
+                                    <Check className="w-3.5 h-3.5 stroke-[2.5px]" />
+                                  </div>
+                                  <div>
+                                    <strong className="block text-nomichi-ink">Booking Confirmed!</strong>
+                                    <span className="text-nomichi-ink/50 text-[11px] block mt-0.5">Your adventure has been confirmed!</span>
                                   </div>
                                 </div>
                               </>
@@ -4842,13 +5690,19 @@ const firstName = lead.name ? lead.name.split(" ")[0] : "Traveler";
                     const departureMeta = parseDepartureStatus(booking.trip_departures?.status);
                     const formattedStartDate = formatDate(booking.trip_departures?.start_date);
                     const formattedEndDate = formatDate(booking.trip_departures?.end_date);
-                    const priceFormatted = `₹${Number(booking.price || 0).toLocaleString("en-IN")}`;
+                    
+                    const travelerCount = booking.leads?.traveler_documents?.length 
+                      || Number(booking.leads?.group_size) 
+                      || booking.travelers?.length 
+                      || 1;
+                    const totalBookingPrice = Number(booking.price || 0) * travelerCount;
+                    const priceFormatted = `₹${totalBookingPrice.toLocaleString("en-IN")}`;
                     
                     // Sum completed payments
                     const completedPayments = (booking.payments || [])
                       .filter((p: any) => p.status === "completed")
                       .reduce((sum: number, p: any) => sum + Number(p.amount), 0);
-                    const pendingAmount = Math.max(0, Number(booking.price || 0) - completedPayments);
+                    const pendingAmount = Math.max(0, totalBookingPrice - completedPayments);
 
                     return (
                       <div key={booking.id} className="bg-white rounded-3xl border border-[#e7e1d5]/40 shadow-sm p-6 lg:p-8 flex flex-col lg:flex-row gap-6 justify-between items-start lg:items-center">
@@ -4877,8 +5731,9 @@ const firstName = lead.name ? lead.name.split(" ")[0] : "Traveler";
 
                           <div className="grid grid-cols-2 md:grid-cols-4 gap-4 pt-2">
                             <div>
-                              <span className="text-[9px] font-extrabold text-nomichi-ink/40 uppercase tracking-wider block">Price</span>
+                              <span className="text-[9px] font-extrabold text-nomichi-ink/40 uppercase tracking-wider block">Total Price</span>
                               <span className="text-xs font-bold text-nomichi-ink mt-0.5 block">{priceFormatted}</span>
+                              <span className="text-[9px] font-semibold text-nomichi-ink/30 mt-0.5 block">({travelerCount} {travelerCount === 1 ? "Person" : "People"} × ₹{Number(booking.price || 0).toLocaleString("en-IN")})</span>
                             </div>
                             <div>
                               <span className="text-[9px] font-extrabold text-nomichi-ink/40 uppercase tracking-wider block">Total Paid</span>
@@ -4945,265 +5800,282 @@ const firstName = lead.name ? lead.name.split(" ")[0] : "Traveler";
               </div>
 
               {/* PAYMENT MODAL */}
-            {paymentModalBooking && (
-              <div className="fixed inset-0 z-50 flex items-center justify-center bg-nomichi-ink/60 backdrop-blur-sm p-4 animate-in fade-in duration-200">
-                <div className="bg-white rounded-3xl shadow-2xl border border-[#e7e1d5]/40 w-full max-w-lg overflow-hidden animate-in zoom-in-95 duration-200">
+            {paymentModalBooking && (() => {
+              const travelerCount = paymentModalBooking.leads?.traveler_documents?.length 
+                || Number(paymentModalBooking.leads?.group_size) 
+                || paymentModalBooking.travelers?.length 
+                || 1;
+              const totalBookingPrice = Number(paymentModalBooking.price || 0) * travelerCount;
+              const completedPayments = (paymentModalBooking.payments || [])
+                .filter((p: any) => p.status === "completed")
+                .reduce((s: number, p: any) => s + Number(p.amount), 0);
+              const pendingAmount = Math.max(0, totalBookingPrice - completedPayments);
 
-                  {/* Header */}
-                  <div className="flex items-center justify-between px-6 py-5 border-b border-[#e7e1d5]/30 bg-gradient-to-r from-[#FFF5F2] to-white">
-                    <div>
-                      <h3 className="text-base font-display font-extrabold text-nomichi-ink">Complete Payment</h3>
-                      <p className="text-[10px] text-nomichi-ink/50 mt-0.5 font-medium">
-                        Booking #{paymentModalBooking.id.slice(0, 8).toUpperCase()} · {paymentModalBooking.trips?.title}
-                      </p>
-                    </div>
-                    {paymentStep !== "processing" && paymentStep !== "success" && (
-                      <button onClick={closePaymentModal} className="text-nomichi-ink/40 hover:text-nomichi-ink/80 transition-colors">
-                        <X className="w-5 h-5" />
-                      </button>
-                    )}
-                  </div>
+              return (
+                <div className="fixed inset-0 z-50 flex items-center justify-center bg-nomichi-ink/60 backdrop-blur-sm p-4 animate-in fade-in duration-200">
+                  <div className="bg-white rounded-3xl shadow-2xl border border-[#e7e1d5]/40 w-full max-w-lg overflow-hidden animate-in zoom-in-95 duration-200">
 
-                  {/* Amount Banner */}
-                  {paymentStep !== "success" && (
-                    <div className="mx-6 mt-5 rounded-2xl bg-gradient-to-r from-[#FF5B26]/10 to-[#FF8C5A]/10 border border-[#FF5B26]/20 px-4 py-3 flex items-center justify-between">
-                      <span className="text-xs font-bold text-nomichi-ink/70">Balance Due</span>
-                      <span className="text-xl font-display font-extrabold text-[#FF5B26]">
-                        ₹{Math.max(0, Number(paymentModalBooking.price || 0) - (paymentModalBooking.payments || []).filter((p: any) => p.status === "completed").reduce((s: number, p: any) => s + Number(p.amount), 0)).toLocaleString("en-IN")}
-                      </span>
-                    </div>
-                  )}
-
-                  <div className="px-6 py-5">
-
-                    {/* STEP 1 — Choose Method */}
-                    {paymentStep === "method" && (
-                      <div className="space-y-4">
-                        <p className="text-xs font-bold text-nomichi-ink/60 uppercase tracking-wider">Select Payment Method</p>
-                        <div className="space-y-2">
-                          {([
-                            { id: "card", label: "Credit / Debit Card", sub: "Visa, Mastercard, RuPay", icon: "💳" },
-                            { id: "upi", label: "UPI", sub: "GPay, PhonePe, Paytm, BHIM", icon: "⚡" },
-                            { id: "netbanking", label: "Net Banking", sub: "All major Indian banks", icon: "🏦" },
-                          ] as const).map((opt) => (
-                            <button
-                              key={opt.id}
-                              onClick={() => setPaymentMethod(opt.id)}
-                              className={`w-full flex items-center gap-4 px-4 py-3.5 rounded-2xl border-2 transition-all text-left ${
-                                paymentMethod === opt.id
-                                  ? "border-[#FF5B26] bg-[#FFF5F2]"
-                                  : "border-[#e7e1d5] bg-[#FAF8F4] hover:border-[#FF5B26]/40"
-                              }`}
-                            >
-                              <span className="text-2xl">{opt.icon}</span>
-                              <div>
-                                <span className="text-xs font-extrabold text-nomichi-ink block">{opt.label}</span>
-                                <span className="text-[10px] text-nomichi-ink/50 font-medium">{opt.sub}</span>
-                              </div>
-                              {paymentMethod === opt.id && (
-                                <Check className="w-4 h-4 text-[#FF5B26] ml-auto" />
-                              )}
-                            </button>
-                          ))}
-                        </div>
-                        <button
-                          disabled={!paymentMethod}
-                          onClick={handlePaymentProceed}
-                          className="w-full py-3 bg-[#FF5B26] hover:bg-[#b04b1e] disabled:opacity-40 disabled:cursor-not-allowed text-white text-xs font-extrabold rounded-xl transition-all shadow-md mt-2"
-                        >
-                          Proceed →
+                    {/* Header */}
+                    <div className="flex items-center justify-between px-6 py-5 border-b border-[#e7e1d5]/30 bg-gradient-to-r from-[#FFF5F2] to-white">
+                      <div>
+                        <h3 className="text-base font-display font-extrabold text-nomichi-ink">Complete Payment</h3>
+                        <p className="text-[10px] text-nomichi-ink/50 mt-0.5 font-medium">
+                          Booking #{paymentModalBooking.id.slice(0, 8).toUpperCase()} · {paymentModalBooking.trips?.title}
+                        </p>
+                      </div>
+                      {paymentStep !== "processing" && paymentStep !== "success" && (
+                        <button onClick={closePaymentModal} className="text-nomichi-ink/40 hover:text-nomichi-ink/80 transition-colors">
+                          <X className="w-5 h-5" />
                         </button>
+                      )}
+                    </div>
+
+                    {/* Amount Banner */}
+                    {paymentStep !== "success" && (
+                      <div className="mx-6 mt-5 rounded-2xl bg-gradient-to-r from-[#FF5B26]/10 to-[#FF8C5A]/10 border border-[#FF5B26]/20 px-4 py-3 flex items-center justify-between">
+                        <span className="text-xs font-bold text-nomichi-ink/70">Balance Due</span>
+                        <span className="text-xl font-display font-extrabold text-[#FF5B26]">
+                          ₹{pendingAmount.toLocaleString("en-IN")}
+                        </span>
                       </div>
                     )}
 
-                    {/* STEP 2 — Enter Details */}
-                    {paymentStep === "details" && (
-                      <div className="space-y-4">
-                        <button
-                          onClick={() => setPaymentStep("method")}
-                          className="flex items-center gap-1 text-[10px] font-bold text-nomichi-ink/50 hover:text-nomichi-ink transition-colors mb-1 cursor-pointer"
-                        >
-                          <ChevronLeft className="w-3 h-3" /> Change method
-                        </button>
+                    <div className="px-6 py-5">
 
-                        {paymentMethod === "card" && (
-                          <div className="space-y-3">
-                            <div className="relative">
-                              <label className="text-[10px] font-extrabold text-nomichi-ink/60 uppercase tracking-wider block mb-1">Card Number</label>
-                              <input
-                                type="text"
-                                maxLength={19}
-                                placeholder="4242 4242 4242 4242"
-                                value={cardForm.number}
-                                onChange={e => {
-                                  const val = e.target.value.replace(/\D/g, "").slice(0, 16);
-                                  const formatted = val.match(/.{1,4}/g)?.join(" ") || val;
-                                  setCardForm(f => ({ ...f, number: formatted }));
-                                }}
-                                className="w-full border border-[#e7e1d5]/60 bg-[#FAF8F4] px-4 py-3 rounded-xl text-sm font-mono font-bold text-nomichi-ink focus:outline-none focus:border-[#FF5B26] tracking-widest"
-                              />
-                            </div>
-                            <div>
-                              <label className="text-[10px] font-extrabold text-nomichi-ink/60 uppercase tracking-wider block mb-1">Name on Card</label>
-                              <input
-                                type="text"
-                                placeholder="Tejaswa Jhode"
-                                value={cardForm.name}
-                                onChange={e => setCardForm(f => ({ ...f, name: e.target.value }))}
-                                className="w-full border border-[#e7e1d5]/60 bg-[#FAF8F4] px-4 py-3 rounded-xl text-sm font-semibold text-nomichi-ink focus:outline-none focus:border-[#FF5B26]"
-                              />
-                            </div>
-                            <div className="grid grid-cols-2 gap-3">
-                              <div>
-                                <label className="text-[10px] font-extrabold text-nomichi-ink/60 uppercase tracking-wider block mb-1">Expiry</label>
+                      {/* STEP 1 — Choose Method */}
+                      {paymentStep === "method" && (
+                        <div className="space-y-4">
+                          <p className="text-xs font-bold text-nomichi-ink/60 uppercase tracking-wider">Select Payment Method</p>
+                          <div className="space-y-2">
+                            {([
+                              { id: "card", label: "Credit / Debit Card", sub: "Visa, Mastercard, RuPay", icon: "💳" },
+                              { id: "upi", label: "UPI", sub: "GPay, PhonePe, Paytm, BHIM", icon: "⚡" },
+                              { id: "netbanking", label: "Net Banking", sub: "All major Indian banks", icon: "🏦" },
+                            ] as const).map((opt) => (
+                              <button
+                                key={opt.id}
+                                onClick={() => setPaymentMethod(opt.id)}
+                                className={`w-full flex items-center gap-4 px-4 py-3.5 rounded-2xl border-2 transition-all text-left ${
+                                  paymentMethod === opt.id
+                                    ? "border-[#FF5B26] bg-[#FFF5F2]"
+                                    : "border-[#e7e1d5] bg-[#FAF8F4] hover:border-[#FF5B26]/40"
+                                }`}
+                              >
+                                <span className="text-2xl">{opt.icon}</span>
+                                <div>
+                                  <span className="text-xs font-extrabold text-nomichi-ink block">{opt.label}</span>
+                                  <span className="text-[10px] text-nomichi-ink/50 font-medium">{opt.sub}</span>
+                                </div>
+                                {paymentMethod === opt.id && (
+                                  <Check className="w-4 h-4 text-[#FF5B26] ml-auto" />
+                                )}
+                              </button>
+                            ))}
+                          </div>
+                          <button
+                            disabled={!paymentMethod}
+                            onClick={handlePaymentProceed}
+                            className="w-full py-3 bg-[#FF5B26] hover:bg-[#b04b1e] disabled:opacity-40 disabled:cursor-not-allowed text-white text-xs font-extrabold rounded-xl transition-all shadow-md mt-2"
+                          >
+                            Proceed →
+                          </button>
+                        </div>
+                      )}
+
+                      {/* STEP 2 — Enter Details */}
+                      {paymentStep === "details" && (
+                        <div className="space-y-4">
+                          <button
+                            onClick={() => setPaymentStep("method")}
+                            className="flex items-center gap-1 text-[10px] font-bold text-nomichi-ink/50 hover:text-nomichi-ink transition-colors mb-1 cursor-pointer"
+                          >
+                            <ChevronLeft className="w-3 h-3" /> Change method
+                          </button>
+
+                          {paymentMethod === "card" && (
+                            <div className="space-y-3">
+                              <div className="relative">
+                                <label className="text-[10px] font-extrabold text-nomichi-ink/60 uppercase tracking-wider block mb-1">Card Number</label>
                                 <input
                                   type="text"
-                                  maxLength={5}
-                                  placeholder="MM/YY"
-                                  value={cardForm.expiry}
+                                  maxLength={19}
+                                  placeholder="4242 4242 4242 4242"
+                                  value={cardForm.number}
                                   onChange={e => {
-                                    let val = e.target.value.replace(/\D/g, "");
-                                    if (val.length > 2) val = val.slice(0, 2) + "/" + val.slice(2, 4);
-                                    setCardForm(f => ({ ...f, expiry: val }));
+                                    const val = e.target.value.replace(/\D/g, "").slice(0, 16);
+                                    const formatted = val.match(/.{1,4}/g)?.join(" ") || val;
+                                    setCardForm(f => ({ ...f, number: formatted }));
                                   }}
-                                  className="w-full border border-[#e7e1d5]/60 bg-[#FAF8F4] px-4 py-3 rounded-xl text-sm font-mono font-bold text-nomichi-ink focus:outline-none focus:border-[#FF5B26]"
+                                  className="w-full border border-[#e7e1d5]/60 bg-[#FAF8F4] px-4 py-3 rounded-xl text-sm font-mono font-bold text-nomichi-ink focus:outline-none focus:border-[#FF5B26] tracking-widest"
                                 />
                               </div>
                               <div>
-                                <label className="text-[10px] font-extrabold text-nomichi-ink/60 uppercase tracking-wider block mb-1">CVV</label>
+                                <label className="text-[10px] font-extrabold text-nomichi-ink/60 uppercase tracking-wider block mb-1">Name on Card</label>
                                 <input
-                                  type="password"
-                                  maxLength={4}
-                                  placeholder="•••"
-                                  value={cardForm.cvv}
-                                  onChange={e => setCardForm(f => ({ ...f, cvv: e.target.value.replace(/\D/g, "").slice(0, 4) }))}
-                                  className="w-full border border-[#e7e1d5]/60 bg-[#FAF8F4] px-4 py-3 rounded-xl text-sm font-mono font-bold text-nomichi-ink focus:outline-none focus:border-[#FF5B26]"
+                                  type="text"
+                                  placeholder="Tejaswa Jhode"
+                                  value={cardForm.name}
+                                  onChange={e => setCardForm(f => ({ ...f, name: e.target.value }))}
+                                  className="w-full border border-[#e7e1d5]/60 bg-[#FAF8F4] px-4 py-3 rounded-xl text-sm font-semibold text-nomichi-ink focus:outline-none focus:border-[#FF5B26]"
+                                />
+                              </div>
+                              <div className="grid grid-cols-2 gap-3">
+                                <div>
+                                  <label className="text-[10px] font-extrabold text-nomichi-ink/60 uppercase tracking-wider block mb-1">Expiry</label>
+                                  <input
+                                    type="text"
+                                    maxLength={5}
+                                    placeholder="MM/YY"
+                                    value={cardForm.expiry}
+                                    onChange={e => {
+                                      let val = e.target.value.replace(/\D/g, "");
+                                      if (val.length > 2) val = val.slice(0, 2) + "/" + val.slice(2, 4);
+                                      setCardForm(f => ({ ...f, expiry: val }));
+                                    }}
+                                    className="w-full border border-[#e7e1d5]/60 bg-[#FAF8F4] px-4 py-3 rounded-xl text-sm font-mono font-bold text-nomichi-ink focus:outline-none focus:border-[#FF5B26]"
+                                  />
+                                </div>
+                                <div>
+                                  <label className="text-[10px] font-extrabold text-nomichi-ink/60 uppercase tracking-wider block mb-1">CVV</label>
+                                  <input
+                                    type="password"
+                                    maxLength={4}
+                                    placeholder="•••"
+                                    value={cardForm.cvv}
+                                    onChange={e => setCardForm(f => ({ ...f, cvv: e.target.value.replace(/\D/g, "").slice(0, 4) }))}
+                                    className="w-full border border-[#e7e1d5]/60 bg-[#FAF8F4] px-4 py-3 rounded-xl text-sm font-mono font-bold text-nomichi-ink focus:outline-none focus:border-[#FF5B26]"
+                                  />
+                                </div>
+                              </div>
+                            </div>
+                          )}
+
+                          {paymentMethod === "upi" && (
+                            <div className="space-y-3">
+                              <div className="flex gap-2 flex-wrap">
+                                {["GPay", "PhonePe", "Paytm", "BHIM"].map(app => (
+                                  <span key={app} className="px-3 py-1.5 bg-[#FAF8F4] border border-[#e7e1d5] rounded-lg text-[10px] font-bold text-nomichi-ink/70">{app}</span>
+                                ))}
+                              </div>
+                              <div>
+                                <label className="text-[10px] font-extrabold text-nomichi-ink/60 uppercase tracking-wider block mb-1">UPI ID</label>
+                                <input
+                                  type="text"
+                                  placeholder="yourname@okaxis"
+                                  value={upiId}
+                                  onChange={e => setUpiId(e.target.value)}
+                                  className="w-full border border-[#e7e1d5]/60 bg-[#FAF8F4] px-4 py-3 rounded-xl text-sm font-semibold text-nomichi-ink focus:outline-none focus:border-[#FF5B26]"
                                 />
                               </div>
                             </div>
-                          </div>
-                        )}
+                          )}
 
-                        {paymentMethod === "upi" && (
-                          <div className="space-y-3">
-                            <div className="flex gap-2 flex-wrap">
-                              {["GPay", "PhonePe", "Paytm", "BHIM"].map(app => (
-                                <span key={app} className="px-3 py-1.5 bg-[#FAF8F4] border border-[#e7e1d5] rounded-lg text-[10px] font-bold text-nomichi-ink/70">{app}</span>
-                              ))}
+                          {paymentMethod === "netbanking" && (
+                            <div className="space-y-3">
+                              <p className="text-[10px] font-extrabold text-nomichi-ink/60 uppercase tracking-wider">Select Your Bank</p>
+                              <div className="grid grid-cols-2 gap-2">
+                                {["State Bank of India", "HDFC Bank", "ICICI Bank", "Axis Bank", "Kotak Bank", "Yes Bank"].map(bank => (
+                                  <button
+                                    key={bank}
+                                    onClick={() => setSelectedBank(bank)}
+                                    className={`px-3 py-2.5 rounded-xl border-2 text-[10px] font-bold text-left transition-all ${
+                                      selectedBank === bank
+                                        ? "border-[#FF5B26] bg-[#FFF5F2] text-nomichi-ink"
+                                        : "border-[#e7e1d5] bg-[#FAF8F4] text-nomichi-ink/70 hover:border-[#FF5B26]/40"
+                                    }`}
+                                  >
+                                    {bank}
+                                  </button>
+                                ))}
+                              </div>
                             </div>
-                            <div>
-                              <label className="text-[10px] font-extrabold text-nomichi-ink/60 uppercase tracking-wider block mb-1">UPI ID</label>
-                              <input
-                                type="text"
-                                placeholder="yourname@okaxis"
-                                value={upiId}
-                                onChange={e => setUpiId(e.target.value)}
-                                className="w-full border border-[#e7e1d5]/60 bg-[#FAF8F4] px-4 py-3 rounded-xl text-sm font-semibold text-nomichi-ink focus:outline-none focus:border-[#FF5B26]"
-                              />
+                          )}
+
+                          <div className="flex items-center gap-2 text-[10px] text-nomichi-ink/40 font-medium pt-1">
+                            <Shield className="w-3.5 h-3.5 text-emerald-500" />
+                            256-bit SSL encrypted · PCI DSS compliant
+                          </div>
+
+                          <button
+                            onClick={handlePaymentSubmit}
+                            className="w-full py-3 bg-[#FF5B26] hover:bg-[#b04b1e] text-white text-xs font-extrabold rounded-xl transition-all shadow-md"
+                          >
+                            Pay Now ₹{pendingAmount.toLocaleString("en-IN")}
+                          </button>
+                        </div>
+                      )}
+
+                      {/* STEP 3 — Processing */}
+                      {paymentStep === "processing" && (
+                        <div className="flex flex-col items-center py-10 gap-5">
+                          <div className="relative">
+                            <div className="w-20 h-20 rounded-full bg-[#FFF5F2] flex items-center justify-center">
+                              <Loader2 className="w-10 h-10 text-[#FF5B26] animate-spin" />
                             </div>
                           </div>
-                        )}
+                          <div className="text-center">
+                            <p className="text-base font-display font-extrabold text-nomichi-ink">Processing Payment…</p>
+                            <p className="text-xs text-nomichi-ink/50 mt-1 font-medium">Please don't close this window</p>
+                          </div>
+                          <div className="w-full bg-[#e7e1d5]/30 rounded-full h-1.5 overflow-hidden">
+                            <div className="h-full bg-gradient-to-r from-[#FF5B26] to-[#FF8C5A] rounded-full" style={{ width: "0", transition: "width 2.4s ease-in-out" }} ref={el => { if (el) setTimeout(() => { el.style.width = "100%"; }, 50); }} />
+                          </div>
+                        </div>
+                      )}
 
-                        {paymentMethod === "netbanking" && (
-                          <div className="space-y-3">
-                            <p className="text-[10px] font-extrabold text-nomichi-ink/60 uppercase tracking-wider">Select Your Bank</p>
-                            <div className="grid grid-cols-2 gap-2">
-                              {["State Bank of India", "HDFC Bank", "ICICI Bank", "Axis Bank", "Kotak Bank", "Yes Bank"].map(bank => (
-                                <button
-                                  key={bank}
-                                  onClick={() => setSelectedBank(bank)}
-                                  className={`px-3 py-2.5 rounded-xl border-2 text-[10px] font-bold text-left transition-all ${
-                                    selectedBank === bank
-                                      ? "border-[#FF5B26] bg-[#FFF5F2] text-nomichi-ink"
-                                      : "border-[#e7e1d5] bg-[#FAF8F4] text-nomichi-ink/70 hover:border-[#FF5B26]/40"
-                                  }`}
-                                >
-                                  {bank}
-                                </button>
-                              ))}
+                      {/* STEP 4 — Success */}
+                      {paymentStep === "success" && (
+                        <div className="flex flex-col items-center py-8 gap-4 text-center">
+                          <div className="w-20 h-20 rounded-full bg-emerald-50 border-4 border-emerald-200 flex items-center justify-center animate-in zoom-in duration-300">
+                            <Check className="w-10 h-10 text-emerald-500" />
+                          </div>
+                          <div>
+                            <p className="text-xl font-display font-extrabold text-nomichi-ink">Payment Successful!</p>
+                            <p className="text-xs text-nomichi-ink/50 mt-1 font-medium">Your booking balance has been cleared</p>
+                          </div>
+                          <div className="w-full bg-[#FAF8F4] rounded-2xl border border-[#e7e1d5]/40 px-4 py-3 text-left space-y-1.5">
+                            <div className="flex justify-between text-[10px]">
+                              <span className="text-nomichi-ink/50 font-semibold">Transaction ID</span>
+                              <span className="font-mono font-bold text-nomichi-ink">TXN{Date.now().toString().slice(-8)}</span>
+                            </div>
+                            <div className="flex justify-between text-[10px]">
+                              <span className="text-nomichi-ink/50 font-semibold">Booking Ref</span>
+                              <span className="font-mono font-bold text-nomichi-ink">{paymentModalBooking.id.slice(0, 8).toUpperCase()}</span>
+                            </div>
+                            <div className="flex justify-between text-[10px]">
+                              <span className="text-nomichi-ink/50 font-semibold">Amount Paid</span>
+                              <span className="font-bold text-emerald-600">₹{pendingAmount.toLocaleString("en-IN")}</span>
+                            </div>
+                            <div className="flex justify-between text-[10px]">
+                              <span className="text-nomichi-ink/50 font-semibold">Status</span>
+                              <span className="font-bold text-emerald-600">✓ COMPLETED</span>
                             </div>
                           </div>
-                        )}
-
-                        <div className="flex items-center gap-2 text-[10px] text-nomichi-ink/40 font-medium pt-1">
-                          <Shield className="w-3.5 h-3.5 text-emerald-500" />
-                          256-bit SSL encrypted · PCI DSS compliant
+                          <p className="text-[10px] text-nomichi-ink/40 font-medium">A confirmation has been sent to {user.email}</p>
+                          <button
+                            onClick={closePaymentModal}
+                            className="w-full py-3 bg-[#FF5B26] hover:bg-[#b04b1e] text-white text-xs font-extrabold rounded-xl transition-all shadow-md"
+                          >
+                            Done
+                          </button>
                         </div>
-
-                        <button
-                          onClick={handlePaymentSubmit}
-                          className="w-full py-3 bg-[#FF5B26] hover:bg-[#b04b1e] text-white text-xs font-extrabold rounded-xl transition-all shadow-md"
-                        >
-                          Pay Now ₹{Math.max(0, Number(paymentModalBooking.price || 0) - (paymentModalBooking.payments || []).filter((p: any) => p.status === "completed").reduce((s: number, p: any) => s + Number(p.amount), 0)).toLocaleString("en-IN")}
-                        </button>
-                      </div>
-                    )}
-
-                    {/* STEP 3 — Processing */}
-                    {paymentStep === "processing" && (
-                      <div className="flex flex-col items-center py-10 gap-5">
-                        <div className="relative">
-                          <div className="w-20 h-20 rounded-full bg-[#FFF5F2] flex items-center justify-center">
-                            <Loader2 className="w-10 h-10 text-[#FF5B26] animate-spin" />
-                          </div>
-                        </div>
-                        <div className="text-center">
-                          <p className="text-base font-display font-extrabold text-nomichi-ink">Processing Payment…</p>
-                          <p className="text-xs text-nomichi-ink/50 mt-1 font-medium">Please don't close this window</p>
-                        </div>
-                        <div className="w-full bg-[#e7e1d5]/30 rounded-full h-1.5 overflow-hidden">
-                          <div className="h-full bg-gradient-to-r from-[#FF5B26] to-[#FF8C5A] rounded-full" style={{ width: "0", transition: "width 2.4s ease-in-out" }} ref={el => { if (el) setTimeout(() => { el.style.width = "100%"; }, 50); }} />
-                        </div>
-                      </div>
-                    )}
-
-                    {/* STEP 4 — Success */}
-                    {paymentStep === "success" && (
-                      <div className="flex flex-col items-center py-8 gap-4 text-center">
-                        <div className="w-20 h-20 rounded-full bg-emerald-50 border-4 border-emerald-200 flex items-center justify-center animate-in zoom-in duration-300">
-                          <Check className="w-10 h-10 text-emerald-500" />
-                        </div>
-                        <div>
-                          <p className="text-xl font-display font-extrabold text-nomichi-ink">Payment Successful!</p>
-                          <p className="text-xs text-nomichi-ink/50 mt-1 font-medium">Your booking balance has been cleared</p>
-                        </div>
-                        <div className="w-full bg-[#FAF8F4] rounded-2xl border border-[#e7e1d5]/40 px-4 py-3 text-left space-y-1.5">
-                          <div className="flex justify-between text-[10px]">
-                            <span className="text-nomichi-ink/50 font-semibold">Transaction ID</span>
-                            <span className="font-mono font-bold text-nomichi-ink">TXN{Date.now().toString().slice(-8)}</span>
-                          </div>
-                          <div className="flex justify-between text-[10px]">
-                            <span className="text-nomichi-ink/50 font-semibold">Booking Ref</span>
-                            <span className="font-mono font-bold text-nomichi-ink">{paymentModalBooking.id.slice(0, 8).toUpperCase()}</span>
-                          </div>
-                          <div className="flex justify-between text-[10px]">
-                            <span className="text-nomichi-ink/50 font-semibold">Amount Paid</span>
-                            <span className="font-bold text-emerald-600">₹{Math.max(0, Number(paymentModalBooking.price || 0) - (paymentModalBooking.payments || []).filter((p: any) => p.status === "completed").reduce((s: number, p: any) => s + Number(p.amount), 0)).toLocaleString("en-IN")}</span>
-                          </div>
-                          <div className="flex justify-between text-[10px]">
-                            <span className="text-nomichi-ink/50 font-semibold">Status</span>
-                            <span className="font-bold text-emerald-600">✓ COMPLETED</span>
-                          </div>
-                        </div>
-                        <p className="text-[10px] text-nomichi-ink/40 font-medium">A confirmation has been sent to {user.email}</p>
-                        <button
-                          onClick={closePaymentModal}
-                          className="w-full py-3 bg-[#FF5B26] hover:bg-[#b04b1e] text-white text-xs font-extrabold rounded-xl transition-all shadow-md"
-                        >
-                          Done
-                        </button>
-                      </div>
-                    )}
+                      )}
+                    </div>
                   </div>
                 </div>
-              </div>
-            )}
+              );
+            })()}
 
               {/* INVOICE MODAL */}
             {invoiceModalBooking && (() => {
               const inv = invoiceModalBooking;
+              const travelerCount = inv.leads?.traveler_documents?.length 
+                || Number(inv.leads?.group_size) 
+                || inv.travelers?.length 
+                || 1;
+              const totalBookingPrice = Number(inv.price || 0) * travelerCount;
               const completedPaid = (inv.payments || []).filter((p: any) => p.status === "completed").reduce((s: number, p: any) => s + Number(p.amount), 0);
-              const pendingAmt = Math.max(0, Number(inv.price || 0) - completedPaid);
+              const pendingAmt = Math.max(0, totalBookingPrice - completedPaid);
               const invoiceNumber = `NMC-${inv.id.slice(0, 8).toUpperCase()}`;
               const invoiceDate = new Date(inv.created_at).toLocaleDateString("en-IN", { day: "2-digit", month: "short", year: "numeric" });
               const deptMeta = parseDepartureStatus(inv.trip_departures?.status);
@@ -5272,13 +6144,13 @@ const firstName = lead.name ? lead.name.split(" ")[0] : "Traveler";
                               <p className="text-xs font-bold text-nomichi-ink">{inv.trips?.title || "Trip Package"}</p>
                               <p className="text-[9px] text-nomichi-ink/50 font-medium mt-0.5">{inv.trips?.destination || ""}</p>
                             </div>
-                            <p className="text-xs font-bold text-nomichi-ink text-center self-center">{inv.travelers?.length || 1}</p>
-                            <p className="text-xs font-bold text-nomichi-ink text-right self-center">₹{Number(inv.price || 0).toLocaleString("en-IN")}</p>
+                            <p className="text-xs font-bold text-nomichi-ink text-center self-center">{travelerCount}</p>
+                            <p className="text-xs font-bold text-nomichi-ink text-right self-center">₹{totalBookingPrice.toLocaleString("en-IN")}</p>
                           </div>
                           <div className="border-t border-[#e7e1d5]/40 px-4 py-3 space-y-2">
                             <div className="flex justify-between text-[10px]">
                               <span className="text-nomichi-ink/50 font-semibold">Subtotal</span>
-                              <span className="font-bold text-nomichi-ink">₹{Number(inv.price || 0).toLocaleString("en-IN")}</span>
+                              <span className="font-bold text-nomichi-ink">₹{totalBookingPrice.toLocaleString("en-IN")}</span>
                             </div>
                             <div className="flex justify-between text-[10px]">
                               <span className="text-nomichi-ink/50 font-semibold">GST (5%)</span>

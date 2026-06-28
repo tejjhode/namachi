@@ -58,7 +58,7 @@ export async function POST(request: Request) {
       return NextResponse.json({ error: "Failed to update booking status" }, { status: 500 });
     }
 
-    // 3. Fetch booking context for emails
+    // 3. Fetch booking context for emails and workflow sync
     const { data: booking } = await supabaseAdmin
       .from("bookings")
       .select(`
@@ -85,6 +85,7 @@ export async function POST(request: Request) {
       paymentMethod === "upi" ? "UPI" :
       paymentMethod === "netbanking" ? "Net Banking" :
       paymentMethod || "Online";
+    const normalizedBookingStatus = String(bk?.payment_status || "").toLowerCase().trim();
 
     // 4. Fetch assigned manager
     let managerEmail = "";
@@ -104,25 +105,25 @@ export async function POST(request: Request) {
       }
     }
 
-    // ── 4b. Auto-Advance Manager Workflow and Task 5 ──
-    if (leadObj?.id) {
+    // ── 4b. Auto-complete payment follow-up when booking is paid ──
+    if (leadObj?.id && normalizedBookingStatus === "paid") {
       const leadId = leadObj.id;
-      // Find the step 5 task for this lead
-      const { data: step5Task } = await supabaseAdmin
+      // Find the step 7 task for this lead
+      const { data: step7Task } = await supabaseAdmin
         .from("tasks")
         .select("id, status")
         .eq("source_kind", "lead")
         .eq("source_id", leadId)
-        .eq("step", 5)
+        .eq("step", 7)
         .neq("status", "completed")
         .maybeSingle();
 
-      if (step5Task) {
-        // Mark step 5 task as completed
+      if (step7Task) {
+        // Mark payment follow-up as completed
         await supabaseAdmin
           .from("tasks")
           .update({ status: "completed", updated_at: new Date().toISOString() })
-          .eq("id", step5Task.id);
+          .eq("id", step7Task.id);
         
         // Update lead status to "converted"
         await supabaseAdmin
@@ -130,38 +131,23 @@ export async function POST(request: Request) {
           .update({ status: "converted" })
           .eq("id", leadId);
 
-        // Add lead note
+        // Add lead note for the activity timeline
         await supabaseAdmin
           .from("lead_notes")
           .insert({
             lead_id: leadId,
-            content: `Payment Confirmed:\n- Amount: ${amountFormatted}\n- Transaction Ref: ${transactionId}\n(Automatically updated via Traveler online payment)`,
+            content: `Payment Follow-up: Pending → Done by traveler payment.\n- Status: Paid\n- Amount: ${amountFormatted}\n- Transaction Ref: ${transactionId}\n- Booking Ref: ${bookingRef}\n(Automatically updated when booking payment_status changed to paid)`,
             created_by: assignedTo || null
           });
-
-        // Send document required notification to Traveler
-        try {
-          await supabaseAdmin.from("notifications").insert({
-            user_id: bk?.user_id,
-            title: "Document Required",
-            body: "Please upload your ID and emergency contact details to complete your booking.",
-            type: "Document Required",
-            priority: "High",
-            source_id: leadId,
-            is_read: false,
-          });
-        } catch (err) {
-          console.error("Failed to send notification in API:", err);
-        }
 
         // Notify Manager
         if (assignedTo) {
           try {
             await supabaseAdmin.from("notifications").insert({
               user_id: assignedTo,
-              title: "Booking Confirmed",
-              body: `Payment received for "${travelerName}". Proceed to booking confirmation.`,
-              type: "Booking Confirmed",
+              title: "Payment Follow-up Completed",
+              body: `Payment for "${travelerName}" is marked paid and the payment follow-up task has been completed automatically.`,
+              type: "Payment Follow-up Completed",
               priority: "High",
               source_id: leadId,
               is_read: false,
@@ -171,16 +157,16 @@ export async function POST(request: Request) {
           }
         }
 
-        // Create Step 6 Task ("Confirm Booking") if not already created
-        const { data: existingStep6 } = await supabaseAdmin
+        // Create Step 8 Task ("Confirm Booking") if not already created
+        const { data: existingStep8 } = await supabaseAdmin
           .from("tasks")
           .select("id")
           .eq("source_kind", "lead")
           .eq("source_id", leadId)
-          .eq("step", 6)
+          .eq("step", 8)
           .maybeSingle();
 
-        if (!existingStep6) {
+        if (!existingStep8) {
           const dueDate = new Date();
           const dueDateStr = dueDate.toISOString();
 
@@ -203,7 +189,7 @@ export async function POST(request: Request) {
               { title: "Confirm payment received", completed: false },
               { title: "Click Confirm Booking to finalize", completed: false }
             ],
-            step: 6,
+            step: 8,
             created_at: new Date().toISOString(),
             updated_at: new Date().toISOString(),
           }]);

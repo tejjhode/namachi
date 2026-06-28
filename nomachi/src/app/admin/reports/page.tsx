@@ -50,6 +50,7 @@ type LeadRow = {
   id: string;
   name?: string;
   email?: string;
+  phone?: string | null;
   status?: string;
   source?: string;
   created_at?: string | null;
@@ -64,6 +65,8 @@ type LeadRow = {
   is_lead?: boolean | null;
   trips?: any;
   message?: string | null;
+  budget_preference?: string | null;
+  preferred_duration?: string | null;
 };
 
 type BookingRow = {
@@ -240,7 +243,7 @@ export default function AdminReportsPage() {
         setError(null);
 
         const [leadsRes, bookingsRes, paymentsRes, tripsRes, travelersRes, profilesRes, departuresRes, tasksRes] = await Promise.all([
-          supabase.from("leads").select("id, name, email, status, source, created_at, group_size, group_type, preferred_month, hope_trip_feels_like, dietary_and_accessibility, trip_id, assigned_to, enquiry_id, is_lead, message, trips(id, title, destination, status)").order("created_at", { ascending: false }),
+          supabase.from("leads").select("id, name, email, phone, status, source, created_at, group_size, group_type, preferred_month, hope_trip_feels_like, dietary_and_accessibility, trip_id, assigned_to, enquiry_id, is_lead, message, budget_preference, preferred_duration, trips(id, title, destination, status)").order("created_at", { ascending: false }),
           supabase.from("bookings").select("id, price, payment_status, created_at, trip_id, lead_id, trips(id, title, destination, status)").order("created_at", { ascending: false }),
           supabase.from("payments").select("id, amount, payment_method, status, created_at, booking_id, bookings(id, trip_id, trips(id, title, destination))").order("created_at", { ascending: false }),
           supabase.from("trips").select("id, title, destination, status, price, total_seats, seats_left, created_at").order("created_at", { ascending: false }),
@@ -582,57 +585,88 @@ export default function AdminReportsPage() {
       percent: Math.round((count / totalGroupTypeCount) * 100)
     })).sort((a, b) => b.count - a.count);
 
-    // Budget distribution (based on selected trip price if available)
-    const priceVal = selectedTrip?.price ? Number(selectedTrip.price) : 35000;
+    // Helpers to classify budget preference and preferred duration
+    const getBudgetBin = (val: string): string => {
+      if (!val) return "";
+      const clean = val.toLowerCase();
+      if (clean.includes("< 30k") || clean.includes("under 30") || clean.includes("less than 30")) return "< 30k";
+      if (clean.includes("30k-50k") || clean.includes("30k–50k")) return "30k–50k";
+      if (clean.includes("50k-80k") || clean.includes("50k–80k")) return "50k–80k";
+      if (clean.includes("80k+")) return "80k+";
+
+      const numbers = val.match(/\d+[\d,.]*/g)?.map(n => parseInt(n.replace(/[,.]/g, ""))) || [];
+      if (numbers.length === 0) return "";
+      const maxBudget = Math.max(...numbers);
+      if (maxBudget < 30000) return "< 30k";
+      if (maxBudget < 50000) return "30k–50k";
+      if (maxBudget < 80000) return "50k–80k";
+      return "80k+";
+    };
+
+    const getDurationBin = (val: string): string => {
+      if (!val) return "";
+      const clean = val.toLowerCase();
+      if (clean.includes("2-3") || clean.includes("2–3")) return "2–3 Days";
+      if (clean.includes("4-5") || clean.includes("4–5")) return "4–5 Days";
+      if (clean.includes("6-7") || clean.includes("6–7")) return "6–7 Days";
+      if (clean.includes("8+") || clean.includes("8 +") || clean.includes("8-") || clean.includes("8–")) return "8+ Days";
+
+      const numbers = val.match(/\d+/g)?.map(Number) || [];
+      if (numbers.length === 0) return "";
+      const maxDays = Math.max(...numbers);
+      if (maxDays <= 3) return "2–3 Days";
+      if (maxDays <= 5) return "4–5 Days";
+      if (maxDays <= 7) return "6–7 Days";
+      return "8+ Days";
+    };
+
+    // Budget distribution based on database values
     const budgetDist = [
-      { label: "< 30k", count: tripLeads.filter(l => priceVal < 30000).length || Math.round(tripLeads.length * 0.15) },
-      { label: "30k–50k", count: tripLeads.filter(l => priceVal >= 30000 && priceVal < 50000).length || Math.round(tripLeads.length * 0.45) },
-      { label: "50k–80k", count: tripLeads.filter(l => priceVal >= 50000 && priceVal < 80000).length || Math.round(tripLeads.length * 0.3) },
-      { label: "80k+", count: tripLeads.filter(l => priceVal >= 80000).length || Math.round(tripLeads.length * 0.1) },
+      { label: "< 30k", count: tripLeads.filter(l => getBudgetBin(l.budget_preference || "") === "< 30k").length },
+      { label: "30k–50k", count: tripLeads.filter(l => getBudgetBin(l.budget_preference || "") === "30k–50k").length },
+      { label: "50k–80k", count: tripLeads.filter(l => getBudgetBin(l.budget_preference || "") === "50k–80k").length },
+      { label: "80k+", count: tripLeads.filter(l => getBudgetBin(l.budget_preference || "") === "80k+").length },
     ];
 
-    // Duration distribution
+    // Duration distribution based on database values
     const durationDist = [
-      { label: "2–3 Days", count: Math.round(tripLeads.length * 0.1) },
-      { label: "4–5 Days", count: Math.round(tripLeads.length * 0.25) },
-      { label: "6–7 Days", count: Math.round(tripLeads.length * 0.5) },
-      { label: "8+ Days", count: Math.round(tripLeads.length * 0.15) },
+      { label: "2–3 Days", count: tripLeads.filter(l => getDurationBin(l.preferred_duration || "") === "2–3 Days").length },
+      { label: "4–5 Days", count: tripLeads.filter(l => getDurationBin(l.preferred_duration || "") === "4-5 Days" || getDurationBin(l.preferred_duration || "") === "4–5 Days").length },
+      { label: "6–7 Days", count: tripLeads.filter(l => getDurationBin(l.preferred_duration || "") === "6–7 Days").length },
+      { label: "8+ Days", count: tripLeads.filter(l => getDurationBin(l.preferred_duration || "") === "8+ Days").length },
     ];
 
     // Activities parser
     const activitiesList = [
-      { label: "Safari", count: tripLeads.filter(l => l.message?.toLowerCase().includes("safari") || l.hope_trip_feels_like?.toLowerCase().includes("safari")).length || Math.round(tripLeads.length * 0.4) },
-      { label: "Photography", count: tripLeads.filter(l => l.message?.toLowerCase().includes("photo") || l.hope_trip_feels_like?.toLowerCase().includes("photo")).length || Math.round(tripLeads.length * 0.3) },
-      { label: "Camping", count: tripLeads.filter(l => l.message?.toLowerCase().includes("camp") || l.hope_trip_feels_like?.toLowerCase().includes("camp")).length || Math.round(tripLeads.length * 0.2) },
-      { label: "Luxury Stay", count: tripLeads.filter(l => l.message?.toLowerCase().includes("luxury") || l.hope_trip_feels_like?.toLowerCase().includes("luxury")).length || Math.round(tripLeads.length * 0.15) },
-      { label: "Trekking", count: tripLeads.filter(l => l.message?.toLowerCase().includes("trek") || l.hope_trip_feels_like?.toLowerCase().includes("trek")).length || Math.round(tripLeads.length * 0.25) },
+      { label: "Safari", count: tripLeads.filter(l => l.message?.toLowerCase().includes("safari") || l.hope_trip_feels_like?.toLowerCase().includes("safari")).length },
+      { label: "Photography", count: tripLeads.filter(l => l.message?.toLowerCase().includes("photo") || l.hope_trip_feels_like?.toLowerCase().includes("photo")).length },
+      { label: "Camping", count: tripLeads.filter(l => l.message?.toLowerCase().includes("camp") || l.hope_trip_feels_like?.toLowerCase().includes("camp")).length },
+      { label: "Luxury Stay", count: tripLeads.filter(l => l.message?.toLowerCase().includes("luxury") || l.hope_trip_feels_like?.toLowerCase().includes("luxury")).length },
+      { label: "Trekking", count: tripLeads.filter(l => l.message?.toLowerCase().includes("trek") || l.hope_trip_feels_like?.toLowerCase().includes("trek")).length },
     ].sort((a, b) => b.count - a.count);
 
     // Hope trip feels like
     const feelsLikeKeywords = [
-      { label: "Nature", count: tripLeads.filter(l => l.hope_trip_feels_like?.toLowerCase().includes("nature")).length || Math.round(tripLeads.length * 0.45) },
-      { label: "Adventure", count: tripLeads.filter(l => l.hope_trip_feels_like?.toLowerCase().includes("adventure")).length || Math.round(tripLeads.length * 0.35) },
-      { label: "Relaxing", count: tripLeads.filter(l => l.hope_trip_feels_like?.toLowerCase().includes("relax")).length || Math.round(tripLeads.length * 0.3) },
-      { label: "Peaceful", count: tripLeads.filter(l => l.hope_trip_feels_like?.toLowerCase().includes("peace")).length || Math.round(tripLeads.length * 0.25) },
-      { label: "Offbeat", count: tripLeads.filter(l => l.hope_trip_feels_like?.toLowerCase().includes("offbeat")).length || Math.round(tripLeads.length * 0.2) },
+      { label: "Nature", count: tripLeads.filter(l => l.hope_trip_feels_like?.toLowerCase().includes("nature")).length },
+      { label: "Adventure", count: tripLeads.filter(l => l.hope_trip_feels_like?.toLowerCase().includes("adventure")).length },
+      { label: "Relaxing", count: tripLeads.filter(l => l.hope_trip_feels_like?.toLowerCase().includes("relax")).length },
+      { label: "Peaceful", count: tripLeads.filter(l => l.hope_trip_feels_like?.toLowerCase().includes("peace")).length },
+      { label: "Offbeat", count: tripLeads.filter(l => l.hope_trip_feels_like?.toLowerCase().includes("offbeat")).length },
     ].sort((a, b) => b.count - a.count);
 
     // Dietary
     const dietaryList = [
-      { label: "Vegetarian", count: tripLeads.filter(l => l.dietary_and_accessibility?.toLowerCase().includes("veg")).length || Math.round(tripLeads.length * 0.4) },
-      { label: "Jain Food", count: tripLeads.filter(l => l.dietary_and_accessibility?.toLowerCase().includes("jain")).length || Math.round(tripLeads.length * 0.15) },
-      { label: "Senior Citizen", count: tripLeads.filter(l => l.dietary_and_accessibility?.toLowerCase().includes("senior") || l.dietary_and_accessibility?.toLowerCase().includes("old")).length || Math.round(tripLeads.length * 0.1) },
-      { label: "None / Standard", count: tripLeads.filter(l => !l.dietary_and_accessibility || l.dietary_and_accessibility?.toLowerCase().includes("no")).length || Math.round(tripLeads.length * 0.35) },
+      { label: "Vegetarian", count: tripLeads.filter(l => l.dietary_and_accessibility?.toLowerCase().includes("veg")).length },
+      { label: "Jain Food", count: tripLeads.filter(l => l.dietary_and_accessibility?.toLowerCase().includes("jain")).length },
+      { label: "Senior Citizen", count: tripLeads.filter(l => l.dietary_and_accessibility?.toLowerCase().includes("senior") || l.dietary_and_accessibility?.toLowerCase().includes("old")).length },
+      { label: "None / Standard", count: tripLeads.filter(l => !l.dietary_and_accessibility || l.dietary_and_accessibility?.toLowerCase().includes("no") || l.dietary_and_accessibility === "").length },
     ].sort((a, b) => b.count - a.count);
 
-    // Traveler Locations
+    // Traveler Locations based on phone code country prefix
     const locations = [
-      { label: "Delhi / NCR", count: Math.round(tripLeads.length * 0.35) },
-      { label: "Mumbai", count: Math.round(tripLeads.length * 0.25) },
-      { label: "Bangalore", count: Math.round(tripLeads.length * 0.15) },
-      { label: "Pune", count: Math.round(tripLeads.length * 0.1) },
-      { label: "Hyderabad", count: Math.round(tripLeads.length * 0.08) },
-    ];
+      { label: "India (+91)", count: tripLeads.filter(l => l.phone?.includes("+91") || l.phone?.startsWith("91") || l.phone?.startsWith("0")).length },
+      { label: "International / Other", count: tripLeads.filter(l => l.phone && !l.phone.includes("+91") && !l.phone.startsWith("91") && !l.phone.startsWith("0")).length }
+    ].sort((a, b) => b.count - a.count);
 
     // Funnel counts
     const funnelEnquiries = tripLeads.filter(l => !l.is_lead).length + tripLeads.filter(l => l.is_lead).length;

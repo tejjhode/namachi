@@ -1,5 +1,6 @@
 import { useEffect, useState, useCallback } from "react";
 import { tripService } from "@/services/trip.service";
+import { createClient } from "@/lib/supabase/client";
 import { Trip, Departure } from "@/types/admin.types";
 
 interface UseTripsFilters {
@@ -45,6 +46,37 @@ export function useTrips(initialFilters?: UseTripsFilters) {
 
   useEffect(() => {
     fetchTripsAndDepartures();
+
+    const supabase = createClient();
+    const channel = supabase
+      .channel("realtime-trips-list")
+      .on(
+        "postgres_changes",
+        {
+          event: "*",
+          schema: "public",
+          table: "trips",
+        },
+        () => {
+          fetchTripsAndDepartures();
+        }
+      )
+      .on(
+        "postgres_changes",
+        {
+          event: "*",
+          schema: "public",
+          table: "trip_departures",
+        },
+        () => {
+          fetchTripsAndDepartures();
+        }
+      )
+      .subscribe();
+
+    return () => {
+      supabase.removeChannel(channel);
+    };
   }, [fetchTripsAndDepartures]);
 
   const updateFilters = (newFilters: Partial<UseTripsFilters>) => {

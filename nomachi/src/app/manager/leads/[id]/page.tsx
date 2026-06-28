@@ -9,6 +9,7 @@ import { createClient } from "@/lib/supabase/client";
 import { isManagerOrAdminRole, normalizeRole } from "@/lib/auth/roles";
 import { getLeadNoteAuthorLabel, getLeadNoteDisplay, getLeadNoteVisual } from "@/lib/lead-notes";
 import { taskService } from "@/services/task.service";
+import { travelerDocumentService, type TravelerDocumentSubmission } from "@/services/traveler-document.service";
 import { notificationService } from "@/services/notification.service";
 import {
   ArrowLeft,
@@ -30,7 +31,11 @@ import {
   CalendarCheck,
   Video,
   Link2,
-  CheckSquare
+  CheckSquare,
+  PhoneOff,
+  Calendar,
+  XCircle,
+  RefreshCw
 } from "lucide-react";
 
 const statusMeta: Record<string, { label: string; className: string }> = {
@@ -85,6 +90,11 @@ export default function ManagerLeadDetailPage({ params }: ManagerLeadDetailPageP
   const [tasks, setTasks] = useState<any[]>([]);
   const [loadingTasks, setLoadingTasks] = useState(false);
 
+  // Documents state
+  const [documents, setDocuments] = useState<TravelerDocumentSubmission[]>([]);
+  const [loadingDocuments, setLoadingDocuments] = useState(false);
+  const [updatingDocumentId, setUpdatingDocumentId] = useState<string | null>(null);
+
   // Note form
   const [newNoteText, setNewNoteText] = useState("");
   const [addingNote, setAddingNote] = useState(false);
@@ -121,7 +131,7 @@ export default function ManagerLeadDetailPage({ params }: ManagerLeadDetailPageP
   const [vibeNotes, setVibeNotes] = useState("");
   const [completingVibeCheck, setCompletingVibeCheck] = useState(false);
 
-  // ── Step 5: Payment Follow-up ──
+  // ── Step 5: Request Documents ──
   const [paymentLinkUrl, setPaymentLinkUrl] = useState("");
   const [paymentResult, setPaymentResult] = useState<string>("");
   const [receiptAmt, setReceiptAmt] = useState("");
@@ -129,8 +139,17 @@ export default function ManagerLeadDetailPage({ params }: ManagerLeadDetailPageP
   const [completingPayment, setCompletingPayment] = useState(false);
   const [sendingReminder, setSendingReminder] = useState(false);
 
+  // ── Document Verification Modal ──
+  const [isDocModalOpen, setIsDocModalOpen] = useState(false);
+  const [selectedDocType, setSelectedDocType] = useState("Aadhaar Card");
+  const [docNumber, setDocNumber] = useState("");
+  const [docRequestMessage, setDocRequestMessage] = useState("");
+  const [docVerificationNotes, setDocVerificationNotes] = useState("");
+  const [activeViewFile, setActiveViewFile] = useState<any>(null);
+  const [verifyingDoc, setVerifyingDoc] = useState(false);
 
-  // ── Step 7: Confirm Booking ──
+
+  // ── Step 8: Confirm Booking ──
   const [confirmingBooking, setConfirmingBooking] = useState(false);
 
   const usersById = new Map(users.map((user) => [user.id, user]));
@@ -180,6 +199,9 @@ export default function ManagerLeadDetailPage({ params }: ManagerLeadDetailPageP
   const fetchLeadTasks = useCallback(async () => {
     try {
       setLoadingTasks(true);
+      // Auto-evaluate workflow to dynamically generate the next pending task if missing
+      await taskService.evaluateLeadWorkflow(params.id);
+      
       const { data, error } = await supabase
         .from("tasks")
         .select("*")
@@ -197,6 +219,40 @@ export default function ManagerLeadDetailPage({ params }: ManagerLeadDetailPageP
   useEffect(() => {
     if (lead) fetchLeadTasks();
   }, [lead, fetchLeadTasks]);
+
+  const fetchLeadDocuments = useCallback(async () => {
+    if (!params.id) return;
+    try {
+      setLoadingDocuments(true);
+      const rows = await travelerDocumentService.listByLead(params.id);
+      setDocuments(rows);
+    } catch (err) {
+      console.error("Failed to fetch lead documents:", err);
+      setDocuments([]);
+    } finally {
+      setLoadingDocuments(false);
+    }
+  }, [params.id]);
+
+  useEffect(() => {
+    if (lead) fetchLeadDocuments();
+  }, [lead, fetchLeadDocuments]);
+
+  const handleDocumentStatusChange = async (documentId: string, status: TravelerDocumentSubmission["status"]) => {
+    try {
+      setUpdatingDocumentId(documentId);
+      const updated = await travelerDocumentService.updateStatus(documentId, status);
+      setDocuments((prev) => prev.map((document) => (document.id === documentId ? updated : document)));
+      if (currentUser?.id) {
+        await addNote(`Document ${status === "approved" ? "approved" : status === "rejected" ? "rejected" : "marked as reviewed"} for traveler "${updated.full_name}".`, currentUser.id);
+      }
+    } catch (err: any) {
+      console.error("Failed to update document status:", err);
+      alert(err?.message || "Failed to update document status.");
+    } finally {
+      setUpdatingDocumentId(null);
+    }
+  };
 
   // Real-time listener for tasks & leads updates
   useEffect(() => {
@@ -483,7 +539,85 @@ export default function ManagerLeadDetailPage({ params }: ManagerLeadDetailPageP
     }
   };
 
-  // ── Step 5 handler: Payment Follow-up ──
+  // ── Step 5 handler: Request Documents ──
+  const [requestingDocuments, setRequestingDocuments] = useState(false);
+  const [docNotes, setDocNotes] = useState("");
+
+  const handleRequestDocuments = async () => {
+    if (!nextActionTask) return;
+    setRequestingDocuments(true);
+    try {
+      await taskService.updateTaskStatus(nextActionTask.id, "completed", { docNotes: docRequestMessage });
+      setDocRequestMessage("");
+      await fetchLeadTasks();
+      await refresh();
+      alert("Document request sent successfully!");
+    } catch (err: any) {
+      console.error("Step 5 document request failed:", err);
+      alert("Failed to send document request: " + err.message);
+    } finally {
+      setRequestingDocuments(false);
+    }
+  };
+
+  // ── Step 6 handler: Document Verification ──
+  const [completingDocVerification, setCompletingDocVerification] = useState(false);
+
+  const handleCompleteDocVerification = async () => {
+    if (!nextActionTask) return;
+    setCompletingDocVerification(true);
+    try {
+      await taskService.updateTaskStatus(nextActionTask.id, "completed", { docNotes });
+      setDocNotes("");
+      await fetchLeadTasks();
+      await refresh();
+      alert("Document verification completed successfully!");
+    } catch (err: any) {
+      console.error("Step 6 document verification failed:", err);
+      alert("Failed to complete document verification: " + err.message);
+    } finally {
+      setCompletingDocVerification(false);
+    }
+  };
+
+  const handleVerifyDocSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!docNumber.trim()) {
+      alert("Please enter the document number.");
+      return;
+    }
+    setVerifyingDoc(true);
+    try {
+      const docTask = tasks.find((t) => t.step === 6 && t.status !== "completed");
+      const verificationContent = `Document Verified: ${selectedDocType}\n- Document Number: ${docNumber}\n- Notes: ${docVerificationNotes || "None"}`;
+
+      if (docTask) {
+        // Complete step 6 Document Verification task
+        await taskService.updateTaskStatus(docTask.id, "completed", {
+          docNotes: verificationContent
+        });
+      } else {
+        // Just save document detail as note if step 5 is not currently active
+        if (currentUser) {
+          await addNote(verificationContent, currentUser.id);
+        }
+      }
+
+      setDocNumber("");
+      setDocVerificationNotes("");
+      setIsDocModalOpen(false);
+      await fetchLeadTasks();
+      await refresh();
+      alert("Document verified successfully!");
+    } catch (err: any) {
+      console.error("Failed to verify document:", err);
+      alert("Failed to verify document: " + (err.message || err));
+    } finally {
+      setVerifyingDoc(false);
+    }
+  };
+
+  // ── Step 6 handler: Payment Follow-up ──
   const handleSendPaymentReminder = async () => {
     if (!leadData?.email) {
       alert("No email address available for this traveler.");
@@ -621,6 +755,7 @@ export default function ManagerLeadDetailPage({ params }: ManagerLeadDetailPageP
     { key: "contacted", label: "CONTACTED" },
     { key: "negotiating", label: "VIBE CHECK DONE" },
     { key: "qualified", label: "ITINERARY SHARED" },
+    { key: "documents_submitted", label: "DOCUMENTS" },
     { key: "converted", label: "PAYMENT RECEIVED" },
     { key: "confirmed", label: "CONFIRMED" },
   ];
@@ -629,6 +764,7 @@ export default function ManagerLeadDetailPage({ params }: ManagerLeadDetailPageP
   const activeStageIndex = pipelineStages.findIndex(
     (s) =>
       s.key === currentStatusKey ||
+      (s.key === "contacted" && (currentStatusKey === "vibe check sent" || currentStatusKey === "vibe_check_sent" || currentStatusKey === "reviewed")) ||
       (s.key === "confirmed" && currentStatusKey === "confirmed") ||
       (s.key === "converted" && currentStatusKey === "converted")
   );
@@ -638,7 +774,7 @@ export default function ManagerLeadDetailPage({ params }: ManagerLeadDetailPageP
     const isTaskDone = (stepNum: number) => tasks.some((t) => t.step === stepNum && t.status === "completed");
     const isTaskPending = (stepNum: number) => tasks.some((t) => t.step === stepNum && t.status !== "completed");
 
-    const steps = [1, 2, 3, 4, 5, 6];
+    const steps = [1, 2, 3, 4, 5, 6, 7, 8];
     return steps.map((s) => ({
       step: s,
       state: isTaskDone(s) ? "completed" : isTaskPending(s) ? "in-progress" : "pending",
@@ -650,6 +786,8 @@ export default function ManagerLeadDetailPage({ params }: ManagerLeadDetailPageP
     "Schedule Vibe Check",
     "Conduct Vibe Check",
     "Share Brochure",
+    "Request Documents",
+    "Verify Documents",
     "Payment Received",
     "Confirm Booking",
   ];
@@ -774,23 +912,27 @@ export default function ManagerLeadDetailPage({ params }: ManagerLeadDetailPageP
           <div className="space-y-2">
             <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest block">Call Result</label>
             {[
-              { value: "completed", label: "✅ Call Completed" },
-              { value: "no_answer", label: "📵 No Answer" },
-              { value: "reschedule", label: "📅 Reschedule" },
-              { value: "not_interested", label: "❌ Not Interested" },
-            ].map((opt) => (
-              <label key={opt.value} className={`flex items-center gap-3 p-3 rounded-xl border cursor-pointer transition-all ${callResult === opt.value ? "bg-[#FFEFEA] border-[#FF5B26]/40 text-[#FF5B26]" : "border-[#e7e1d5]/55 hover:bg-slate-50 text-slate-700"}`}>
-                <input
-                  type="radio"
-                  name="callResult"
-                  value={opt.value}
-                  checked={callResult === opt.value}
-                  onChange={(e) => setCallResult(e.target.value)}
-                  className="accent-[#FF5B26]"
-                />
-                <span className="text-xs font-bold">{opt.label}</span>
-              </label>
-            ))}
+              { value: "completed", label: "Call Completed", icon: CheckCircle2, iconColor: "text-emerald-500" },
+              { value: "no_answer", label: "No Answer", icon: PhoneOff, iconColor: "text-slate-400" },
+              { value: "reschedule", label: "Reschedule", icon: Calendar, iconColor: "text-[#FF5B26]" },
+              { value: "not_interested", label: "Not Interested", icon: XCircle, iconColor: "text-rose-500" },
+            ].map((opt) => {
+              const IconComp = opt.icon;
+              return (
+                <label key={opt.value} className={`flex items-center gap-3 p-3 rounded-xl border cursor-pointer transition-all ${callResult === opt.value ? "bg-[#FFEFEA] border-[#FF5B26]/40 text-[#FF5B26]" : "border-[#e7e1d5]/55 hover:bg-slate-50 text-slate-700"}`}>
+                  <input
+                    type="radio"
+                    name="callResult"
+                    value={opt.value}
+                    checked={callResult === opt.value}
+                    onChange={(e) => setCallResult(e.target.value)}
+                    className="accent-[#FF5B26]"
+                  />
+                  <IconComp className={`w-4 h-4 shrink-0 ${opt.iconColor}`} />
+                  <span className="text-xs font-bold">{opt.label}</span>
+                </label>
+              );
+            })}
           </div>
           <button
             disabled={completingStep1}
@@ -875,22 +1017,26 @@ export default function ManagerLeadDetailPage({ params }: ManagerLeadDetailPageP
           <div className="space-y-2">
             <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest block">Vibe Check Result</label>
             {[
-              { value: "qualified", label: "✅ Qualified — Proceed to Booking" },
-              { value: "not_qualified", label: "❌ Not Qualified — End Workflow" },
-              { value: "need_follow_up", label: "🔄 Need Follow-up — Reschedule" },
-            ].map((opt) => (
-              <label key={opt.value} className={`flex items-center gap-3 p-3 rounded-xl border cursor-pointer transition-all ${vibeResult === opt.value ? "bg-[#FFEFEA] border-[#FF5B26]/40 text-[#FF5B26]" : "border-[#e7e1d5]/55 hover:bg-slate-50 text-slate-700"}`}>
-                <input
-                  type="radio"
-                  name="vibeResult"
-                  value={opt.value}
-                  checked={vibeResult === opt.value}
-                  onChange={(e) => setVibeResult(e.target.value)}
-                  className="accent-[#FF5B26]"
-                />
-                <span className="text-xs font-bold">{opt.label}</span>
-              </label>
-            ))}
+              { value: "qualified", label: "Qualified — Proceed to Booking", icon: CheckCircle2, iconColor: "text-emerald-500" },
+              { value: "not_qualified", label: "Not Qualified — End Workflow", icon: XCircle, iconColor: "text-rose-500" },
+              { value: "need_follow_up", label: "Need Follow-up — Reschedule", icon: RefreshCw, iconColor: "text-[#FF5B26]" },
+            ].map((opt) => {
+              const IconComp = opt.icon;
+              return (
+                <label key={opt.value} className={`flex items-center gap-3 p-3 rounded-xl border cursor-pointer transition-all ${vibeResult === opt.value ? "bg-[#FFEFEA] border-[#FF5B26]/40 text-[#FF5B26]" : "border-[#e7e1d5]/55 hover:bg-slate-50 text-slate-700"}`}>
+                  <input
+                    type="radio"
+                    name="vibeResult"
+                    value={opt.value}
+                    checked={vibeResult === opt.value}
+                    onChange={(e) => setVibeResult(e.target.value)}
+                    className="accent-[#FF5B26]"
+                  />
+                  <IconComp className={`w-4 h-4 shrink-0 ${opt.iconColor}`} />
+                  <span className="text-xs font-bold">{opt.label}</span>
+                </label>
+              );
+            })}
           </div>
           <div className="space-y-1">
             <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest block">Notes (optional)</label>
@@ -978,45 +1124,111 @@ export default function ManagerLeadDetailPage({ params }: ManagerLeadDetailPageP
       );
     }
 
-    // ── Step 5: Payment Follow-up ──
+    // ── Step 5: Request Documents ──
     if (step === 5) {
       return (
         <div className="space-y-4">
+          <p className="text-xs text-slate-500 font-semibold leading-relaxed">
+            Request the traveler's documents so the user dashboard moves to the Document Submission stage.
+          </p>
+          <div className="rounded-xl border border-[#e7e1d5]/70 bg-[#FAF8F4] p-3 text-[10px] font-semibold text-slate-500 leading-relaxed">
+            This task sends the request to the traveler. Once they upload the files, the verification task will appear next.
+          </div>
+          <div className="space-y-1 text-left">
+            <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest block mb-1">Request Message (optional)</label>
+            <textarea
+              rows={2}
+              placeholder="Please upload Aadhaar / passport copy, travel permit, and any supporting documents."
+              value={docRequestMessage}
+              onChange={(e) => setDocRequestMessage(e.target.value)}
+              className="w-full rounded-xl border border-[#e7e1d5]/70 p-3 text-xs font-semibold text-slate-700 bg-white focus:outline-none"
+            />
+          </div>
           <button
-            disabled={sendingReminder}
-            onClick={handleSendPaymentReminder}
+            disabled={requestingDocuments}
+            onClick={handleRequestDocuments}
             className="w-full py-2.5 bg-[#FF5B26] hover:bg-[#e04b1c] disabled:bg-slate-200 disabled:text-slate-400 text-white text-xs font-bold rounded-xl transition-all shadow-xs cursor-pointer border-0 flex items-center justify-center gap-1.5"
           >
-            {sendingReminder ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Mail className="w-3.5 h-3.5" />}
-            {sendingReminder ? "Sending Reminder..." : "Send Payment Reminder"}
+            {requestingDocuments ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <FileText className="w-3.5 h-3.5" />}
+            {requestingDocuments ? "Sending..." : "Request Documents"}
           </button>
-          <div className="border-t border-slate-100 pt-3 space-y-2">
-            <div className="bg-[#FAF8F4] border border-[#e7e1d5]/70 rounded-xl p-4 text-center">
-              <Clock3 className="w-5 h-5 text-amber-500 mx-auto mb-2 animate-pulse" />
-              <p className="text-xs font-bold text-slate-700">Awaiting Online Payment</p>
-              <p className="text-[10px] text-slate-500 mt-1 leading-relaxed">
-                The traveler must complete the payment from their personal dashboard bookings portal. Once paid, the system will automatically confirm the receipt and advance this workflow to Document Collection.
-              </p>
-            </div>
-          </div>
         </div>
       );
     }
 
-    // ── Step 6: Confirm Booking ──
+    // ── Step 6: Verify Submitted Documents ──
     if (step === 6) {
+      return (
+        <div className="space-y-4">
+          <p className="text-xs text-slate-500 font-semibold leading-relaxed">
+            Review the traveler’s uploaded documents and verify that the submitted details match the enquiry.
+          </p>
+          <div className="rounded-xl border border-[#e7e1d5]/70 bg-[#FAF8F4] p-3 text-[10px] font-semibold text-slate-500 leading-relaxed">
+            Submitted records found: <span className="font-black text-slate-700">{documents.length}</span>
+          </div>
+          <button
+            type="button"
+            onClick={() => setActiveTab("Documents")}
+            className="w-full py-2.5 bg-white hover:bg-slate-50 border border-[#e7e1d5]/70 text-slate-700 text-xs font-bold rounded-xl transition-all shadow-xs cursor-pointer flex items-center justify-center gap-1.5"
+          >
+            <FileText className="w-3.5 h-3.5" />
+            Open Documents Tab
+          </button>
+          <div className="bg-[#FAF8F4] border border-[#e7e1d5]/70 rounded-xl p-4 space-y-3">
+            <h4 className="text-[10px] font-black text-slate-400 uppercase tracking-widest text-left">Verification Checklist</h4>
+            <div className="space-y-2 text-xs text-slate-700 font-semibold text-left">
+              <label className="flex items-center gap-2 cursor-pointer">
+                <input type="checkbox" defaultChecked className="accent-[#FF5B26] w-4 h-4 rounded" />
+                <span>Identity Proof (Aadhaar / Passport / ID)</span>
+              </label>
+              <label className="flex items-center gap-2 cursor-pointer">
+                <input type="checkbox" defaultChecked className="accent-[#FF5B26] w-4 h-4 rounded" />
+                <span>Visa / Travel Permit Checks</span>
+              </label>
+              <label className="flex items-center gap-2 cursor-pointer">
+                <input type="checkbox" defaultChecked className="accent-[#FF5B26] w-4 h-4 rounded" />
+                <span>Trip Specific Declarations / Age Limit</span>
+              </label>
+            </div>
+          </div>
+          <div className="space-y-1 text-left">
+            <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest block mb-1">Verification Notes (optional)</label>
+            <textarea
+              rows={2}
+              placeholder="e.g., Passport valid. Documents match traveler details..."
+              value={docNotes}
+              onChange={(e) => setDocNotes(e.target.value)}
+              className="w-full rounded-xl border border-[#e7e1d5]/70 p-3 text-xs font-semibold text-slate-700 bg-white focus:outline-none"
+            />
+          </div>
+          <button
+            disabled={completingDocVerification}
+            onClick={handleCompleteDocVerification}
+            className="w-full py-2.5 bg-[#FF5B26] hover:bg-[#e04b1c] disabled:bg-slate-200 disabled:text-slate-400 text-white text-xs font-bold rounded-xl transition-all shadow-xs cursor-pointer border-0 flex items-center justify-center gap-1.5"
+          >
+            {completingDocVerification ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <CheckCircle2 className="w-3.5 h-3.5" />}
+            {completingDocVerification ? "Completing..." : "Verify Submitted Documents"}
+          </button>
+        </div>
+      );
+    }
+
+    // ── Step 7: Payment Follow-up ──
+    if (step === 7) {
       const completedSteps = tasks.filter((t) => t.status === "completed").map((t) => t.step);
       const SUMMARY_STEPS = [
         { step: 1, label: "Call Completed" },
         { step: 2, label: "Vibe Check Scheduled" },
-        { step: 3, label: "Brochure Shared" },
-        { step: 4, label: "Vibe Check Conducted" },
-        { step: 5, label: "Payment Received" },
+        { step: 3, label: "Vibe Check Conducted" },
+        { step: 4, label: "Brochure Shared" },
+        { step: 5, label: "Documents Requested" },
+        { step: 6, label: "Documents Verified" },
+        { step: 7, label: "Payment Received" },
       ];
       return (
         <div className="space-y-4">
           <p className="text-xs text-slate-500 font-semibold leading-relaxed">
-            All tasks are complete. Click below to officially confirm the booking.
+            Follow up on the payment and update the booking once the traveler pays.
           </p>
           <div className="bg-emerald-50/50 border border-emerald-100 rounded-2xl p-4 space-y-2">
             {SUMMARY_STEPS.map((s) => (
@@ -1026,12 +1238,31 @@ export default function ManagerLeadDetailPage({ params }: ManagerLeadDetailPageP
             ))}
           </div>
           <button
+            disabled={sendingReminder}
+            onClick={handleSendPaymentReminder}
+            className="w-full py-2.5 bg-[#FF5B26] hover:bg-[#e04b1c] disabled:bg-slate-200 disabled:text-slate-400 text-white text-xs font-bold rounded-xl transition-all shadow-xs cursor-pointer border-0 flex items-center justify-center gap-1.5"
+          >
+            {sendingReminder ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Mail className="w-3.5 h-3.5" />}
+            {sendingReminder ? "Sending Reminder..." : "Send Payment Reminder"}
+          </button>
+        </div>
+      );
+    }
+
+    // ── Step 8: Confirm Booking ──
+    if (step === 8) {
+      return (
+        <div className="space-y-4">
+          <p className="text-xs text-slate-500 font-semibold leading-relaxed">
+            All tasks are complete. Click below to officially confirm the booking.
+          </p>
+          <button
             disabled={confirmingBooking}
             onClick={handleConfirmBooking}
             className="w-full py-3 bg-emerald-600 hover:bg-emerald-700 disabled:bg-slate-200 disabled:text-slate-400 text-white text-sm font-black rounded-xl transition-all shadow-sm cursor-pointer border-0 flex items-center justify-center gap-2"
           >
             {confirmingBooking ? <Loader2 className="w-4 h-4 animate-spin" /> : <CheckCircle2 className="w-4 h-4" />}
-            {confirmingBooking ? "Confirming..." : "Confirm Booking 🎉"}
+            {confirmingBooking ? "Confirming..." : "Confirm Booking"}
           </button>
         </div>
       );
@@ -1163,11 +1394,10 @@ export default function ManagerLeadDetailPage({ params }: ManagerLeadDetailPageP
           </div>
 
           {/* Conversion Roadmap */}
-          <div className="bg-white rounded-3xl border border-[#e7e1d5]/55 shadow-xs p-6 space-y-4 text-left">
+          <div className="bg-white rounded-3xl border border-[#e7e1d5]/55 shadow-xs p-6 space-y-4 text-left overflow-hidden">
             <div className="border-b border-slate-100 pb-3 flex items-center justify-between">
               <div>
                 <span className="text-xs font-black uppercase tracking-widest text-slate-700">Conversion Roadmap</span>
-                <p className="text-[10px] text-slate-400 font-semibold mt-0.5">7-step lead journey progress</p>
               </div>
               {nextActionTask && (
                 <span className="text-[9px] font-black uppercase tracking-widest px-2.5 py-1 rounded-full bg-[#FFEFEA] text-[#FF5B26]">
@@ -1175,27 +1405,36 @@ export default function ManagerLeadDetailPage({ params }: ManagerLeadDetailPageP
                 </span>
               )}
             </div>
-            <div className="grid grid-cols-4 lg:grid-cols-7 gap-2">
-              {workflowSteps.map(({ step, state }) => {
-                const label = WORKFLOW_LABELS[step - 1];
-                let circleClass = "bg-slate-50 text-slate-400 border-slate-200";
-                let icon: any = <span className="text-[9px] font-black text-slate-300">{step}</span>;
-                if (state === "completed") {
-                  circleClass = "bg-emerald-50 text-emerald-600 border-emerald-200";
-                  icon = <span className="font-extrabold text-[10px]">✓</span>;
-                } else if (state === "in-progress") {
-                  circleClass = "bg-[#FFEFEA] text-[#FF5B26] border-[#FFD3C4] ring-2 ring-[#FF5B26]/10";
-                  icon = <span className="text-[9px] font-black">{step}</span>;
-                }
-                return (
-                  <div key={step} className="flex flex-col items-center gap-1.5 text-center">
-                    <div className={`w-8 h-8 rounded-full border flex items-center justify-center shrink-0 transition-all ${circleClass}`}>{icon}</div>
-                    <div className={`text-[8px] font-bold leading-tight ${state === "in-progress" ? "text-[#FF5B26]" : state === "completed" ? "text-slate-600" : "text-slate-300"}`}>
-                      {label}
+            <div className="overflow-x-auto scrollbar-none -mx-2 px-2">
+              <div className="grid grid-cols-8 gap-3 min-w-[720px] lg:min-w-0">
+                {workflowSteps.map(({ step, state }) => {
+                  const label = WORKFLOW_LABELS[step - 1];
+                  let circleClass = "bg-slate-50 text-slate-400 border-slate-200";
+                  let labelClass = "text-slate-400";
+                  let icon: any = <span className="text-[9px] font-black text-slate-300">{step}</span>;
+                  
+                  if (state === "completed") {
+                    circleClass = "bg-emerald-50 text-emerald-600 border-emerald-200 shadow-2xs";
+                    labelClass = "text-slate-600 font-bold";
+                    icon = <span className="font-extrabold text-[10px]">✓</span>;
+                  } else if (state === "in-progress") {
+                    circleClass = "bg-[#FFEFEA] text-[#FF5B26] border-[#FF5B26] ring-4 ring-[#FF5B26]/10 shadow-2xs";
+                    labelClass = "text-[#FF5B26] font-black";
+                    icon = <span className="text-[9px] font-black">{step}</span>;
+                  }
+                  
+                  return (
+                    <div key={step} className="flex flex-col items-center gap-2 text-center select-none">
+                      <div className={`w-8 h-8 rounded-full border flex items-center justify-center shrink-0 transition-all duration-200 ${circleClass}`}>
+                        {icon}
+                      </div>
+                      <div className={`text-[8.5px] tracking-wide leading-tight ${labelClass}`}>
+                        {label}
+                      </div>
                     </div>
-                  </div>
-                );
-              })}
+                  );
+                })}
+              </div>
             </div>
           </div>
 
@@ -1203,9 +1442,10 @@ export default function ManagerLeadDetailPage({ params }: ManagerLeadDetailPageP
           <div className="bg-transparent border-0 space-y-6">
             <div className="bg-white rounded-3xl border border-[#e7e1d5]/55 shadow-xs p-4 flex items-center justify-between">
               <div className="flex items-center gap-2 overflow-x-auto scrollbar-none">
-                {["Overview", "Tasks", "Notes", "Activity"].map((tab) => {
+                {["Overview", "Tasks", "Documents", "Notes", "Activity"].map((tab) => {
                   let badgeVal = 0;
                   if (tab === "Tasks") badgeVal = tasks.filter((t) => t.status !== "completed").length;
+                  else if (tab === "Documents") badgeVal = documents.length;
                   else if (tab === "Notes") badgeVal = leadData?.lead_notes?.length || 0;
                   return (
                     <button
@@ -1287,6 +1527,112 @@ export default function ManagerLeadDetailPage({ params }: ManagerLeadDetailPageP
                             </span>
                           </div>
                         ))
+                      )}
+                    </div>
+                  </div>
+                )}
+
+                {/* Documents */}
+                {activeTab === "Documents" && (
+                  <div className="space-y-4 text-left">
+                    <div className="flex items-center justify-between border-b border-slate-100 pb-2">
+                      <h2 className="text-xs font-black uppercase tracking-widest text-slate-400">Traveler Documents</h2>
+                      <span className="text-[10px] text-slate-400 font-bold">
+                        {loadingDocuments ? "Loading..." : `${documents.length} record${documents.length === 1 ? "" : "s"}`}
+                      </span>
+                    </div>
+
+                    <div className="rounded-2xl border border-[#e7e1d5]/55 bg-[#FAF8F5]/30 overflow-hidden">
+                      {loadingDocuments ? (
+                        <div className="py-10 text-center text-[11px] font-bold text-slate-400">
+                          <Loader2 className="w-4 h-4 animate-spin mx-auto mb-2 text-[#FF5B26]" />
+                          Loading documents...
+                        </div>
+                      ) : documents.length === 0 ? (
+                        <div className="py-10 text-center text-[11px] font-bold text-slate-400">
+                          No documents submitted yet.
+                        </div>
+                      ) : (
+                        <div className="overflow-x-auto">
+                          <table className="min-w-full text-left text-xs table-fixed">
+                            <thead className="bg-[#FAF8F5]/80 border-b border-[#e7e1d5]/55 text-slate-400 uppercase tracking-wider font-black">
+                              <tr>
+                                <th className="px-3 py-3 w-[30%]">Traveler</th>
+                                <th className="px-3 py-3 w-[20%]">Document</th>
+                                <th className="px-3 py-3 w-[15%]">File</th>
+                                <th className="px-3 py-3 w-[15%]">Submitted</th>
+                                <th className="px-3 py-3 w-[10%]">Status</th>
+                                <th className="px-3 py-3 w-[10%] text-right">Actions</th>
+                              </tr>
+                            </thead>
+                            <tbody className="divide-y divide-[#e7e1d5]/40 bg-white">
+                              {documents.map((document) => (
+                                <tr key={document.id} className="align-top">
+                                  <td className="px-3 py-4 min-w-0">
+                                    <div className="font-bold text-slate-800 break-words leading-tight">{document.full_name}</div>
+                                    <div className="text-[10px] text-slate-400 font-semibold mt-0.5">Traveler #{document.traveler_index}</div>
+                                    <div className="text-[10px] text-slate-500 font-semibold mt-1 break-all">{document.email || document.mobile_number || "No contact provided"}</div>
+                                  </td>
+                                  <td className="px-3 py-4 min-w-0">
+                                    <div className="font-semibold text-slate-700 capitalize">{document.document_type || "—"}</div>
+                                    <div className="text-[10px] text-slate-400 font-semibold mt-1 break-all">{document.document_number || "—"}</div>
+                                  </td>
+                                  <td className="px-3 py-4">
+                                    {document.file_data_url ? (
+                                      <button
+                                        type="button"
+                                        onClick={() => setActiveViewFile(document)}
+                                        className="inline-flex items-center gap-1 rounded-lg border border-[#FF5B26]/30 bg-white px-2.5 py-1.5 text-[10px] font-bold text-[#FF5B26] hover:bg-[#FFF7F3] cursor-pointer transition-all"
+                                      >
+                                        <FileText className="w-3.5 h-3.5" />
+                                        View File
+                                      </button>
+                                    ) : (
+                                      <span className="text-[10px] text-slate-400 font-semibold">No file uploaded</span>
+                                    )}
+                                  </td>
+                                  <td className="px-3 py-4 text-[10px] text-slate-500 font-semibold">{formatDateTime(document.created_at)}</td>
+                                  <td className="px-3 py-4">
+                                    <span className={`inline-flex items-center rounded-full px-2 py-0.5 text-[9px] font-black uppercase tracking-wider border ${document.status === "approved" ? "bg-emerald-50 text-emerald-700 border-emerald-100" : document.status === "rejected" ? "bg-rose-50 text-rose-700 border-rose-100" : document.status === "reviewed" ? "bg-blue-50 text-blue-700 border-blue-100" : "bg-amber-50 text-amber-700 border-amber-100"}`}>
+                                      {document.status}
+                                    </span>
+                                  </td>
+                                  <td className="px-3 py-4">
+                                    <div className="flex items-center justify-end gap-1.5">
+                                      <button
+                                        type="button"
+                                        disabled={updatingDocumentId === document.id || document.status === "reviewed"}
+                                        onClick={() => handleDocumentStatusChange(document.id, "reviewed")}
+                                        className="inline-flex items-center gap-1 rounded-lg border border-slate-200 bg-white px-2 py-1 text-[10px] font-bold text-slate-600 hover:bg-slate-50 disabled:opacity-50 disabled:cursor-not-allowed cursor-pointer"
+                                      >
+                                        <RefreshCw className="w-3 h-3" />
+                                        Review
+                                      </button>
+                                      <button
+                                        type="button"
+                                        disabled={updatingDocumentId === document.id || document.status === "approved"}
+                                        onClick={() => handleDocumentStatusChange(document.id, "approved")}
+                                        className="inline-flex items-center gap-1 rounded-lg border border-emerald-200 bg-white px-2 py-1 text-[10px] font-bold text-emerald-700 hover:bg-emerald-50 disabled:opacity-50 disabled:cursor-not-allowed cursor-pointer"
+                                      >
+                                        <CheckCircle2 className="w-3 h-3" />
+                                        Approve
+                                      </button>
+                                      <button
+                                        type="button"
+                                        disabled={updatingDocumentId === document.id || document.status === "rejected"}
+                                        onClick={() => handleDocumentStatusChange(document.id, "rejected")}
+                                        className="inline-flex items-center gap-1 rounded-lg border border-rose-200 bg-white px-2 py-1 text-[10px] font-bold text-rose-700 hover:bg-rose-50 disabled:opacity-50 disabled:cursor-not-allowed cursor-pointer"
+                                      >
+                                        <XCircle className="w-3 h-3" />
+                                        Reject
+                                      </button>
+                                    </div>
+                                  </td>
+                                </tr>
+                              ))}
+                            </tbody>
+                          </table>
+                        </div>
                       )}
                     </div>
                   </div>
@@ -1419,7 +1765,7 @@ export default function ManagerLeadDetailPage({ params }: ManagerLeadDetailPageP
                 <h2 className="text-sm font-black uppercase tracking-wider text-slate-800">Next Action</h2>
                 {nextActionTask && (
                   <p className="text-[10px] text-slate-400 font-bold mt-0.5">
-                    Step {nextActionTask.step} of 7 — {nextActionTask.title}
+                    Step {nextActionTask.step} of 8 — {nextActionTask.title}
                   </p>
                 )}
               </div>
@@ -1447,6 +1793,9 @@ export default function ManagerLeadDetailPage({ params }: ManagerLeadDetailPageP
               </a>
               <button onClick={handleAddNoteClick} className="rounded-2xl border border-[#e7e1d5]/55 px-3 py-3.5 hover:bg-[#FAF8F5] transition-colors cursor-pointer flex items-center gap-2.5 bg-white text-left">
                 <FileText className="w-4 h-4 text-slate-500 shrink-0" />Add Note
+              </button>
+              <button onClick={() => setIsDocModalOpen(true)} className="rounded-2xl border border-[#e7e1d5]/55 px-3 py-3.5 hover:bg-[#FAF8F5] transition-colors cursor-pointer flex items-center gap-2.5 bg-white text-left col-span-2">
+                <CheckSquare className="w-4 h-4 text-orange-600 shrink-0" />Verify ID / Passport
               </button>
               <Link href={`/manager/trips/${leadData.trips?.id || ""}`} className="rounded-2xl border border-[#e7e1d5]/55 px-3 py-3.5 hover:bg-[#FAF8F5] transition-colors flex items-center gap-2.5 no-underline col-span-2">
                 <CalendarDays className="w-4 h-4 text-purple-600 shrink-0" />View Trip Details
@@ -1476,6 +1825,126 @@ export default function ManagerLeadDetailPage({ params }: ManagerLeadDetailPageP
                 </button>
               </div>
             </form>
+          </div>
+        </div>
+      )}
+
+      {/* Document Verification Modal */}
+      {isDocModalOpen && (
+        <div className="fixed inset-0 z-50 bg-[#FAF8F5]/10 backdrop-blur-xs flex items-center justify-center px-4 animate-in fade-in duration-200">
+          <div className="w-full max-w-sm rounded-3xl bg-white shadow-2xl border border-slate-150 overflow-hidden text-xs">
+            <div className="flex items-center justify-between px-6 py-4 border-b border-slate-100 text-left">
+              <div>
+                <h2 className="text-sm font-extrabold text-slate-900">Verify Identity Document</h2>
+                <p className="text-[10px] text-slate-400 mt-0.5 font-semibold">Select document type and verify details.</p>
+              </div>
+              <button onClick={() => setIsDocModalOpen(false)} className="text-slate-300 hover:text-slate-500 font-bold border-0 bg-transparent cursor-pointer text-sm">✕</button>
+            </div>
+            <form onSubmit={handleVerifyDocSubmit} className="p-6 space-y-4 text-left font-semibold">
+              <div className="space-y-1.5">
+                <label className="text-[10px] font-black uppercase text-slate-400 tracking-wider">Document Type</label>
+                <select
+                  value={selectedDocType}
+                  onChange={(e) => setSelectedDocType(e.target.value)}
+                  className="w-full h-11 px-3.5 border border-slate-200 rounded-xl focus:outline-none focus:border-[#FF5B26] text-xs bg-white font-semibold"
+                >
+                  <option value="Aadhaar Card">Aadhaar Card</option>
+                  <option value="PAN Card">PAN Card</option>
+                  <option value="Passport">Passport</option>
+                  <option value="Voter ID">Voter ID</option>
+                  <option value="Driving License">Driving License</option>
+                  <option value="Other ID">Other ID</option>
+                </select>
+              </div>
+              <div className="space-y-1.5">
+                <label className="text-[10px] font-black uppercase text-slate-400 tracking-wider">Document Number / ID</label>
+                <input
+                  type="text"
+                  required
+                  placeholder="e.g., XXXX-XXXX-XXXX or Passport No"
+                  value={docNumber}
+                  onChange={(e) => setDocNumber(e.target.value)}
+                  className="w-full h-11 px-3.5 border border-slate-200 rounded-xl focus:outline-none focus:border-[#FF5B26] text-xs bg-white font-semibold"
+                />
+              </div>
+              <div className="space-y-1.5">
+                <label className="text-[10px] font-black uppercase text-slate-400 tracking-wider">Verification Notes (optional)</label>
+                <textarea
+                  rows={2}
+                  placeholder="Name matches Aadhaar, valid passport expiry..."
+                  value={docVerificationNotes}
+                  onChange={(e) => setDocVerificationNotes(e.target.value)}
+                  className="w-full p-3.5 border border-slate-200 rounded-xl focus:outline-none focus:border-[#FF5B26] text-xs bg-white font-semibold"
+                />
+              </div>
+              <div className="flex justify-end gap-2 pt-2 border-t border-slate-100">
+                <button type="button" onClick={() => setIsDocModalOpen(false)} className="px-4 py-2 border border-slate-200 bg-white rounded-xl font-bold cursor-pointer hover:bg-slate-50 text-slate-600">Cancel</button>
+                <button type="submit" disabled={verifyingDoc} className="px-4 py-2 bg-[#FF5B26] hover:bg-[#FF5B26]/90 text-white rounded-xl font-bold cursor-pointer shadow-xs border-0 disabled:opacity-50 flex items-center gap-1.5">
+                  {verifyingDoc && <Loader2 className="w-3 h-3 animate-spin" />}
+                  {verifyingDoc ? "Saving..." : "Verify & Save"}
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
+
+      {/* Document Viewer Modal */}
+      {activeViewFile && (
+        <div className="fixed inset-0 z-50 bg-[#FAF8F5]/10 backdrop-blur-xs flex items-center justify-center px-4 animate-in fade-in duration-200">
+          <div className="w-full max-w-4xl rounded-3xl bg-white shadow-2xl border border-slate-150 overflow-hidden flex flex-col h-[85vh] text-left">
+            <div className="flex items-center justify-between px-6 py-4 border-b border-slate-100 shrink-0">
+              <div>
+                <h2 className="text-sm font-extrabold text-slate-900 capitalize">
+                  {activeViewFile.document_type || "Document"} Preview
+                </h2>
+                <p className="text-[10px] text-slate-400 mt-0.5 font-semibold">
+                  Submitted by {activeViewFile.full_name} (Traveler #{activeViewFile.traveler_index})
+                </p>
+              </div>
+              <button 
+                onClick={() => setActiveViewFile(null)} 
+                className="text-slate-400 hover:text-slate-600 font-bold border-0 bg-transparent cursor-pointer text-sm"
+              >
+                ✕
+              </button>
+            </div>
+            <div className="flex-1 bg-slate-50 p-6 overflow-auto flex items-center justify-center min-h-0">
+              {activeViewFile.file_data_url.startsWith("data:application/pdf") || activeViewFile.file_name?.toLowerCase().endsWith(".pdf") ? (
+                <iframe
+                  src={activeViewFile.file_data_url}
+                  className="w-full h-full border-0 rounded-2xl bg-white shadow-xs"
+                  title="PDF Preview"
+                />
+              ) : (
+                <img
+                  src={activeViewFile.file_data_url}
+                  alt={activeViewFile.file_name || "Document Preview"}
+                  className="max-w-full max-h-full object-contain rounded-2xl shadow-xs"
+                />
+              )}
+            </div>
+            <div className="flex items-center justify-between px-6 py-4 border-t border-slate-100 shrink-0 bg-white">
+              <span className="text-[10px] font-bold text-slate-400 truncate max-w-xs sm:max-w-md">
+                File: {activeViewFile.file_name || "document.bin"}
+              </span>
+              <div className="flex items-center gap-2">
+                <a
+                  href={activeViewFile.file_data_url}
+                  download={activeViewFile.file_name || "document"}
+                  className="px-4 py-2 border border-slate-200 bg-white hover:bg-slate-50 rounded-xl font-bold cursor-pointer text-slate-600 text-xs no-underline inline-flex items-center gap-1.5"
+                >
+                  Download File
+                </a>
+                <button
+                  type="button"
+                  onClick={() => setActiveViewFile(null)}
+                  className="px-4 py-2 bg-[#FF5B26] hover:bg-[#FF5B26]/90 text-white rounded-xl font-bold cursor-pointer text-xs border-0"
+                >
+                  Close Preview
+                </button>
+              </div>
+            </div>
           </div>
         </div>
       )}

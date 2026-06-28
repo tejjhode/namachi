@@ -1,5 +1,6 @@
 import { useEffect, useState, useCallback } from "react";
 import { leadService } from "@/services/lead.service";
+import { createClient } from "@/lib/supabase/client";
 import { Lead } from "@/types/admin.types";
 
 interface UseLeadsFilters {
@@ -30,6 +31,26 @@ export function useLeads(initialFilters?: UseLeadsFilters) {
 
   useEffect(() => {
     fetchLeads();
+
+    const supabase = createClient();
+    const channel = supabase
+      .channel("realtime-leads-list")
+      .on(
+        "postgres_changes",
+        {
+          event: "*",
+          schema: "public",
+          table: "leads",
+        },
+        () => {
+          fetchLeads();
+        }
+      )
+      .subscribe();
+
+    return () => {
+      supabase.removeChannel(channel);
+    };
   }, [fetchLeads]);
 
   const updateFilters = (newFilters: Partial<UseLeadsFilters>) => {

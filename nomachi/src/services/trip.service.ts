@@ -236,13 +236,6 @@ export const tripService = {
         .eq("trip_id", trip.id);
 
       if (primaryAssignErr) throw primaryAssignErr;
-
-      const { error: legacyAssignErr } = await supabase
-        .from("leads")
-        .update({ assigned_to: departureData.tripLeaderId })
-        .eq("trip_interest", trip.id);
-
-      if (legacyAssignErr) throw legacyAssignErr;
     }
   },
 };

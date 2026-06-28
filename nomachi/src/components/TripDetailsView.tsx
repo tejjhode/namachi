@@ -630,8 +630,8 @@ export function TripDetailsView({ user, leads = [], trip }: TripDetailsViewProps
                     alt={trip.title} 
                     className="w-full h-full object-cover group-hover:scale-[1.01] transition-transform duration-500"
                   />
-                  <span className="absolute top-4 left-4 bg-[#1C1B1A]/85 text-[#FAF8F4] text-[10px] font-bold tracking-wider uppercase px-3 py-1.5 rounded-lg backdrop-blur-sm shadow-sm">
-                    ★ Bestseller
+                  <span className="absolute top-4 left-4 bg-[#1C1B1A]/85 text-[#FAF8F4] text-[10px] font-bold tracking-wider uppercase px-3 py-1.5 rounded-lg backdrop-blur-sm shadow-sm flex items-center gap-1.5 flex items-center gap-1.5">
+                    <Star className="w-3.5 h-3.5 text-[#FF5B26] fill-[#FF5B26]" /> Bestseller
                   </span>
                 </button>
                 {/* 3 Secondary Stacked Images */}

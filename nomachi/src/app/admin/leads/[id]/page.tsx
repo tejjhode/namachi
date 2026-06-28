@@ -5,7 +5,7 @@ import { useUsers } from "@/hooks/useUsers";
 import { createClient } from "@/lib/supabase/client";
 import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
-import { ArrowLeft, Loader2, Calendar, Mail, Phone, Tag, Clock, Send, MessageSquare } from "lucide-react";
+import { ArrowLeft, Loader2, Calendar, Mail, Phone, Tag, Clock, Send, MessageSquare, Compass, Wallet, Utensils, Heart, Users, Clock3 } from "lucide-react";
 import Link from "next/link";
 import { getLeadNoteAuthorLabel, getLeadNoteDisplay, getLeadNoteVisual } from "@/lib/lead-notes";
 
@@ -160,6 +160,110 @@ export default function LeadDetailPage({ params }: LeadDetailPageProps) {
               </div>
             </div>
           )}
+        </div>
+
+        {/* Left Column - Card 2: Enquiry Preferences */}
+        <div className="lg:col-span-4 bg-white rounded-3xl border border-[#e7e1d5]/40 shadow-sm p-6 space-y-5">
+          <h3 className="text-xs font-black text-nomichi-ink/45 uppercase tracking-widest border-b border-[#e7e1d5]/20 pb-2">Enquiry Preferences</h3>
+          <div className="space-y-4 text-xs text-nomichi-ink">
+            
+            <div className="flex gap-3 items-start text-left">
+              <div className="w-8 h-8 rounded-lg bg-[#FFEFEA] flex items-center justify-center shrink-0 text-[#FF5B26]">
+                <Compass className="w-4 h-4" />
+              </div>
+              <div className="space-y-0.5">
+                <span className="text-[9px] font-bold text-slate-400 uppercase tracking-wide block">Trip Interest</span>
+                <span className="font-bold text-slate-800">{lead.trips?.title || lead.trip_interest || "General Enquiry"}</span>
+              </div>
+            </div>
+
+            <div className="flex gap-3 items-start text-left">
+              <div className="w-8 h-8 rounded-lg bg-[#FFEFEA] flex items-center justify-center shrink-0 text-[#FF5B26]">
+                <Calendar className="w-4 h-4" />
+              </div>
+              <div className="space-y-0.5">
+                <span className="text-[9px] font-bold text-slate-400 uppercase tracking-wide block">Preferred Month</span>
+                <span className="font-bold text-slate-800">{lead.preferred_month || "Not specified"}</span>
+              </div>
+            </div>
+
+            <div className="flex gap-3 items-start text-left">
+              <div className="w-8 h-8 rounded-lg bg-[#FFEFEA] flex items-center justify-center shrink-0 text-[#FF5B26]">
+                <Clock3 className="w-4 h-4" />
+              </div>
+              <div className="space-y-0.5">
+                <span className="text-[9px] font-bold text-slate-400 uppercase tracking-wide block">Preferred Duration</span>
+                <span className="font-bold text-slate-800">{lead.preferred_duration || "Not specified"}</span>
+              </div>
+            </div>
+
+            <div className="flex gap-3 items-start text-left">
+              <div className="w-8 h-8 rounded-lg bg-[#FFEFEA] flex items-center justify-center shrink-0 text-[#FF5B26]">
+                <Wallet className="w-4 h-4" />
+              </div>
+              <div className="space-y-0.5">
+                <span className="text-[9px] font-bold text-slate-400 uppercase tracking-wide block">Budget Preference</span>
+                <span className="font-bold text-slate-800">{lead.budget_preference || "Not specified"}</span>
+              </div>
+            </div>
+
+            <div className="flex gap-3 items-start text-left">
+              <div className="w-8 h-8 rounded-lg bg-[#FFEFEA] flex items-center justify-center shrink-0 text-[#FF5B26]">
+                <Users className="w-4 h-4" />
+              </div>
+              <div className="space-y-0.5">
+                <span className="text-[9px] font-bold text-slate-400 uppercase tracking-wide block">Travel Style</span>
+                <span className="font-bold text-slate-800 capitalize">{lead.group_type || "Not specified"}</span>
+              </div>
+            </div>
+
+            <div className="flex gap-3 items-start text-left">
+              <div className="w-8 h-8 rounded-lg bg-[#FFEFEA] flex items-center justify-center shrink-0 text-[#FF5B26]">
+                <Utensils className="w-4 h-4" />
+              </div>
+              <div className="space-y-0.5">
+                <span className="text-[9px] font-bold text-slate-400 uppercase tracking-wide block">Dietary & Accessibility</span>
+                <span className="font-bold text-slate-800">{lead.dietary_and_accessibility || "None specified"}</span>
+              </div>
+            </div>
+
+            <div className="flex gap-3 items-start border-t border-slate-100 pt-3 text-left">
+              <div className="w-8 h-8 rounded-lg bg-[#FFEFEA] flex items-center justify-center shrink-0 text-[#FF5B26]">
+                <Heart className="w-4 h-4" />
+              </div>
+              <div className="space-y-0.5">
+                <span className="text-[9px] font-bold text-slate-400 uppercase tracking-wide block">Hope this trip feels like</span>
+                <p className="font-semibold text-slate-700 leading-relaxed max-w-sm">
+                  {lead.hope_trip_feels_like || "Not specified"}
+                </p>
+              </div>
+            </div>
+
+            <div className="flex gap-3 items-start border-t border-slate-100 pt-3 text-left">
+              <div className="w-8 h-8 rounded-lg bg-[#FFEFEA] flex items-center justify-center shrink-0 text-[#FF5B26]">
+                <Tag className="w-4 h-4" />
+              </div>
+              <div className="space-y-0.5">
+                <span className="text-[9px] font-bold text-slate-400 uppercase tracking-wide block">Referral Source</span>
+                <span className="font-bold text-slate-800 capitalize">{lead.source || "Website Search"}</span>
+              </div>
+            </div>
+
+            {lead.message && (
+              <div className="flex gap-3 items-start border-t border-slate-100 pt-3 text-left">
+                <div className="w-8 h-8 rounded-lg bg-[#FFEFEA] flex items-center justify-center shrink-0 text-[#FF5B26]">
+                  <MessageSquare className="w-4 h-4" />
+                </div>
+                <div className="space-y-0.5">
+                  <span className="text-[9px] font-bold text-slate-400 uppercase tracking-wide block">Special Message</span>
+                  <p className="font-semibold text-slate-700 leading-relaxed max-w-sm">
+                    {lead.message}
+                  </p>
+                </div>
+              </div>
+            )}
+
+          </div>
         </div>
 
         {/* Right Column: Interaction Notes Timeline */}

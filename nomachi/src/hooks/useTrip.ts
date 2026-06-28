@@ -1,5 +1,6 @@
 import { useEffect, useState, useCallback } from "react";
 import { tripService } from "@/services/trip.service";
+import { createClient } from "@/lib/supabase/client";
 import { Trip } from "@/types/admin.types";
 
 export function useTrip(id: string | null) {
@@ -24,7 +25,29 @@ export function useTrip(id: string | null) {
 
   useEffect(() => {
     fetchTrip();
-  }, [fetchTrip]);
+
+    if (!id) return;
+    const supabase = createClient();
+    const channel = supabase
+      .channel(`realtime-trip-${id}`)
+      .on(
+        "postgres_changes",
+        {
+          event: "*",
+          schema: "public",
+          table: "trips",
+          filter: `id=eq.${id}`,
+        },
+        () => {
+          fetchTrip();
+        }
+      )
+      .subscribe();
+
+    return () => {
+      supabase.removeChannel(channel);
+    };
+  }, [id, fetchTrip]);
 
   const saveTrip = async (updates: Partial<Trip>): Promise<Trip> => {
     if (!id) throw new Error("No trip ID specified");

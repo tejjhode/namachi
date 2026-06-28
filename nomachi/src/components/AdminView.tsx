@@ -971,6 +971,36 @@ export default function AdminView({ user, onBack, initialTab }: AdminViewProps) 
 
   useEffect(() => {
     loadData();
+
+    // Supabase Realtime Subscription for Admin Data
+    const channel = supabase
+      .channel("admin-realtime-sync")
+      .on(
+        "postgres_changes",
+        { event: "*", schema: "public", table: "leads" },
+        () => {
+          loadData();
+        }
+      )
+      .on(
+        "postgres_changes",
+        { event: "*", schema: "public", table: "trips" },
+        () => {
+          loadData();
+        }
+      )
+      .on(
+        "postgres_changes",
+        { event: "*", schema: "public", table: "trip_departures" },
+        () => {
+          loadData();
+        }
+      )
+      .subscribe();
+
+    return () => {
+      supabase.removeChannel(channel);
+    };
   }, []);
 
   // Handle Dynamic Lists adding/removing
@@ -1237,13 +1267,6 @@ export default function AdminView({ user, onBack, initialTab }: AdminViewProps) 
           .eq("trip_id", activeTripForActivation.id);
 
         if (assignPrimaryErr) throw assignPrimaryErr;
-
-        const { error: assignLegacyErr } = await supabase
-          .from("leads")
-          .update({ assigned_to: tripLeaderId })
-          .eq("trip_interest", activeTripForActivation.id);
-
-        if (assignLegacyErr) throw assignLegacyErr;
       }
 
       const activeId = activeTripForActivation.id;
